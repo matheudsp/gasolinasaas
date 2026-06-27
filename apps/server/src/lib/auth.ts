@@ -4,7 +4,7 @@ import { type BetterAuthOptions, betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { db } from "../db";
 import { account, session, user, verification } from "../db/schema/auth";
-import { openAPI } from "better-auth/plugins"
+import { openAPI } from "better-auth/plugins";
 
 export const auth = betterAuth<BetterAuthOptions>({
   baseURL: env.BETTER_AUTH_URL || "",
@@ -19,13 +19,18 @@ export const auth = betterAuth<BetterAuthOptions>({
     },
   }),
   // trustedOrigins: [process.env.CORS_ORIGIN || "", "mybettertapp://", "exp://"],
-  trustedOrigins: [env.CORS_ORIGIN || "", "martinezapp://", "exp://","http://10.0.2.2:8081", ],
+  trustedOrigins: [
+    env.CORS_ORIGIN || "",
+    "martinezapp://",
+    "exp://",
+    "http://10.0.2.2:8081",
+    "http://localhost:15001",
+  ],
   emailAndPassword: {
     enabled: true,
   },
   // https://www.better-auth.com/docs/concepts/oauth
   socialProviders: {
-  
     google: {
       enabled: true,
       clientId: env.GOOGLE_CLIENT_ID || "",

@@ -29,7 +29,7 @@ const navItems = [
 ];
 
 export function Layout() {
-  const { user, client } = useAuth();
+  const { user, signOut } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -57,9 +57,7 @@ export function Layout() {
               return (
                 <Button
                   key={item.to}
-                  variant={
-                    location.pathname === item.to ? "secondary" : "ghost"
-                  }
+                  variant={location.pathname === item.to ? "secondary" : "ghost"}
                   size="sm"
                   asChild
                 >
@@ -89,7 +87,7 @@ export function Layout() {
                 <User className="mr-2 h-4 w-4" /> Profile
               </DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={() => client.signOut()}>
+              <DropdownMenuItem onClick={signOut}>
                 <LogOut className="mr-2 h-4 w-4" /> Logout
               </DropdownMenuItem>
             </DropdownMenuContent>
@@ -118,9 +116,7 @@ export function Layout() {
               return (
                 <Button
                   key={item.to}
-                  variant={
-                    location.pathname === item.to ? "secondary" : "ghost"
-                  }
+                  variant={location.pathname === item.to ? "secondary" : "ghost"}
                   className="justify-start"
                   asChild
                   onClick={() => setMobileOpen(false)}

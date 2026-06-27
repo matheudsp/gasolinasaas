@@ -1,19 +1,14 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
-import { listTenants } from "@/api/tenants";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Building2, Users, CreditCard, ArrowRight } from "lucide-react";
 
 export default function Dashboard() {
-  const { user } = useAuth();
-  const { data: tenants = [], isLoading } = useQuery({
-    queryKey: ["tenants"],
-    queryFn: listTenants,
-  });
-
+  const { user} = useAuth();
+ 
   const statusColor = (status: string) => {
     switch (status) {
       case "active":
@@ -32,7 +27,7 @@ export default function Dashboard() {
     <div className="space-y-6">
       <div>
         <h1 className="text-3xl font-bold tracking-tight">
-          Welcome, {user?.full_name}
+          Welcome, {user?.name}
         </h1>
         <p className="text-muted-foreground">
           Here&apos;s an overview of your multi-tenant platform.
@@ -46,7 +41,7 @@ export default function Dashboard() {
             <Building2 className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{tenants.length}</div>
+            <div className="text-2xl font-bold">{10}</div>
           </CardContent>
         </Card>
         <Card>
@@ -58,7 +53,7 @@ export default function Dashboard() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {tenants.filter((t) => t.status === "active").length}
+              {10}
             </div>
           </CardContent>
         </Card>
@@ -68,9 +63,9 @@ export default function Dashboard() {
             <CreditCard className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold capitalize">
+            {/* <div className="text-2xl font-bold capitalize">
               {user?.is_superadmin ? "Superadmin" : "User"}
-            </div>
+            </div> */}
           </CardContent>
         </Card>
       </div>
@@ -85,48 +80,7 @@ export default function Dashboard() {
           </Button>
         </div>
 
-        {isLoading ? (
-          <div className="text-center text-muted-foreground py-8">
-            Loading tenants...
-          </div>
-        ) : tenants.length === 0 ? (
-          <Card>
-            <CardContent className="flex flex-col items-center py-8 text-center">
-              <Building2 className="mb-2 h-8 w-8 text-muted-foreground" />
-              <p className="text-muted-foreground">No tenants yet</p>
-              <Button asChild className="mt-4">
-                <Link to="/tenants">Create your first tenant</Link>
-              </Button>
-            </CardContent>
-          </Card>
-        ) : (
-          <div className="grid gap-4 sm:grid-cols-2">
-            {tenants.map((tenant) => (
-              <Card
-                key={tenant.id}
-                className="hover:shadow-md transition-shadow"
-              >
-                <CardHeader>
-                  <div className="flex items-center justify-between">
-                    <CardTitle className="text-base">{tenant.name}</CardTitle>
-                    <Badge variant={statusColor(tenant.status)}>
-                      {tenant.status}
-                    </Badge>
-                  </div>
-                </CardHeader>
-                <CardContent className="text-sm text-muted-foreground">
-                  <p>Slug: {tenant.slug}</p>
-                  <p>Schema: {tenant.schema_name}</p>
-                  <Button variant="link" size="sm" className="mt-2 p-0" asChild>
-                    <Link to={`/tenants/${tenant.id}`}>
-                      Manage tenant <ArrowRight className="ml-1 h-3 w-3" />
-                    </Link>
-                  </Button>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        )}
+       
       </div>
     </div>
   );

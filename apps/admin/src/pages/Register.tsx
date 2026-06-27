@@ -9,7 +9,7 @@ import { Building2 } from 'lucide-react'
 import { useToast } from '@/components/ui/use-toast'
 
 export default function Register() {
-  const { register, isAuthenticated } = useAuth()
+  const { session } = useAuth()
   const navigate = useNavigate()
   const { toast } = useToast()
   const [fullName, setFullName] = useState('')
@@ -17,13 +17,13 @@ export default function Register() {
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
 
-  if (isAuthenticated) return <Navigate to="/" replace />
+  if (session) return <Navigate to="/" replace />
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setLoading(true)
     try {
-      await register({ full_name: fullName, email, password })
+      // await register({ full_name: fullName, email, password })
       navigate('/')
     } catch (err: unknown) {
       let msg = 'Registration failed'

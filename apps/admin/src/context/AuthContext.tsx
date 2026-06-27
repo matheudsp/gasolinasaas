@@ -2,60 +2,87 @@ import {
   createContext,
   useContext,
   useState,
-  useCallback,
   useEffect,
   type ReactNode,
 } from "react";
 import { authClient } from "@/lib/auth-client";
-import { orpc } from "@/lib/orpc";
+import { client } from "@/lib/orpc";
+
+type Session = typeof authClient.$Infer.Session;
+type User = typeof authClient.$Infer.Session.user;
+type Membership = NonNullable<Awaited<ReturnType<typeof client.tenant.getMyMembership>>>;
 
 interface AuthContextType {
-  session: typeof authClient.$Infer.Session | null;
-  user: typeof authClient.$Infer.Session.user | null;
+  session: Session | null;
+  user: User | null;
   isPending: boolean;
-  error: any;
-  client: typeof authClient;
+  error: unknown;
+  membership: Membership | null;
   signInAsOwner: (email: string, password: string) => Promise<void>;
+  signOut: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const { data, isPending, error } = authClient.useSession();
+  const [membership, setMembership] = useState<Membership | null>(null);
+
+  useEffect(() => {
+    if (!data?.user) {
+      setMembership(null);
+      return;
+    }
+    client.tenant
+      .getMyMembership()
+      .then((result) => setMembership(result ?? null))
+      .catch(() => setMembership(null));
+  }, [data?.user?.id]);
+
   const signInAsOwner = async (email: string, password: string) => {
-    const { data: signInData, error: signInError } =
-      await authClient.signIn.email({
-        email,
-        password: password,
-      });
+    const { data: signInData, error: signInError } = await authClient.signIn.email({
+      email,
+      password,
+    });
 
     if (signInError || !signInData) {
       throw new Error(signInError?.message || "Falha na autenticação.");
     }
 
-    try {
-      const membership = await orpc.tenant.getMyMembership();
+    let membershipData: Membership | null = null;
 
-      if (!membership || membership.role !== "owner") {
-        await authClient.signOut();
-        throw new Error(
-          "Acesso negado: você não é o proprietário (Owner) deste tenant.",
-        );
-      }
-    } catch (err: any) {
+    try {
+      membershipData = await client.tenant.getMyMembership();
+    } catch {
       await authClient.signOut();
-      throw new Error(err.message || "Erro ao validar permissões do tenant.");
+      throw new Error("Erro ao validar permissões do tenant.");
     }
+
+    if (!membershipData || membershipData.role !== "owner") {
+      await authClient.signOut();
+      throw new Error(
+        "Acesso negado: você não é o proprietário (Owner) deste tenant.",
+      );
+    }
+
+    setMembership(membershipData);
   };
+
+  const signOut = async () => {
+    await authClient.signOut();
+    setMembership(null);
+  };
+
   return (
     <AuthContext.Provider
       value={{
-        session: data,
+        session: data ?? null,
         user: data?.user ?? null,
         isPending,
         error,
-        client: authClient,
+        membership,
         signInAsOwner,
+        signOut,
       }}
     >
       {children}
