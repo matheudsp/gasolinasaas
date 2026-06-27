@@ -1,0 +1,48 @@
+{
+  "name": "server",
+  "main": "src/index.ts",
+  "type": "module",
+  "scripts": {
+    "build": "tsdown",
+    "check-types": "tsc -b",
+    "compile": "pnpm build --compile --minify --sourcemap --bytecode ./src/index.ts --outfile server",
+    "db:push": "drizzle-kit push",
+    "db:studio": "drizzle-kit studio",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate",
+    "dev": "wrangler dev --port=15000",
+    "start": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "secrets:setup": "node scripts/setup-secrets.mjs",
+    "sync:secrets": "node scripts/sync-wrangler-secrets.js --env-file=.env --only=DATABASE_URL,DATABASE_URL_POOLER,BETTER_AUTH_SECRET --worker=ship-fullstack-server",
+    "cf-typegen": "wrangler types --env-interface CloudflareBindings",
+    "generate-types": "wrangler types",
+    "seed:liso": "tsx src/db/seed.ts",
+    "db:seed": "pnpm run src/db/seed.ts"
+
+  },
+  "dependencies": {
+    "@better-auth/expo": "^1.3.13",
+    "@hono/node-server": "^1.14.4",
+    "@neondatabase/serverless": "^1.0.1",
+    "@orpc/client": "^1.9.0",
+    "@orpc/openapi": "^1.9.0",
+    "@orpc/server": "^1.9.0",
+    "@orpc/zod": "^1.9.0",
+    "better-auth": "^1.3.13",
+    "dotenv": "^17.2.1",
+    "drizzle-orm": "^0.44.2",
+    "hono": "^4.8.2",
+    "ws": "^8.18.3",
+    "zod": "^4.0.2"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.11",
+    "@types/ws": "^8.18.1",
+    "drizzle-kit": "^0.31.2",
+    "tsdown": "^0.15.1",
+    "tsx": "^4.19.2",
+    "typescript": "^5.8.2",
+    "wrangler": "^4.42.0"
+  }
+}

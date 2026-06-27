@@ -1,0 +1,18 @@
+# Local development environment variables for Wrangler
+# This file is automatically loaded by `wrangler dev`
+# Copy this file to .dev.vars and fill in your actual values
+
+NODE_ENV=development
+CORS_ORIGIN=http://localhost:15001
+
+# Database
+DATABASE_URL=
+DATABASE_URL_POOLER=
+
+# Better Auth
+BETTER_AUTH_SECRET=
+BETTER_AUTH_URL=http://localhost:15000
+
+# Google OAuth
+GOOGLE_CLIENT_ID=
+GOOGLE_CLIENT_SECRET=

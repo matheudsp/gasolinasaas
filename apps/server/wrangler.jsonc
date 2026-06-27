@@ -1,0 +1,17 @@
+{
+	"name": "gasolina-server",
+	"main": "src/index.ts",
+	"compatibility_date": "2025-06-15",
+	"compatibility_flags": ["nodejs_compat"],
+	"vars": {
+		"NODE_ENV": "production",
+		"CORS_ORIGIN": "https://gasolina.ship-fullstack.workers.dev",
+		"BETTER_AUTH_URL": "https://gasolina-server.ship-fullstack.workers.dev",
+		// Add non-sensitive public IDs here:
+		// "GOOGLE_CLIENT_ID": "your_google_client_id"
+	}
+	// For sensitive data, use:
+	// pnpm run secrets:setup
+	// or: wrangler secret put SECRET_NAME
+	// Don't add secrets to "vars" - they're visible in the dashboard!
+}

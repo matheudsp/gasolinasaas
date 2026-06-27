@@ -1,0 +1,13 @@
+# Production environment secrets for Cloudflare Workers
+# This file is used by `pnpm run secrets:setup` to set production secrets
+# Copy this file to .prod.vars and fill in your actual production values
+
+# Database (Production)
+DATABASE_URL=
+DATABASE_URL_POOLER=
+
+# Better Auth (Production)
+BETTER_AUTH_SECRET=
+
+# Google OAuth (Production)
+GOOGLE_CLIENT_SECRET=
