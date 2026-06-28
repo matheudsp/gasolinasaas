@@ -1,32 +1,82 @@
-import { useAuth } from '@/context/AuthContext'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
-import { Avatar, AvatarFallback } from '@/components/ui/avatar'
-import { User, Mail, Calendar, ShieldCheck } from 'lucide-react'
+import { useEffect } from "react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
+import { useMutation } from "@tanstack/react-query";
+import { useAuth } from "@/context/AuthContext";
+import { authClient } from "@/lib/auth-client";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Separator } from "@/components/ui/separator";
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
+
+import { User, Mail, Calendar, ShieldCheck, Building2 } from "lucide-react";
+import { toast } from "sonner";
+
+const profileSchema = z.object({
+  name: z.string().min(2, "Name must be at least 2 characters"),
+});
+
+type ProfileForm = z.infer<typeof profileSchema>;
 
 export default function Profile() {
-  const { user } = useAuth()
+  const { user, membership } = useAuth();
 
-  if (!user) return null
+  const form = useForm<ProfileForm>({
+    resolver: zodResolver(profileSchema),
+    defaultValues: { name: user?.name ?? "" },
+  });
 
-  const initials = user.name
-    ?.split(' ')
-    .map((n) => n[0])
-    .join('')
-    .toUpperCase()
-    .slice(0, 2) ?? 'U'
+  useEffect(() => {
+    form.reset({ name: user?.name ?? "" });
+  }, [user?.name, form]);
 
-  const createdAt = new Date(user.createdAt).toLocaleDateString('pt-BR', {
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-  })
+  const { mutate: updateProfile, isPending } = useMutation({
+    mutationFn: async ({ name }: ProfileForm) => {
+      const { error } = await authClient.updateUser({ name });
+      if (error) throw new Error(error.message);
+    },
+    onSuccess: () => {
+      toast.success("Profile updated successfully");
+    },
+    onError: (error) => {
+      toast.error(`Failed to update profile: ${error.message}`);
+    },
+  });
+
+  if (!user) return null;
+
+  const initials =
+    user.name
+      ?.split(" ")
+      .map((n) => n[0])
+      .join("")
+      .toUpperCase()
+      .slice(0, 2) ?? "U";
+
+  const createdAt = new Date(user.createdAt).toLocaleDateString("pt-BR", {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+  });
 
   return (
     <div className="mx-auto max-w-2xl space-y-6">
       <div>
         <h1 className="text-3xl font-bold tracking-tight">Profile</h1>
-        <p className="text-muted-foreground">Your account information.</p>
+        <p className="text-muted-foreground">
+          Manage your account information.
+        </p>
       </div>
 
       <Card>
@@ -41,31 +91,88 @@ export default function Profile() {
             </div>
           </div>
         </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex items-center gap-3 text-sm">
-            <User className="h-4 w-4 text-muted-foreground" />
-            <span className="font-medium">Full Name:</span>
-            <span>{user.name}</span>
-          </div>
+        <CardContent className="space-y-3">
           <div className="flex items-center gap-3 text-sm">
             <Mail className="h-4 w-4 text-muted-foreground" />
-            <span className="font-medium">Email:</span>
-            <span>{user.email}</span>
+            <span className="font-medium">Email</span>
+            <span className="text-muted-foreground">{user.email}</span>
           </div>
-          {/* <div className="flex items-center gap-3 text-sm">
-            <ShieldCheck className="h-4 w-4 text-muted-foreground" />
-            <span className="font-medium">Role:</span>
-            <Badge variant={user. ? 'default' : 'secondary'}>
-              {user.is_superadmin ? 'Superadmin' : 'User'}
-            </Badge>
-          </div> */}
           <div className="flex items-center gap-3 text-sm">
             <Calendar className="h-4 w-4 text-muted-foreground" />
-            <span className="font-medium">Member since:</span>
-            <span>{createdAt}</span>
+            <span className="font-medium">Member since</span>
+            <span className="text-muted-foreground">{createdAt}</span>
           </div>
+          {membership && (
+            <div className="flex items-center gap-3 text-sm">
+              <ShieldCheck className="h-4 w-4 text-muted-foreground" />
+              <span className="font-medium">Role</span>
+              <Badge className="capitalize">{membership.role}</Badge>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {membership && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-base">
+              <Building2 className="h-4 w-4" />
+              Tenant
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="flex items-center gap-3 text-sm">
+              <span className="font-medium">Name</span>
+              <span className="text-muted-foreground">
+                {membership.tenant.name}
+              </span>
+            </div>
+            <div className="flex items-center gap-3 text-sm">
+              <span className="font-medium">Slug</span>
+              <span className="font-mono text-muted-foreground">
+                {membership.tenant.slug}
+              </span>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <User className="h-4 w-4" />
+            Edit Profile
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <Form {...form}>
+            <form
+              onSubmit={form.handleSubmit((data) => updateProfile(data))}
+              className="space-y-4"
+            >
+              <FormField
+                control={form.control}
+                name="name"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Full Name</FormLabel>
+                    <FormControl>
+                      <Input placeholder="Your name" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <Separator />
+              <div className="flex justify-end">
+                <Button type="submit" disabled={isPending}>
+                  {isPending ? "Saving..." : "Save changes"}
+                </Button>
+              </div>
+            </form>
+          </Form>
         </CardContent>
       </Card>
     </div>
-  )
+  );
 }
