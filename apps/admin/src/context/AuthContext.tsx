@@ -6,7 +6,7 @@ import {
   type ReactNode,
 } from "react";
 import { authClient } from "@/lib/auth-client";
-import { client } from "@/lib/orpc";
+import { client, setActiveTenant } from "@/lib/orpc";
 
 type Session = typeof authClient.$Infer.Session;
 type User = typeof authClient.$Infer.Session.user;
@@ -31,12 +31,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!data?.user) {
       setMembership(null);
+      setActiveTenant(undefined);
       return;
     }
     client.tenant
       .getMyMembership()
-      .then((result) => setMembership(result ?? null))
-      .catch(() => setMembership(null));
+      .then((result) => {
+        setMembership(result ?? null);
+        setActiveTenant(result?.tenantId ?? undefined);
+      })
+      .catch(() => {
+        setMembership(null);
+        setActiveTenant(undefined);
+      });
   }, [data?.user?.id]);
 
   const signInAsOwner = async (email: string, password: string) => {
@@ -66,11 +73,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     setMembership(membershipData);
+    setActiveTenant(membershipData.tenantId);
   };
 
   const signOut = async () => {
     await authClient.signOut();
     setMembership(null);
+    setActiveTenant(undefined);
   };
 
   return (

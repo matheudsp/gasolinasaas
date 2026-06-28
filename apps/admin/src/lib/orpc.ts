@@ -2,8 +2,14 @@ import { createORPCClient } from "@orpc/client";
 import { RPCLink } from "@orpc/client/fetch";
 import { createTanstackQueryUtils } from "@orpc/tanstack-query";
 import { QueryCache, QueryClient } from "@tanstack/react-query";
-
+import { toast } from "sonner";
 import type { AppRouterClient } from "../../../server/src/routers/index";
+
+let activeTenantId: string | undefined;
+
+export function setActiveTenant(tenantId: string | undefined) {
+  activeTenantId = tenantId;
+}
 
 export const queryClient = new QueryClient({
   defaultOptions: {
@@ -13,13 +19,23 @@ export const queryClient = new QueryClient({
   },
   queryCache: new QueryCache({
     onError: (error) => {
-      console.error(error);
+      toast.error(`Erro: ${error.message}`, {
+        action: {
+          label: "Tentar novamente",
+          onClick: () => {
+            queryClient.invalidateQueries();
+          },
+        },
+      });
     },
   }),
 });
 
 export const link = new RPCLink({
   url: `${import.meta.env.VITE_API_URL}/rpc`,
+  headers: () => ({
+    ...(activeTenantId ? { "x-tenant-id": activeTenantId } : {}),
+  }),
   fetch(url, options) {
     return fetch(url, {
       ...options,

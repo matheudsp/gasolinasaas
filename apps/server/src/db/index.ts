@@ -1,13 +1,9 @@
 import { env } from "cloudflare:workers";
-import { neon, neonConfig } from "@neondatabase/serverless";
-import { drizzle } from "drizzle-orm/neon-http";
-import ws from "ws";
+import { Pool } from "@neondatabase/serverless";
+import { drizzle } from "drizzle-orm/neon-serverless";
 
-neonConfig.webSocketConstructor = ws;
+// neon-http não suporta db.transaction() — use neon-serverless com Pool (WebSocket).
+// Cloudflare Workers tem WebSocket nativo, não precisa de `ws` nem neonConfig.
+const pool = new Pool({ connectionString: env.DATABASE_URL || "" });
 
-// To work in edge environments (Cloudflare Workers, Vercel Edge, etc.), enable querying over fetch
-// neonConfig.poolQueryViaFetch = true
-
-// const sql = neon(process.env.DATABASE_URL || "");
-const sql = neon(env.DATABASE_URL || "");
-export const db = drizzle(sql);
+export const db = drizzle({ client: pool });

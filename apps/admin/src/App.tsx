@@ -5,6 +5,7 @@ import Login from '@/pages/Login'
 import Register from '@/pages/Register'
 import Dashboard from '@/pages/Dashboard'
 import Profile from '@/pages/Profile'
+import StationDetail from './pages/StationDetail'
 
 export default function App() {
   return (
@@ -20,6 +21,7 @@ export default function App() {
       >
         <Route path="/" element={<Dashboard />} />
         <Route path="/profile" element={<Profile />} />
+        <Route path="/stations/:id" element={<StationDetail />} />
       </Route>
     </Routes>
   )
