@@ -4,7 +4,6 @@ import {
   Building2,
   LayoutDashboard,
   CreditCard,
-  Flag,
   LogOut,
   User,
   Menu,
@@ -22,14 +21,13 @@ import {
 import { useState } from "react";
 
 const navItems = [
-  { to: "/", label: "Dashboard", icon: LayoutDashboard },
-  { to: "/tenants", label: "Tenants", icon: Building2 },
-  { to: "/plans", label: "Plans", icon: CreditCard },
-  { to: "/feature-flags", label: "Feature Flags", icon: Flag },
+  { to: "/dashboard", label: "Painel", icon: LayoutDashboard },
+  { to: "/tenants", label: "Clientes", icon: Building2, adminOnly: true },
+  { to: "/plans", label: "Planos", icon: CreditCard },
 ];
 
 export function Layout() {
-  const { user, signOut } = useAuth();
+  const { user, signOut, isAdmin } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -45,19 +43,26 @@ export function Layout() {
   return (
     <div className="flex min-h-screen flex-col">
       <header className="sticky top-0 z-50 flex h-16 items-center border-b bg-background px-4 sm:px-6">
-        <Link to="/" className="flex items-center gap-2 font-semibold text-lg">
-          <Building2 className="h-6 w-6" />
-          <span className="hidden sm:inline">Gasolina</span>
+        <Link
+          to="/dashboard"
+          className="flex items-center gap-2 font-semibold text-lg"
+        >
+          <span className="hidden sm:inline">
+            Gasolina - Painel Adminstrativo
+          </span>
         </Link>
 
         <nav className="ml-auto flex items-center gap-2">
           <div className="hidden md:flex md:items-center md:gap-1">
             {navItems.map((item) => {
+              if (item.adminOnly && !isAdmin) return null;
               const Icon = item.icon;
               return (
                 <Button
                   key={item.to}
-                  variant={location.pathname === item.to ? "secondary" : "ghost"}
+                  variant={
+                    location.pathname === item.to ? "secondary" : "ghost"
+                  }
                   size="sm"
                   asChild
                 >
@@ -84,11 +89,11 @@ export function Layout() {
               </div>
               <DropdownMenuSeparator />
               <DropdownMenuItem onClick={() => navigate("/profile")}>
-                <User className="mr-2 h-4 w-4" /> Profile
+                <User className="mr-2 h-4 w-4" /> Perfil
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem onClick={signOut}>
-                <LogOut className="mr-2 h-4 w-4" /> Logout
+                <LogOut className="mr-2 h-4 w-4" /> Sair
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -112,11 +117,14 @@ export function Layout() {
         <div className="border-b bg-background md:hidden">
           <nav className="flex flex-col p-4 gap-1">
             {navItems.map((item) => {
+              if (item.adminOnly && !isAdmin) return null;
               const Icon = item.icon;
               return (
                 <Button
                   key={item.to}
-                  variant={location.pathname === item.to ? "secondary" : "ghost"}
+                  variant={
+                    location.pathname === item.to ? "secondary" : "ghost"
+                  }
                   className="justify-start"
                   asChild
                   onClick={() => setMobileOpen(false)}

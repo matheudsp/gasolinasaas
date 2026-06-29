@@ -1,22 +1,15 @@
 import { ORPCError } from "@orpc/server";
 import { and, eq } from "drizzle-orm";
 import { z } from "zod";
-import { db } from "../db";
 import { fuel, priceHistory, station, stationFuel } from "../db/schema/station";
 import { protectedProcedure, tenantOwnerProcedure } from "../lib/orpc";
 
-// ─── Router ───────────────────────────────────────────────────────────────────
-
 export const fuelRouter = {
-  /**
-   * List available fuel prices for the resolved tenant's active stations.
-   * Optionally scoped to a single station via stationId.
-   */
   listPrices: protectedProcedure
     .input(
       z.object({
         stationId: z.string().optional(),
-      })
+      }),
     )
     .handler(async ({ context, input }) => {
       if (!context.tenant) {
@@ -33,7 +26,7 @@ export const fuelRouter = {
         conditions.push(eq(stationFuel.stationId, input.stationId));
       }
 
-      return db
+      return context.db
         .select({
           stationFuelId: stationFuel.id,
           stationId: station.id,
@@ -51,18 +44,6 @@ export const fuelRouter = {
         .where(and(...conditions));
     }),
 
-  /**
-   * Update the price of a fuel at a specific station.
-   *
-   * Two things happen inside a transaction:
-   * 1. stationFuel.currentPrice is updated.
-   * 2. A priceHistory record is inserted with the previous price.
-   *
-   * A cross-tenant ownership check is done explicitly:
-   * tenantOwnerProcedure validates the user is an owner, but it does not
-   * validate that the stationFuel being updated belongs to their tenant.
-   * That check is done manually before the transaction.
-   */
   updatePrice: tenantOwnerProcedure
     .input(
       z.object({
@@ -71,13 +52,12 @@ export const fuelRouter = {
           .string()
           .regex(
             /^\d+(\.\d{1,3})?$/,
-            "Price must be a positive number with up to 3 decimal places"
+            "Price must be a positive number with up to 3 decimal places",
           ),
-      })
+      }),
     )
     .handler(async ({ context, input }) => {
-      // Fetch current price and verify tenant ownership in one query.
-      const current = await db
+      const current = await context.db
         .select({
           currentPrice: stationFuel.currentPrice,
           tenantId: station.tenantId,
@@ -92,14 +72,13 @@ export const fuelRouter = {
         throw new ORPCError("NOT_FOUND");
       }
 
-      // Defense in depth: confirm the station belongs to the authenticated tenant.
       if (current.tenantId !== context.tenant!.id) {
         throw new ORPCError("FORBIDDEN");
       }
 
       const now = new Date();
 
-      await db.transaction(async (tx) => {
+      await context.db.transaction(async (tx) => {
         await tx
           .update(stationFuel)
           .set({ currentPrice: input.newPrice, updatedAt: now })
@@ -111,7 +90,6 @@ export const fuelRouter = {
           previousPrice: current.currentPrice,
           newPrice: input.newPrice,
           changedAt: now,
-          // session is guaranteed non-null by tenantOwnerProcedure → requireAuth
           changedById: context.session!.user.id,
         });
       });

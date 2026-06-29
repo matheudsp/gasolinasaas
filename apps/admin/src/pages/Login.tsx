@@ -12,27 +12,27 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Building2 } from "lucide-react";
+import { Fuel, LockKeyhole } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 
 export default function Login() {
-  const { signInAsOwner, session } = useAuth();
+  const { signIn, session } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
 
-  if (session) return <Navigate to="/" replace />;
+  if (session) return <Navigate to="/dashboard" replace />;
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
     try {
-      await signInAsOwner(email, password);
-      navigate("/");
+      await signIn(email, password);
+      navigate("/dashboard");
     } catch (err: unknown) {
-      let msg = "Login failed";
+      let msg = "Falha na autenticação";
       if (err && typeof err === "object" && "response" in err) {
         const detail = (err as { response: { data: { detail?: unknown } } })
           .response?.data?.detail;
@@ -42,39 +42,56 @@ export default function Login() {
           msg = detail;
         }
       }
-      toast({ title: "Error", description: msg, variant: "destructive" });
+      toast({
+        title: "Acesso Negado",
+        description: msg,
+        variant: "destructive",
+      });
     } finally {
       setLoading(false);
     }
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center p-4">
-      <Card className="w-full max-w-sm">
-        <CardHeader className="text-center">
-          <div className="mx-auto mb-2 flex h-12 w-12 items-center justify-center rounded-full bg-primary">
-            <Building2 className="h-6 w-6 text-primary-foreground" />
+    <div className="flex min-h-screen items-center justify-center bg-background p-4">
+      <Card className="w-full max-w-sm border-border shadow-sm">
+        <CardHeader className="space-y-3 text-center pb-6">
+          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-primary/10">
+            <Fuel className="h-8 w-8 text-primary" />
           </div>
-          <CardTitle className="text-xl">Sign In</CardTitle>
-          <CardDescription>
-            Enter your credentials to access the dashboard
-          </CardDescription>
+          <div className="space-y-1">
+            <CardTitle className="text-2xl font-bold tracking-tight">
+              GASOLINA
+            </CardTitle>
+            <CardDescription className="text-sm font-medium">
+              Gestão de Rede e Fidelização
+            </CardDescription>
+          </div>
         </CardHeader>
+
         <form onSubmit={handleSubmit}>
-          <CardContent className="space-y-4">
+          <CardContent className="space-y-5">
             <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
+              <Label htmlFor="email" className="font-medium">
+                E-mail
+              </Label>
               <Input
                 id="email"
                 type="email"
-                placeholder="you@example.com"
+                placeholder="gerente@rededepostos.com.br"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
+                className="bg-transparent"
               />
             </div>
+
             <div className="space-y-2">
-              <Label htmlFor="password">Password</Label>
+              <div className="flex items-center justify-between">
+                <Label htmlFor="password" className="font-medium">
+                  Senha
+                </Label>
+              </div>
               <Input
                 id="password"
                 type="password"
@@ -82,22 +99,26 @@ export default function Login() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
+                className="bg-transparent"
               />
             </div>
           </CardContent>
-          <CardFooter className="flex flex-col gap-4">
-            <Button type="submit" className="w-full" disabled={loading}>
-              {loading ? "Signing in..." : "Sign In"}
+
+          <CardFooter className="flex flex-col gap-4 pt-2 pb-8">
+            <Button
+              type="submit"
+              className="w-full h-11 text-base shadow-sm"
+              disabled={loading}
+            >
+              {loading ? "Autenticando..." : "Entrar"}
             </Button>
-            <p className="text-sm text-muted-foreground">
-              Don&apos;t have an account?{" "}
-              <Link
-                to="/register"
-                className="underline underline-offset-4 hover:text-primary"
-              >
-                Sign up
-              </Link>
-            </p>
+
+            <div className="mt-2 flex items-center justify-center gap-1.5 text-xs text-muted-foreground">
+              <LockKeyhole className="h-3.5 w-3.5" />
+              <span>
+                Acesso restrito. Sessões são registradas para auditoria.
+              </span>
+            </div>
           </CardFooter>
         </form>
       </Card>

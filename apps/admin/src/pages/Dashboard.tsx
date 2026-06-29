@@ -4,7 +4,6 @@ import { useAuth } from "@/context/AuthContext";
 import { orpc } from "@/lib/orpc";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Table,
@@ -14,7 +13,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Building2, Fuel, Settings, ArrowRight } from "lucide-react";
+import { Building2, Fuel, Phone } from "lucide-react";
 
 export default function Dashboard() {
   const { user, membership } = useAuth();
@@ -45,25 +44,20 @@ export default function Dashboard() {
       <div className="flex items-start justify-between">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">
-            Welcome, {user?.name}
+            Olá, {user?.name}
           </h1>
-          <p className="text-muted-foreground">{membership?.tenant.name}</p>
+          <p className="text-muted-foreground text-xs">
+            tenantId:
+            {membership?.tenant.name}
+          </p>
         </div>
-        {membership?.tenantId && (
-          <Button asChild size="sm" variant="outline">
-            <Link to={`/tenants/${membership.tenantId}`}>
-              <Settings className="mr-1.5 h-4 w-4" />
-              Manage Tenant
-            </Link>
-          </Button>
-        )}
       </div>
 
       <div className="grid gap-4 sm:grid-cols-3">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium">
-              Total Stations
+              Postos cadastrados
             </CardTitle>
             <Building2 className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
@@ -78,7 +72,9 @@ export default function Dashboard() {
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">Fuel Types</CardTitle>
+            <CardTitle className="text-sm font-medium">
+              Tipos de Combustível
+            </CardTitle>
             <Fuel className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
@@ -92,40 +88,30 @@ export default function Dashboard() {
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">Role</CardTitle>
-            <Settings className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium">
+              Suporte via WhatsApp
+            </CardTitle>
+            <Phone className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold capitalize">
-              {membership?.role ?? "—"}
-            </div>
-            <p className="text-xs text-muted-foreground">
-              {membership?.tenant.slug}
-            </p>
+            <div className="text-lg font-bold">(89) 9 94176493</div>
           </CardContent>
         </Card>
       </div>
 
       <div className="space-y-4">
         <div className="flex items-center justify-between">
-          <h2 className="text-xl font-semibold">Stations & Prices</h2>
-          {membership?.tenantId && (
-            <Button asChild size="sm" variant="ghost">
-              <Link to={`/tenants/${membership.tenantId}`}>
-                View all <ArrowRight className="ml-1 h-4 w-4" />
-              </Link>
-            </Button>
-          )}
+          <h2 className="text-xl font-semibold">Listagem</h2>
         </div>
 
         <Card className="overflow-hidden">
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Station</TableHead>
-                <TableHead>City</TableHead>
-                <TableHead>Address</TableHead>
-                <TableHead>Fuel Prices</TableHead>
+                <TableHead>Posto</TableHead>
+                <TableHead>Cidade</TableHead>
+                <TableHead>Endereço</TableHead>
+                <TableHead>Preço Combustível</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -155,7 +141,7 @@ export default function Dashboard() {
                     colSpan={4}
                     className="py-10 text-center text-muted-foreground"
                   >
-                    No stations yet. Add one from the Tenant settings.
+                    Nenhum posto ainda. Adicione um nas configurações do Tenant.
                   </TableCell>
                 </TableRow>
               ) : (

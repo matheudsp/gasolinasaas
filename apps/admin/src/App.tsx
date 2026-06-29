@@ -1,28 +1,38 @@
-import { Routes, Route } from 'react-router-dom'
-import { ProtectedRoute } from '@/components/ProtectedRoute'
-import { Layout } from '@/components/Layout'
-import Login from '@/pages/Login'
-import Register from '@/pages/Register'
-import Dashboard from '@/pages/Dashboard'
-import Profile from '@/pages/Profile'
-import StationDetail from './pages/StationDetail'
+import { Routes, Route } from "react-router-dom";
+import { TenantProtectedRoute } from "@/components/TenantProtectedRoute";
+import { Layout } from "@/components/Layout";
+import Login from "@/pages/Login";
+import Index from "@/pages/Index";
+import Dashboard from "@/pages/Dashboard";
+import Profile from "@/pages/Profile";
+import StationDetail from "./pages/StationDetail";
+import { AdminProtectedRoute } from "./components/AdminProtectedRoute";
 
 export default function App() {
   return (
     <Routes>
       <Route path="/login" element={<Login />} />
-      <Route path="/register" element={<Register />} />
+      <Route path="/" element={<Index />} />
       <Route
         element={
-          <ProtectedRoute>
+          <TenantProtectedRoute>
             <Layout />
-          </ProtectedRoute>
+          </TenantProtectedRoute>
         }
       >
-        <Route path="/" element={<Dashboard />} />
+        <Route path="/dashboard" element={<Dashboard />} />
         <Route path="/profile" element={<Profile />} />
         <Route path="/stations/:id" element={<StationDetail />} />
       </Route>
+      <Route
+        element={
+          <AdminProtectedRoute>
+            <Layout />
+          </AdminProtectedRoute>
+        }
+      >
+        <Route path="/tenants" element={<div>Tenants</div>} />
+      </Route>
     </Routes>
-  )
+  );
 }

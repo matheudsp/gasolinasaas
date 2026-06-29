@@ -15,6 +15,13 @@
       "when": 1782269938638,
       "tag": "0001_luxuriant_vulcan",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1782688895030,
+      "tag": "0002_pale_thundra",
+      "breakpoints": true
     }
   ]
 }

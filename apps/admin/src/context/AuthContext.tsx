@@ -10,7 +10,9 @@ import { client, setActiveTenant } from "@/lib/orpc";
 
 type Session = typeof authClient.$Infer.Session;
 type User = typeof authClient.$Infer.Session.user;
-type Membership = NonNullable<Awaited<ReturnType<typeof client.tenant.getMyMembership>>>;
+type Membership = NonNullable<
+  Awaited<ReturnType<typeof client.tenant.getMyMembership>>
+>;
 
 interface AuthContextType {
   session: Session | null;
@@ -18,15 +20,24 @@ interface AuthContextType {
   isPending: boolean;
   error: unknown;
   membership: Membership | null;
-  signInAsOwner: (email: string, password: string) => Promise<void>;
+  isAdmin: boolean;
+  signIn: (email: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+function getUserRole(user: User | null | undefined): string | undefined {
+  return (user as Record<string, unknown> | null | undefined)?.role as
+    | string
+    | undefined;
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const { data, isPending, error } = authClient.useSession();
   const [membership, setMembership] = useState<Membership | null>(null);
+
+  const isAdmin = getUserRole(data?.user) === "admin";
 
   useEffect(() => {
     if (!data?.user) {
@@ -34,6 +45,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setActiveTenant(undefined);
       return;
     }
+
+    if (isAdmin) return;
+
     client.tenant
       .getMyMembership()
       .then((result) => {
@@ -44,17 +58,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setMembership(null);
         setActiveTenant(undefined);
       });
-  }, [data?.user?.id]);
+  }, [data?.user?.id, isAdmin]);
 
-  const signInAsOwner = async (email: string, password: string) => {
-    const { data: signInData, error: signInError } = await authClient.signIn.email({
-      email,
-      password,
-    });
+  const signIn = async (email: string, password: string) => {
+    const { data: signInData, error: signInError } =
+      await authClient.signIn.email({ email, password });
 
     if (signInError || !signInData) {
       throw new Error(signInError?.message || "Falha na autenticação.");
     }
+
+    const role = getUserRole(signInData.user);
+
+    if (role === "admin") return;
 
     let membershipData: Membership | null = null;
 
@@ -90,7 +106,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         isPending,
         error,
         membership,
-        signInAsOwner,
+        isAdmin,
+        signIn,
         signOut,
       }}
     >

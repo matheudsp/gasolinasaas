@@ -1,7 +1,6 @@
 import { ORPCError } from "@orpc/server";
 import { and, eq, ilike, or } from "drizzle-orm";
 import { z } from "zod";
-import { db } from "../db";
 import { station } from "../db/schema/station";
 import { protectedProcedure, tenantOwnerProcedure } from "../lib/orpc";
 
@@ -27,19 +26,14 @@ const stationBaseSchema = z
   })
   .merge(amenitiesSchema);
 
-
 export const stationRouter = {
-  /**
-   * List active stations for the resolved tenant.
-   * Supports optional text search and amenity filtering.
-   */
   search: protectedProcedure
     .input(
       z.object({
         query: z.string().optional(),
         city: z.string().optional(),
         amenities: amenitiesSchema.optional(),
-      })
+      }),
     )
     .handler(async ({ context, input }) => {
       if (!context.tenant) {
@@ -54,7 +48,7 @@ export const stationRouter = {
       if (input.query) {
         const textSearch = or(
           ilike(station.name, `%${input.query}%`),
-          ilike(station.address, `%${input.query}%`)
+          ilike(station.address, `%${input.query}%`),
         );
         if (textSearch) conditions.push(textSearch);
       }
@@ -70,8 +64,7 @@ export const stationRouter = {
           conditions.push(eq(station.accessibility, true));
         if (amenities.convenienceStore)
           conditions.push(eq(station.convenienceStore, true));
-        if (amenities.restaurant)
-          conditions.push(eq(station.restaurant, true));
+        if (amenities.restaurant) conditions.push(eq(station.restaurant, true));
         if (amenities.electricCharging)
           conditions.push(eq(station.electricCharging, true));
         if (amenities.carWash) conditions.push(eq(station.carWash, true));
@@ -81,22 +74,18 @@ export const stationRouter = {
         if (amenities.bathroom) conditions.push(eq(station.bathroom, true));
       }
 
-      return db
+      return context.db
         .select()
         .from(station)
         .where(and(...conditions));
     }),
 
-  /**
-   * Create a new station for the authenticated tenant owner.
-   * tenantId is taken from the validated context — never from input.
-   */
   create: tenantOwnerProcedure
     .input(stationBaseSchema)
     .handler(async ({ context, input }) => {
       const now = new Date();
 
-      const [created] = await db
+      const [created] = await context.db
         .insert(station)
         .values({
           id: crypto.randomUUID(),
@@ -111,10 +100,6 @@ export const stationRouter = {
       return created;
     }),
 
-  /**
-   * Update fields of an existing station.
-   * Validates the station belongs to the authenticated tenant before updating.
-   */
   update: tenantOwnerProcedure
     .input(
       z.object({
@@ -122,17 +107,17 @@ export const stationRouter = {
         data: stationBaseSchema
           .partial()
           .extend({ isActive: z.boolean().optional() }),
-      })
+      }),
     )
     .handler(async ({ context, input }) => {
-      const existing = await db
+      const existing = await context.db
         .select({ id: station.id })
         .from(station)
         .where(
           and(
             eq(station.id, input.id),
-            eq(station.tenantId, context.tenant!.id)
-          )
+            eq(station.tenantId, context.tenant!.id),
+          ),
         )
         .limit(1)
         .then((rows) => rows.at(0));
@@ -141,7 +126,7 @@ export const stationRouter = {
         throw new ORPCError("NOT_FOUND");
       }
 
-      const [updated] = await db
+      const [updated] = await context.db
         .update(station)
         .set({ ...input.data, updatedAt: new Date() })
         .where(eq(station.id, input.id))
@@ -150,21 +135,17 @@ export const stationRouter = {
       return updated;
     }),
 
-  /**
-   * Soft-delete a station by setting isActive = false.
-   * Validates the station belongs to the authenticated tenant.
-   */
   remove: tenantOwnerProcedure
     .input(z.object({ id: z.string() }))
     .handler(async ({ context, input }) => {
-      const existing = await db
+      const existing = await context.db
         .select({ id: station.id })
         .from(station)
         .where(
           and(
             eq(station.id, input.id),
-            eq(station.tenantId, context.tenant!.id)
-          )
+            eq(station.tenantId, context.tenant!.id),
+          ),
         )
         .limit(1)
         .then((rows) => rows.at(0));
@@ -173,7 +154,7 @@ export const stationRouter = {
         throw new ORPCError("NOT_FOUND");
       }
 
-      await db
+      await context.db
         .update(station)
         .set({ isActive: false, updatedAt: new Date() })
         .where(eq(station.id, input.id));

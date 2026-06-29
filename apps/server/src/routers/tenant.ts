@@ -1,6 +1,6 @@
 import { eq } from "drizzle-orm";
 import { z } from "zod";
-import { db } from "../db";
+
 import { tenant, tenantMembership } from "../db/schema/tenant";
 import { protectedProcedure, tenantOwnerProcedure } from "../lib/orpc";
 
@@ -11,7 +11,7 @@ export const tenantRouter = {
    * mas context.tenant ainda não (é o que estamos buscando).
    */
   getMyMembership: protectedProcedure.handler(async ({ context }) => {
-    const [result] = await db
+    const [result] = await context.db
       .select({
         id: tenantMembership.id,
         role: tenantMembership.role,
@@ -41,7 +41,7 @@ export const tenantRouter = {
       }),
     )
     .handler(async ({ context, input }) => {
-      const [updated] = await db
+      const [updated] = await context.db
         .update(tenant)
         .set({ ...input, updatedAt: new Date() })
         .where(eq(tenant.id, context.tenant!.id))
