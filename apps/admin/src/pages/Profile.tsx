@@ -73,9 +73,9 @@ export default function Profile() {
   return (
     <div className="mx-auto max-w-2xl space-y-6">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">Profile</h1>
+        <h1 className="text-3xl font-bold tracking-tight">Minha Conta</h1>
         <p className="text-muted-foreground">
-          Manage your account information.
+          Gerencie as informações da sua conta.
         </p>
       </div>
 
@@ -94,12 +94,12 @@ export default function Profile() {
         <CardContent className="space-y-3">
           <div className="flex items-center gap-3 text-sm">
             <Mail className="h-4 w-4 text-muted-foreground" />
-            <span className="font-medium">Email</span>
+            <span className="font-medium">E-mail</span>
             <span className="text-muted-foreground">{user.email}</span>
           </div>
           <div className="flex items-center gap-3 text-sm">
             <Calendar className="h-4 w-4 text-muted-foreground" />
-            <span className="font-medium">Member since</span>
+            <span className="font-medium">Membro desde</span>
             <span className="text-muted-foreground">{createdAt}</span>
           </div>
           {membership && (
@@ -116,13 +116,12 @@ export default function Profile() {
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-base">
-              <Building2 className="h-4 w-4" />
-              Tenant
+              Domínio
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
             <div className="flex items-center gap-3 text-sm">
-              <span className="font-medium">Name</span>
+              <span className="font-medium">Nome</span>
               <span className="text-muted-foreground">
                 {membership.tenant.name}
               </span>
@@ -141,7 +140,7 @@ export default function Profile() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base">
             <User className="h-4 w-4" />
-            Edit Profile
+            Editar Perfil
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -155,9 +154,9 @@ export default function Profile() {
                 name="name"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Full Name</FormLabel>
+                    <FormLabel>Nome Completo</FormLabel>
                     <FormControl>
-                      <Input placeholder="Your name" {...field} />
+                      <Input placeholder="Seu nome" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -166,7 +165,7 @@ export default function Profile() {
               <Separator />
               <div className="flex justify-end">
                 <Button type="submit" disabled={isPending}>
-                  {isPending ? "Saving..." : "Save changes"}
+                  {isPending ? "Salvando..." : "Salvar alterações"}
                 </Button>
               </div>
             </form>

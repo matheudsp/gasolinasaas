@@ -1,12 +1,13 @@
 import { Routes, Route } from "react-router-dom";
 import { TenantProtectedRoute } from "@/components/TenantProtectedRoute";
+import { AdminProtectedRoute } from "./components/AdminProtectedRoute";
 import { Layout } from "@/components/Layout";
 import Login from "@/pages/Login";
 import Index from "@/pages/Index";
 import Dashboard from "@/pages/Dashboard";
 import Profile from "@/pages/Profile";
 import StationDetail from "./pages/StationDetail";
-import { AdminProtectedRoute } from "./components/AdminProtectedRoute";
+import Admin from "./pages/Admin";
 
 export default function App() {
   return (
@@ -31,7 +32,7 @@ export default function App() {
           </AdminProtectedRoute>
         }
       >
-        <Route path="/tenants" element={<div>Tenants</div>} />
+        <Route path="/admin" element={<Admin />} />
       </Route>
     </Routes>
   );

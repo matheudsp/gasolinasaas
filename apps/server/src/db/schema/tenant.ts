@@ -1,4 +1,5 @@
 import {
+  boolean,
   pgEnum,
   pgTable,
   text,
@@ -13,6 +14,7 @@ export const tenant = pgTable("tenant", {
   id: text("id").primaryKey(),
   slug: text("slug").notNull().unique(),
   name: text("name").notNull(),
+  isActive: boolean("is_active").notNull().default(true),
   createdAt: timestamp("created_at").notNull(),
   updatedAt: timestamp("updated_at").notNull(),
 });
@@ -33,7 +35,7 @@ export const tenantMembership = pgTable(
   },
   (table) => ({
     tenantMembershipTenantUserIdx: uniqueIndex(
-      "tenant_membership_tenant_id_user_id_idx"
+      "tenant_membership_tenant_id_user_id_idx",
     ).on(table.tenantId, table.userId),
-  })
+  }),
 );

@@ -22,6 +22,20 @@
       "when": 1782688895030,
       "tag": "0002_pale_thundra",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1782712294864,
+      "tag": "0003_outgoing_nicolaos",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1782712972116,
+      "tag": "0004_lyrical_otto_octavius",
+      "breakpoints": true
     }
   ]
 }

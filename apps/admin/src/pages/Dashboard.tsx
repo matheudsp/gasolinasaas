@@ -3,7 +3,6 @@ import { Link } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
 import { orpc } from "@/lib/orpc";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Table,
@@ -14,6 +13,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Building2, Fuel, Phone } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 
 export default function Dashboard() {
   const { user, membership } = useAuth();
@@ -38,6 +38,10 @@ export default function Dashboard() {
   );
 
   const uniqueFuelCount = new Set(prices.map((p) => p.fuelName)).size;
+
+  const allFuels = Array.from(new Set(prices.map((p) => p.fuelName))).sort((a, b) =>
+    a.localeCompare(b, "pt-BR")
+  );
 
   return (
     <div className="space-y-6">
@@ -109,7 +113,6 @@ export default function Dashboard() {
             <TableHeader>
               <TableRow>
                 <TableHead>Posto</TableHead>
-                <TableHead>Cidade</TableHead>
                 <TableHead>Endereço</TableHead>
                 <TableHead>Preço Combustível</TableHead>
               </TableRow>
@@ -125,12 +128,10 @@ export default function Dashboard() {
                       <Skeleton className="h-4 w-20" />
                     </TableCell>
                     <TableCell>
-                      <Skeleton className="h-4 w-40" />
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex gap-2">
-                        <Skeleton className="h-5 w-20" />
-                        <Skeleton className="h-5 w-20" />
+                      <div className="flex flex-col gap-1.5">
+                        <Skeleton className="h-4 w-28" />
+                        <Skeleton className="h-4 w-24" />
+                        <Skeleton className="h-4 w-20" />
                       </div>
                     </TableCell>
                   </TableRow>
@@ -147,6 +148,9 @@ export default function Dashboard() {
               ) : (
                 stations.map((s) => {
                   const stationPrices = pricesByStation[s.id] ?? [];
+                  const stationPricesMap = new Map(
+                    stationPrices.map((p) => [p.fuelName, p.currentPrice] as const)
+                  );
                   return (
                     <TableRow key={s.id}>
                       <TableCell className="font-medium">
@@ -158,27 +162,30 @@ export default function Dashboard() {
                         </Link>
                       </TableCell>
                       <TableCell className="text-muted-foreground">
-                        {s.city}
+                        {s.city} - {s.address}
                       </TableCell>
-                      <TableCell className="text-muted-foreground">
-                        {s.address}
-                      </TableCell>
-                      <TableCell>
-                        {stationPrices.length === 0 ? (
-                          <span className="text-sm text-muted-foreground">
-                            —
-                          </span>
+                      <TableCell className="py-2.5">
+                        {allFuels.length === 0 ? (
+                          <span className="text-sm text-muted-foreground">—</span>
                         ) : (
-                          <div className="flex flex-wrap gap-1.5">
-                            {stationPrices.map((price) => (
-                              <Badge
-                                key={price.stationFuelId}
-                                variant="outline"
-                                className="font-mono text-xs"
-                              >
-                                {price.fuelName} · R$ {price.currentPrice}
-                              </Badge>
-                            ))}
+                          <div className="flex flex-col gap-1 text-[13px] leading-tight">
+                            {allFuels.map((fuelName) => {
+                              const currentPrice = stationPricesMap.get(fuelName);
+                              return (
+                                <Badge
+                                  key={fuelName}
+                                  variant={currentPrice != null ? "outline" : "secondary"}
+                                  className="flex items-baseline justify-between gap-2"
+                                >
+                                  <span className=" truncate ">
+                                    {fuelName}
+                                  </span>
+                                  <span className="font-mono font-medium tabular-nums whitespace-nowrap min-w-[4.5ch] text-right">
+                                    {currentPrice != null ? `R$ ${currentPrice}` : "-"}
+                                  </span>
+                                </Badge>
+                              );
+                            })}
                           </div>
                         )}
                       </TableCell>
