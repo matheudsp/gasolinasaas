@@ -2,17 +2,29 @@ import { NativeTabs } from "expo-router/unstable-native-tabs";
 
 import { useAppTheme } from "@/theme/context";
 
+
 export default function TabsLayout() {
-const { theme:{colors}} = useAppTheme();
+const { theme:{colors, typography}} = useAppTheme();
 
   return (
     <NativeTabs
       backgroundColor={colors.background}
       indicatorColor={colors.tint}
-      labelStyle={{
-        default: { color: colors.border },
-        selected: { color: colors.tint },
+      // iconColor={{
+      //  default:{color: colors.border},
+      //  selected:{color:colors.tint}
+      // }}
+      iconColor={{
+        default: colors.border,
+        selected: colors.palette.primary200,
       }}
+      rippleColor={colors.palette.primary400}
+      labelStyle={{
+        default: { color: colors.border, fontWeight:"normal"  },
+        selected: { color: colors.tint, fontWeight:"bold" },
+        fontFamily: typography.fonts.spaceGrotesk.bold,
+      }}
+
     >
       <NativeTabs.Trigger name="index">
         <NativeTabs.Trigger.Label>Home</NativeTabs.Trigger.Label>

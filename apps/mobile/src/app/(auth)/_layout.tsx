@@ -1,7 +1,10 @@
-import { Slot } from "expo-router"
+import { Slot, Stack } from "expo-router"
 
 export default function AuthLayout() {
   return (
-    <Slot screenOptions={{ headerShown: false, animation: "fade" }} />
+    <Stack>
+    <Stack.Screen name="sign-in" options={{ headerShown: false, animation: "fade"  }} />
+    <Stack.Screen name="sign-up" options={{ headerShown: false, animation: "fade", presentation: "modal"  }} />
+    </Stack>
   )
 }

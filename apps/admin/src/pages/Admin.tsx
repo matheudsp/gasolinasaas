@@ -1,833 +1,975 @@
-import { useState } from "react";
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { z } from "zod";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useAuth } from "@/context/AuthContext";
-import { orpc } from "@/lib/orpc";
-
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { useState } from "react"
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
+import { toast } from "sonner"
 import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+  Ban, Building2, CheckCircle2, CreditCard, DollarSign,
+  FileText, History, MoreHorizontal, Pencil, Plus, RefreshCw,
+  UserMinus, UserPlus, Users, XCircle,
+} from "lucide-react"
+import { orpc } from "@/lib/orpc"
+import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from "@/components/ui/form";
+  Dialog, DialogContent, DialogFooter,
+  DialogHeader, DialogTitle,
+} from "@/components/ui/dialog"
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem,
+  DropdownMenuSeparator, DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { toast } from "sonner";
+  Select, SelectContent, SelectItem,
+  SelectTrigger, SelectValue,
+} from "@/components/ui/select"
 import {
-  Plus,
-  Edit,
-  Trash2,
-  UserCheck,
-  CreditCard,
-  Users,
-  Building2,
-  Package,
-} from "lucide-react";
-import { Navigate } from "react-router-dom";
-import { Spinner } from "@/components/ui/spinner";
+  Table, TableBody, TableCell, TableHead,
+  TableHeader, TableRow,
+} from "@/components/ui/table"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Textarea } from "@/components/ui/textarea"
+import { Spinner } from "@/components/ui/spinner"
 
+// ── Helpers ───────────────────────────────────────────────────────────────────
+function fmtBRL(v: string | number) {
+  return Number(v).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })
+}
+function fmtDate(d: Date | string | null | undefined) {
+  if (!d) return "—"
+  return new Date(d).toLocaleDateString("pt-BR")
+}
+const subStatusMap: Record<string, { label: string; variant: "default" | "secondary" | "destructive" | "outline" }> = {
+  trial:     { label: "Trial",     variant: "secondary"    },
+  active:    { label: "Ativo",     variant: "default"      },
+  cancelled: { label: "Cancelado", variant: "destructive"  },
+  suspended: { label: "Suspenso",  variant: "outline"      },
+}
 
-const tenantFormSchema = z.object({
-  name: z.string().min(1, "Nome é obrigatório"),
-  slug: z.string().optional(),
-  planId: z.string().optional(),
-  trialDays: z.number().int().min(0),
-  isActive: z.boolean().optional(),
-});
-type TenantForm = z.infer<typeof tenantFormSchema>;
-
-const planFormSchema = z.object({
-  name: z.string().min(1, "Nome é obrigatório"),
-  slug: z.string().optional(),
-  price: z.string().regex(/^\d+(\.\d{1,2})?$/, "Preço inválido (ex: 29.90)"),
-  interval: z.enum(["monthly", "yearly"]),
-  description: z.string().optional(),
-  maxStations: z.number().int().positive().optional(),
-  isActive: z.boolean().optional(),
-});
-type PlanForm = z.infer<typeof planFormSchema>;
-
-const subscriptionFormSchema = z.object({
-  tenantId: z.string().min(1, "Selecione um domínio"),
-  planId: z.string().min(1, "Selecione um plano"),
-  status: z.enum(["trial", "active"]),
-  trialDays: z.number().int().min(0),
-});
-type SubscriptionForm = z.infer<typeof subscriptionFormSchema>;
-
-const assignUserSchema = z.object({
-  userId: z.string().min(1),
-  tenantId: z.string().min(1),
-});
-type AssignUserForm = z.infer<typeof assignUserSchema>;
-
-const paymentFormSchema = z.object({
-  amount: z.string().regex(/^\d+(\.\d{1,2})?$/, "Valor inválido"),
-  status: z.enum(["paid", "failed", "refunded"]),
-  notes: z.string().optional(),
-  externalId: z.string().optional(),
-});
-type PaymentForm = z.infer<typeof paymentFormSchema>;
-
-
-export default function AdminDashboard() {
-  const {isAdmin} = useAuth();
-    if (!isAdmin) return <Navigate to="/dashboard" replace />;
-
-  const queryClient = useQueryClient();
-
-  const [activeTab, setActiveTab] = useState<"tenants" | "users" | "plans" | "subscriptions">("tenants");
-
-  const [tenantDialogOpen, setTenantDialogOpen] = useState(false);
-  const [editingTenant, setEditingTenant] = useState<any>(null);
-
-  const [planDialogOpen, setPlanDialogOpen] = useState(false);
-  const [editingPlan, setEditingPlan] = useState<any>(null);
-
-  const [subscriptionDialogOpen, setSubscriptionDialogOpen] = useState(false);
-  const [assignDialogOpen, setAssignDialogOpen] = useState(false);
-
-  const [paymentDialogOpen, setPaymentDialogOpen] = useState(false);
-  const [selectedSubForPayment, setSelectedSubForPayment] = useState<any>(null);
-
-  const [paymentsDialogOpen, setPaymentsDialogOpen] = useState(false);
-  const [selectedSubForPayments, setSelectedSubForPayments] = useState<string | null>(null);
-
-  // QUERIES
-  const { data: tenants = [], isLoading: tenantsLoading } = useQuery(
-    orpc.admin.tenant.list.queryOptions({ input: {} })
-  );
-
-  const { data: plans = [], isLoading: plansLoading } = useQuery(
-    orpc.admin.plan.list.queryOptions({ input: {} })
-  );
-
-  const { data: users = [], isLoading: usersLoading } = useQuery(
-    orpc.admin.user.list.queryOptions({ input: {}  })
-  );
-
-  const { data: subscriptions = [], isLoading: subsLoading } = useQuery(
-    orpc.admin.subscription.list.queryOptions({ input: {} })
-  );
-
-  const { data: payments = [], isLoading: paymentsLoading } = useQuery(
-    orpc.admin.subscription.payments.queryOptions({
-      input: { subscriptionId: selectedSubForPayments || "" },
-      enabled: !!selectedSubForPayments && paymentsDialogOpen,
-    })
-  );
-
-  // FORMS
-  const tenantForm = useForm<TenantForm>({
-    resolver: zodResolver(tenantFormSchema),
-    defaultValues: { name: "", slug: "", planId: "", trialDays: 14, isActive: true },
-  });
-
-  const planForm = useForm<PlanForm>({
-    resolver: zodResolver(planFormSchema),
-    defaultValues: { name: "", slug: "", price: "", interval: "monthly", description: "", maxStations: undefined, isActive: true },
-  });
-
-  const subscriptionForm = useForm<SubscriptionForm>({
-    resolver: zodResolver(subscriptionFormSchema),
-    defaultValues: { tenantId: "", planId: "", status: "active", trialDays: 0 },
-  });
-
-  const assignForm = useForm<AssignUserForm>({
-    resolver: zodResolver(assignUserSchema),
-    defaultValues: { userId: "", tenantId: "" },
-  });
-
-  const paymentForm = useForm<PaymentForm>({
-    resolver: zodResolver(paymentFormSchema),
-    defaultValues: { amount: "", status: "paid", notes: "", externalId: "" },
-  });
-
-  // MUTATIONS (mesmo padrão anterior)
-  const createTenantMutation = useMutation(
-    orpc.admin.tenant.create.mutationOptions({
-      onSuccess: () => {
-        toast.success("Domínio criado com sucesso!");
-        queryClient.invalidateQueries({ queryKey: orpc.admin.tenant.list.queryKey({ input: {} }) });
-        setTenantDialogOpen(false);
-        tenantForm.reset();
-        setEditingTenant(null);
-      },
-      onError: (error: any) => toast.error(error.message || "Erro ao criar domínio"),
-    })
-  );
-
-  const updateTenantMutation = useMutation(
-    orpc.admin.tenant.update.mutationOptions({
-      onSuccess: () => {
-        toast.success("Domínio atualizado!");
-        queryClient.invalidateQueries({ queryKey: orpc.admin.tenant.list.queryKey({ input: {} }) });
-        setTenantDialogOpen(false);
-        tenantForm.reset();
-        setEditingTenant(null);
-      },
-      onError: (error: any) => toast.error(error.message || "Erro ao atualizar"),
-    })
-  );
-
-  const deleteTenantMutation = useMutation(
-    orpc.admin.tenant.delete.mutationOptions({
-      onSuccess: () => {
-        toast.success("Domínio desativado");
-        queryClient.invalidateQueries({ queryKey: orpc.admin.tenant.list.queryKey({ input: {} }) });
-      },
-      onError: (error: any) => toast.error(error.message || "Erro ao desativar"),
-    })
-  );
-
-  const createPlanMutation = useMutation(
-    orpc.admin.plan.create.mutationOptions({
-      onSuccess: () => {
-        toast.success("Plano criado com sucesso!");
-        queryClient.invalidateQueries({ queryKey: orpc.admin.plan.list.queryKey({ input: {} }) });
-        setPlanDialogOpen(false);
-        planForm.reset();
-        setEditingPlan(null);
-      },
-      onError: (error: any) => toast.error(error.message || "Erro ao criar plano"),
-    })
-  );
-
-  const updatePlanMutation = useMutation(
-    orpc.admin.plan.update.mutationOptions({
-      onSuccess: () => {
-        toast.success("Plano atualizado!");
-        queryClient.invalidateQueries({ queryKey: orpc.admin.plan.list.queryKey({ input: {} }) });
-        setPlanDialogOpen(false);
-        planForm.reset();
-        setEditingPlan(null);
-      },
-      onError: (error: any) => toast.error(error.message || "Erro ao atualizar plano"),
-    })
-  );
-
-  const banUserMutation = useMutation(
-    orpc.admin.user.ban.mutationOptions({
-      onSuccess: () => {
-        toast.success("Usuário banido");
-        queryClient.invalidateQueries({ queryKey: orpc.admin.user.list.queryKey({ input: {} }) });
-      },
-      onError: (error: any) => toast.error(error.message || "Erro ao banir"),
-    })
-  );
-
-  const unbanUserMutation = useMutation(
-    orpc.admin.user.unban.mutationOptions({
-      onSuccess: () => {
-        toast.success("Usuário desbanido");
-        queryClient.invalidateQueries({ queryKey: orpc.admin.user.list.queryKey({ input: {} }) });
-      },
-      onError: (error: any) => toast.error(error.message || "Erro ao desbanir"),
-    })
-  );
-
-  const assignUserMutation = useMutation(
-    orpc.admin.user.assignToTenant.mutationOptions({
-      onSuccess: () => {
-        toast.success("Usuário associado ao domínio!");
-        queryClient.invalidateQueries({ queryKey: orpc.admin.user.list.queryKey({ input: {} }) });
-        setAssignDialogOpen(false);
-        assignForm.reset();
-      },
-      onError: (error: any) => toast.error(error.message || "Erro ao associar"),
-    })
-  );
-
-  const createSubscriptionMutation = useMutation(
-    orpc.admin.subscription.create.mutationOptions({
-      onSuccess: () => {
-        toast.success("Assinatura criada!");
-        queryClient.invalidateQueries({ queryKey: orpc.admin.subscription.list.queryKey({ input: {} }) });
-        setSubscriptionDialogOpen(false);
-        subscriptionForm.reset();
-      },
-      onError: (error: any) => toast.error(error.message || "Erro ao criar assinatura"),
-    })
-  );
-
-  const changePlanMutation = useMutation(
-    orpc.admin.subscription.changePlan.mutationOptions({
-      onSuccess: () => {
-        toast.success("Plano alterado com sucesso!");
-        queryClient.invalidateQueries({ queryKey: orpc.admin.subscription.list.queryKey({ input: {} }) });
-      },
-      onError: (error: any) => toast.error(error.message || "Erro ao alterar plano"),
-    })
-  );
-
-  const cancelSubscriptionMutation = useMutation(
-    orpc.admin.subscription.cancel.mutationOptions({
-      onSuccess: () => {
-        toast.success("Assinatura cancelada");
-        queryClient.invalidateQueries({ queryKey: orpc.admin.subscription.list.queryKey({ input: {} }) });
-      },
-      onError: (error: any) => toast.error(error.message || "Erro ao cancelar"),
-    })
-  );
-
-  const renewSubscriptionMutation = useMutation(
-    orpc.admin.subscription.renew.mutationOptions({
-      onSuccess: () => {
-        toast.success("Assinatura renovada!");
-        queryClient.invalidateQueries({ queryKey: orpc.admin.subscription.list.queryKey({ input: {} }) });
-      },
-      onError: (error: any) => toast.error(error.message || "Erro ao renovar"),
-    })
-  );
-
-  const recordPaymentMutation = useMutation(
-    orpc.admin.subscription.recordPayment.mutationOptions({
-      onSuccess: () => {
-        toast.success("Pagamento registrado!");
-        queryClient.invalidateQueries({ queryKey: orpc.admin.subscription.list.queryKey({ input: {} }) });
-        if (selectedSubForPayment) {
-          queryClient.invalidateQueries({
-            queryKey: orpc.admin.subscription.payments.queryKey({ input: { subscriptionId: selectedSubForPayment.id } }),
-          });
-        }
-        setPaymentDialogOpen(false);
-        paymentForm.reset();
-      },
-      onError: (error: any) => toast.error(error.message || "Erro ao registrar pagamento"),
-    })
-  );
-
-  // HANDLERS
-  const openCreateTenant = () => {
-    setEditingTenant(null);
-    tenantForm.reset({ name: "", slug: "", planId: "", trialDays: 14, isActive: true });
-    setTenantDialogOpen(true);
-  };
-
-  const openEditTenant = (tenant: any) => {
-    setEditingTenant(tenant);
-    tenantForm.reset({
-      name: tenant.name,
-      slug: tenant.slug,
-      planId: "",
-      trialDays: 0,
-      isActive: tenant.isActive,
-    });
-    setTenantDialogOpen(true);
-  };
-
-  const onTenantSubmit = (data: TenantForm) => {
-    if (editingTenant) {
-      updateTenantMutation.mutate({ id: editingTenant.id, name: data.name, isActive: data.isActive });
-    } else {
-      createTenantMutation.mutate(data);
-    }
-  };
-
-  const openCreatePlan = () => {
-    setEditingPlan(null);
-    planForm.reset({ name: "", slug: "", price: "", interval: "monthly", description: "", maxStations: undefined, isActive: true });
-    setPlanDialogOpen(true);
-  };
-
-  const openEditPlan = (plan: any) => {
-    setEditingPlan(plan);
-    planForm.reset({
-      name: plan.name,
-      slug: plan.slug,
-      price: plan.price,
-      interval: plan.interval,
-      description: plan.description || "",
-      maxStations: plan.maxStations || undefined,
-      isActive: plan.isActive,
-    });
-    setPlanDialogOpen(true);
-  };
-
-  const onPlanSubmit = (data: PlanForm) => {
-    if (editingPlan) {
-      updatePlanMutation.mutate({ id: editingPlan.id, ...data });
-    } else {
-      createPlanMutation.mutate(data);
-    }
-  };
-
-  const handleBan = (userId: string, name: string) => {
-    if (!confirm(`Banir o usuário "${name}"?`)) return;
-    const reason = prompt("Motivo do banimento (opcional):") || undefined;
-    banUserMutation.mutate({ userId, reason });
-  };
-
-  const openAssignDialog = () => {
-    assignForm.reset();
-    setAssignDialogOpen(true);
-  };
-
-  const onAssignSubmit = (data: AssignUserForm) => {
-    assignUserMutation.mutate(data);
-  };
-
-  const openCreateSubscription = () => {
-    subscriptionForm.reset({ tenantId: "", planId: "", status: "active", trialDays: 0 });
-    setSubscriptionDialogOpen(true);
-  };
-
-  const openRecordPayment = (sub: any) => {
-    setSelectedSubForPayment(sub);
-    paymentForm.reset({ amount: "", status: "paid", notes: "", externalId: "" });
-    setPaymentDialogOpen(true);
-  };
-
-  const openPaymentsDialog = (subscriptionId: string) => {
-    setSelectedSubForPayments(subscriptionId);
-    setPaymentsDialogOpen(true);
-  };
-
-  const formatDate = (date: string | Date | null | undefined) => {
-    if (!date) return "—";
-    return new Date(date).toLocaleDateString("pt-BR", { day: "2-digit", month: "short", year: "numeric" });
-  };
-
-  const getStatusBadge = (status: string) => {
-    const map: Record<string, string> = {
-      active: "bg-green-600 text-white",
-      trial: "bg-blue-600 text-white",
-      cancelled: "bg-red-600 text-white",
-    };
-    return <Badge className={map[status] || "bg-gray-500"}>{status}</Badge>;
-  };
-
+// ── Main Page ─────────────────────────────────────────────────────────────────
+export default function AdminPage() {
   return (
-    <div className="mx-auto max-w-7xl space-y-6 p-6">
+    <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">Painel de Administração</h1>
-        <p className="text-muted-foreground">Gerencie domínios, usuários, planos e assinaturas do sistema.</p>
+        <h1 className="text-2xl font-bold tracking-tight">Painel de Administração</h1>
+        <p className="text-muted-foreground text-sm">
+          Gerencie domínios, usuários, planos e assinaturas do sistema.
+        </p>
       </div>
 
-      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)} className="space-y-4">
-        <TabsList className="grid w-full grid-cols-4">
-          <TabsTrigger value="tenants" className="flex items-center gap-2"><Building2 className="h-4 w-4" /> Domínios</TabsTrigger>
-          <TabsTrigger value="users" className="flex items-center gap-2"><Users className="h-4 w-4" /> Usuários</TabsTrigger>
-          <TabsTrigger value="plans" className="flex items-center gap-2"><Package className="h-4 w-4" /> Planos</TabsTrigger>
-          <TabsTrigger value="subscriptions" className="flex items-center gap-2"><CreditCard className="h-4 w-4" /> Assinaturas</TabsTrigger>
+      <Tabs defaultValue="tenants">
+        <TabsList className="grid w-full max-w-lg grid-cols-4">
+          <TabsTrigger value="tenants"       className="gap-1.5"><Building2 className="h-3.5 w-3.5" />Domínios</TabsTrigger>
+          <TabsTrigger value="users"         className="gap-1.5"><Users     className="h-3.5 w-3.5" />Usuários</TabsTrigger>
+          <TabsTrigger value="plans"         className="gap-1.5"><CreditCard className="h-3.5 w-3.5"/>Planos</TabsTrigger>
+          <TabsTrigger value="subscriptions" className="gap-1.5"><FileText  className="h-3.5 w-3.5" />Assinaturas</TabsTrigger>
         </TabsList>
-
-        {/* TENANTS TAB */}
-        <TabsContent value="tenants">
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle>Domínios / Empresas</CardTitle>
-              <Button onClick={openCreateTenant}><Plus className="mr-2 h-4 w-4" /> Novo Domínio</Button>
-            </CardHeader>
-            <CardContent>
-              {tenantsLoading ?  <Spinner className="size-8 mx-auto" /> : (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Nome</TableHead><TableHead>Slug</TableHead><TableHead>Status</TableHead><TableHead>Criado em</TableHead><TableHead className="text-right">Ações</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {tenants.length === 0 && <TableRow><TableCell colSpan={5}>Nenhum domínio encontrado.</TableCell></TableRow>}
-                    {tenants.map((tenant: any) => (
-                      <TableRow key={tenant.id}>
-                        <TableCell className="font-medium">{tenant.name}</TableCell>
-                        <TableCell className="font-mono text-sm">{tenant.slug}</TableCell>
-                        <TableCell>{tenant.isActive ? <Badge>Ativo</Badge> : <Badge variant="destructive">Inativo</Badge>}</TableCell>
-                        <TableCell>{formatDate(tenant.createdAt)}</TableCell>
-                        <TableCell className="text-right space-x-2">
-                          <Button variant="outline" size="sm" onClick={() => openEditTenant(tenant)}><Edit className="h-4 w-4" /></Button>
-                          <Button variant="destructive" size="sm" className="text-accent" onClick={() => deleteTenantMutation.mutate(tenant.id)}><Trash2 className="h-4 w-4" /></Button>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        {/* USERS TAB */}
-        <TabsContent value="users">
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle>Usuários</CardTitle>
-              <Button onClick={openAssignDialog}><UserCheck className="mr-2 h-4 w-4" /> Associar a Domínio</Button>
-            </CardHeader>
-            <CardContent>
-              {usersLoading ? <Spinner className="size-8 mx-auto" /> : (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Nome</TableHead><TableHead>E-mail</TableHead><TableHead>Status</TableHead><TableHead>Criado em</TableHead><TableHead className="text-right">Ações</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {users.map((user: any) => (
-                      <TableRow key={user.id || user.userId}>
-                        <TableCell>{user.name}</TableCell>
-                        <TableCell>{user.email}</TableCell>
-                        <TableCell>{user.banned ? <Badge variant="destructive" className="text-accent">Banido</Badge> : <Badge>Ativo</Badge>}</TableCell>
-                        <TableCell>{formatDate(user.createdAt)}</TableCell>
-                        <TableCell className="text-right space-x-2">
-                          {user.banned ? (
-                            <Button size="sm" className="" variant="default" onClick={() => unbanUserMutation.mutate(user.id || user.userId)}>Desbanir</Button>
-                          ) : (
-                            <Button size="sm" className="text-accent" variant="destructive" onClick={() => handleBan(user.id || user.userId, user.name)}>Banir</Button>
-                          )}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        {/* PLANS TAB */}
-        <TabsContent value="plans">
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle>Planos</CardTitle>
-              <Button onClick={openCreatePlan}><Plus className="mr-2 h-4 w-4" /> Novo Plano</Button>
-            </CardHeader>
-            <CardContent>
-              {plansLoading ? <Spinner className="size-8 mx-auto" /> : (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Nome</TableHead><TableHead>Preço</TableHead><TableHead>Intervalo</TableHead><TableHead>Max. Estações</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Ações</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {plans.map((plan: any) => (
-                      <TableRow key={plan.id}>
-                        <TableCell className="font-medium">{plan.name}</TableCell>
-                        <TableCell>R$ {plan.price}</TableCell>
-                        <TableCell className="capitalize">{plan.interval}</TableCell>
-                        <TableCell>{plan.maxStations ?? "—"}</TableCell>
-                        <TableCell>{plan.isActive ? <Badge>Ativo</Badge> : <Badge variant="secondary">Inativo</Badge>}</TableCell>
-                        <TableCell className="text-right">
-                          <Button variant="outline" size="sm" onClick={() => openEditPlan(plan)}><Edit className="h-4 w-4" /></Button>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        {/* SUBSCRIPTIONS TAB */}
-        <TabsContent value="subscriptions">
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle>Assinaturas</CardTitle>
-              <Button onClick={openCreateSubscription}><Plus className="mr-2 h-4 w-4" /> Nova Assinatura</Button>
-            </CardHeader>
-            <CardContent>
-              {subsLoading ? <Spinner className="size-8 mx-auto" /> : (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Domínio</TableHead><TableHead>Plano</TableHead><TableHead>Status</TableHead><TableHead>Período</TableHead><TableHead className="text-right">Ações</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {subscriptions.map((sub: any) => (
-                      <TableRow key={sub.id}>
-                        <TableCell>{sub.tenantName}</TableCell>
-                        <TableCell>{sub.planName} <span className="text-xs text-muted-foreground">({sub.planInterval})</span></TableCell>
-                        <TableCell>{getStatusBadge(sub.status)}</TableCell>
-                        <TableCell className="text-sm">{formatDate(sub.currentPeriodStart)} → {formatDate(sub.currentPeriodEnd)}</TableCell>
-                        <TableCell className="text-right space-x-1">
-                          <Button size="sm" variant="outline" onClick={() => {
-                            const newPlanId = prompt("ID do novo plano:");
-                            if (newPlanId) changePlanMutation.mutate({ subscriptionId: sub.id, planId: newPlanId });
-                          }}>Mudar Plano</Button>
-                          <Button size="sm" variant="outline" onClick={() => openRecordPayment(sub)}><CreditCard className="h-4 w-4" /></Button>
-                          <Button size="sm" variant="outline" onClick={() => openPaymentsDialog(sub.id)}>Pagamentos</Button>
-                          {sub.status !== "cancelled" && <Button size="sm" variant="destructive" onClick={() => cancelSubscriptionMutation.mutate(sub.id)}>Cancelar</Button>}
-                          {sub.status === "cancelled" && <Button size="sm" onClick={() => renewSubscriptionMutation.mutate(sub.id)}>Renovar</Button>}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
+        <TabsContent value="tenants"       className="mt-4"><TenantsTab /></TabsContent>
+        <TabsContent value="users"         className="mt-4"><UsersTab /></TabsContent>
+        <TabsContent value="plans"         className="mt-4"><PlansTab /></TabsContent>
+        <TabsContent value="subscriptions" className="mt-4"><SubscriptionsTab /></TabsContent>
       </Tabs>
+    </div>
+  )
+}
 
-      {/* DIALOGS */}
+// ── TenantsTab ────────────────────────────────────────────────────────────────
+function TenantsTab() {
+  const qc = useQueryClient()
+  const [createOpen, setCreateOpen] = useState(false)
+  const [editRow, setEditRow] = useState<{ id: string; name: string } | null>(null)
+  const [form, setForm] = useState({ name: "", slug: "", planId: "", trialDays: "14" })
 
-      {/* Tenant Dialog */}
-      <Dialog open={tenantDialogOpen} onOpenChange={setTenantDialogOpen}>
-        <DialogContent className="sm:max-w-[500px]">
-          <DialogHeader><DialogTitle>{editingTenant ? "Editar Domínio" : "Novo Domínio"}</DialogTitle></DialogHeader>
-          <Form {...tenantForm}>
-            <form onSubmit={tenantForm.handleSubmit(onTenantSubmit)} className="space-y-4">
-              <FormField control={tenantForm.control} name="name" render={({ field }) => (
-                <FormItem><FormLabel>Nome</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
-              )} />
-              <FormField control={tenantForm.control} name="slug" render={({ field }) => (
-                <FormItem><FormLabel>Slug (opcional)</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
-              )} />
-              {!editingTenant && (
-                <>
-                  <FormField control={tenantForm.control} name="planId" render={({ field }) => (
-                    <FormItem><FormLabel>Plano inicial (opcional)</FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value || ""}>
-                        <FormControl><SelectTrigger><SelectValue placeholder="Selecione um plano" /></SelectTrigger></FormControl>
-                        <SelectContent>{plans.map((p: any) => <SelectItem key={p.id} value={p.id}>{p.name} - R$ {p.price}</SelectItem>)}</SelectContent>
-                      </Select>
-                    </FormItem>
-                  )} />
-                  <FormField control={tenantForm.control} name="trialDays" render={({ field }) => (
-                    <FormItem><FormLabel>Dias de trial</FormLabel>
-                      <FormControl>
-                        <Input 
-                          type="number" 
-                          {...field} 
-                          value={field.value ?? ""}
-                          onChange={(e) => field.onChange(e.target.value === "" ? 0 : parseInt(e.target.value))}
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )} />
-                </>
-              )}
-              {editingTenant && (
-                <FormField control={tenantForm.control} name="isActive" render={({ field }) => (
-                  <FormItem><FormLabel>Status</FormLabel>
-                    <Select onValueChange={(v) => field.onChange(v === "true")} value={field.value ? "true" : "false"}>
-                      <FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl>
-                      <SelectContent>
-                        <SelectItem value="true">Ativo</SelectItem>
-                        <SelectItem value="false">Inativo</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </FormItem>
-                )} />
-              )}
-              <DialogFooter>
-                <Button type="submit" disabled={createTenantMutation.isPending || updateTenantMutation.isPending}>
-                  {editingTenant ? "Salvar alterações" : "Criar Domínio"}
-                </Button>
-              </DialogFooter>
-            </form>
-          </Form>
-        </DialogContent>
-      </Dialog>
+  const { data: tenants = [], isLoading } = useQuery(
+    orpc.admin.tenant.list.queryOptions({ input: {} })
+  )
+  const { data: plans = [] } = useQuery(
+    orpc.admin.plan.list.queryOptions({ input: {} })
+  )
 
-      {/* Plan Dialog */}
-      <Dialog open={planDialogOpen} onOpenChange={setPlanDialogOpen}>
-        <DialogContent>
-          <DialogHeader><DialogTitle>{editingPlan ? "Editar Plano" : "Novo Plano"}</DialogTitle></DialogHeader>
-          <Form {...planForm}>
-            <form onSubmit={planForm.handleSubmit(onPlanSubmit)} className="space-y-4">
-              <FormField control={planForm.control} name="name" render={({ field }) => <FormItem><FormLabel>Nome</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>} />
-              <div className="grid grid-cols-2 gap-4">
-                <FormField control={planForm.control} name="price" render={({ field }) => <FormItem><FormLabel>Preço</FormLabel><FormControl><Input placeholder="29.90" {...field} /></FormControl><FormMessage /></FormItem>} />
-                <FormField control={planForm.control} name="interval" render={({ field }) => (
-                  <FormItem><FormLabel>Intervalo</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl>
-                      <SelectContent><SelectItem value="monthly">Mensal</SelectItem><SelectItem value="yearly">Anual</SelectItem></SelectContent>
-                    </Select>
-                  </FormItem>
-                )} />
+  const invalidate = () => qc.invalidateQueries(orpc.admin.tenant.list.queryOptions({ input: {} }))
+
+  const createMutation = useMutation({
+    ...orpc.admin.tenant.create.mutationOptions(),
+    onSuccess: async () => {
+      toast.success("Domínio criado!")
+      setCreateOpen(false)
+      setForm({ name: "", slug: "", planId: "", trialDays: "14" })
+      await invalidate()
+    },
+    onError: (e: Error) => toast.error(e.message),
+  })
+
+  const updateMutation = useMutation({
+    ...orpc.admin.tenant.update.mutationOptions(),
+    onSuccess: async () => { toast.success("Domínio atualizado!"); setEditRow(null); await invalidate() },
+    onError: (e: Error) => toast.error(e.message),
+  })
+
+  const toggleMutation = useMutation({
+    ...orpc.admin.tenant.update.mutationOptions(),
+    onSuccess: async () => { toast.success("Status do domínio alterado!"); await invalidate() },
+    onError: (e: Error) => toast.error(e.message),
+  })
+
+  return (
+    <Card>
+      <CardHeader className="flex flex-row items-center justify-between pb-3">
+        <CardTitle className="text-base">Domínios{!isLoading && ` (${tenants.length})`}</CardTitle>
+        <Button size="sm" onClick={() => setCreateOpen(true)}>
+          <Plus className="mr-1.5 h-4 w-4" />Novo domínio
+        </Button>
+      </CardHeader>
+      <CardContent className="p-0">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Nome</TableHead>
+              <TableHead>Slug</TableHead>
+              <TableHead>Status</TableHead>
+              <TableHead>Criado em</TableHead>
+              <TableHead className="w-10" />
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {isLoading ? (
+              <TableRow><TableCell colSpan={5} className="py-10 text-center text-muted-foreground text-sm"><Spinner className="mx-auto size-10" /></TableCell></TableRow>
+            ) : tenants.length === 0 ? (
+              <TableRow><TableCell colSpan={5} className="py-10 text-center text-muted-foreground text-sm">Nenhum domínio cadastrado.</TableCell></TableRow>
+            ) : tenants.map((t) => (
+              <TableRow key={t.id}>
+                <TableCell className="font-medium">{t.name}</TableCell>
+                <TableCell className="font-mono text-xs text-muted-foreground">{t.slug}</TableCell>
+                <TableCell>
+                  <Badge variant={t.isActive ? "default" : "secondary"}>
+                    {t.isActive ? "Ativo" : "Inativo"}
+                  </Badge>
+                </TableCell>
+                <TableCell className="text-sm text-muted-foreground">{fmtDate(t.createdAt)}</TableCell>
+                <TableCell>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="ghost" size="icon" className="h-8 w-8"><MoreHorizontal className="h-4 w-4" /></Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem onClick={() => setEditRow({ id: t.id, name: t.name })}>
+                        <Pencil className="mr-2 h-4 w-4" />Editar nome
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem onClick={() => toggleMutation.mutate({ id: t.id, isActive: !t.isActive })}>
+                        {t.isActive
+                          ? <><XCircle className="mr-2 h-4 w-4" />Desativar</>
+                          : <><CheckCircle2 className="mr-2 h-4 w-4" />Ativar</>}
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </CardContent>
+
+      {/* Criar */}
+      <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader><DialogTitle>Novo domínio</DialogTitle></DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-1.5">
+              <Label>Nome *</Label>
+              <Input value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} placeholder="Rede Exemplo" />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Slug <span className="text-muted-foreground text-xs">(opcional)</span></Label>
+              <Input value={form.slug} onChange={(e) => setForm((f) => ({ ...f, slug: e.target.value }))} placeholder="gerado automaticamente" />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Plano inicial <span className="text-muted-foreground text-xs">(opcional)</span></Label>
+              <Select value={form.planId} onValueChange={(v) => setForm((f) => ({ ...f, planId: v }))}>
+                <SelectTrigger><SelectValue placeholder="Sem plano" /></SelectTrigger>
+                <SelectContent>
+                  {plans.filter((p) => p.isActive).map((p) => (
+                    <SelectItem key={p.id} value={p.id}>
+                      {p.name} — {fmtBRL(p.price)}/{p.interval === "monthly" ? "mês" : "ano"}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            {form.planId && (
+              <div className="space-y-1.5">
+                <Label>Dias de trial</Label>
+                <Input type="number" min="0" value={form.trialDays} onChange={(e) => setForm((f) => ({ ...f, trialDays: e.target.value }))} />
               </div>
-              <FormField control={planForm.control} name="maxStations" render={({ field }) => (
-                <FormItem><FormLabel>Máx. Estações</FormLabel>
-                  <FormControl>
-                    <Input 
-                      type="number" 
-                      {...field} 
-                      value={field.value ?? ""}
-                      onChange={(e) => field.onChange(e.target.value === "" ? undefined : parseInt(e.target.value))}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )} />
-              <FormField control={planForm.control} name="description" render={({ field }) => <FormItem><FormLabel>Descrição</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>} />
-              {editingPlan && (
-                <FormField control={planForm.control} name="isActive" render={({ field }) => (
-                  <FormItem><FormLabel>Status</FormLabel>
-                    <Select onValueChange={(v) => field.onChange(v === "true")} value={field.value ? "true" : "false"}>
-                      <FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl>
-                      <SelectContent><SelectItem value="true">Ativo</SelectItem><SelectItem value="false">Inativo</SelectItem></SelectContent>
-                    </Select>
-                  </FormItem>
-                )} />
-              )}
-              <DialogFooter>
-                <Button type="submit" disabled={createPlanMutation.isPending || updatePlanMutation.isPending}>
-                  {editingPlan ? "Salvar" : "Criar Plano"}
-                </Button>
-              </DialogFooter>
-            </form>
-          </Form>
-        </DialogContent>
-      </Dialog>
-
-      {/* Assign User Dialog */}
-      <Dialog open={assignDialogOpen} onOpenChange={setAssignDialogOpen}>
-        <DialogContent>
-          <DialogHeader><DialogTitle>Associar Usuário a um Domínio</DialogTitle></DialogHeader>
-          <Form {...assignForm}>
-            <form onSubmit={assignForm.handleSubmit(onAssignSubmit)} className="space-y-4">
-              <FormField control={assignForm.control} name="userId" render={({ field }) => (
-                <FormItem><FormLabel>Usuário</FormLabel>
-                  <Select onValueChange={field.onChange} value={field.value}>
-                    <FormControl><SelectTrigger><SelectValue placeholder="Selecione o usuário" /></SelectTrigger></FormControl>
-                    <SelectContent>{users.map((u: any) => <SelectItem key={u.id || u.userId} value={u.id || u.userId}>{u.name} ({u.email})</SelectItem>)}</SelectContent>
-                  </Select>
-                </FormItem>
-              )} />
-              <FormField control={assignForm.control} name="tenantId" render={({ field }) => (
-                <FormItem><FormLabel>Domínio</FormLabel>
-                  <Select onValueChange={field.onChange} value={field.value}>
-                    <FormControl><SelectTrigger><SelectValue placeholder="Selecione o domínio" /></SelectTrigger></FormControl>
-                    <SelectContent>{tenants.map((t: any) => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}</SelectContent>
-                  </Select>
-                </FormItem>
-              )} />
-              <DialogFooter><Button type="submit" disabled={assignUserMutation.isPending}>Associar</Button></DialogFooter>
-            </form>
-          </Form>
-        </DialogContent>
-      </Dialog>
-
-      {/* Create Subscription Dialog */}
-      <Dialog open={subscriptionDialogOpen} onOpenChange={setSubscriptionDialogOpen}>
-        <DialogContent>
-          <DialogHeader><DialogTitle>Nova Assinatura</DialogTitle></DialogHeader>
-          <Form {...subscriptionForm}>
-            <form onSubmit={subscriptionForm.handleSubmit((data) => createSubscriptionMutation.mutate(data))} className="space-y-4">
-              <FormField control={subscriptionForm.control} name="tenantId" render={({ field }) => (
-                <FormItem><FormLabel>Domínio</FormLabel>
-                  <Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger></FormControl>
-                    <SelectContent>{tenants.map((t: any) => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}</SelectContent>
-                  </Select>
-                </FormItem>
-              )} />
-              <FormField control={subscriptionForm.control} name="planId" render={({ field }) => (
-                <FormItem><FormLabel>Plano</FormLabel>
-                  <Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger></FormControl>
-                    <SelectContent>{plans.map((p: any) => <SelectItem key={p.id} value={p.id}>{p.name} - R$ {p.price}</SelectItem>)}</SelectContent>
-                  </Select>
-                </FormItem>
-              )} />
-              <div className="grid grid-cols-2 gap-4">
-                <FormField control={subscriptionForm.control} name="status" render={({ field }) => (
-                  <FormItem><FormLabel>Status</FormLabel><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl>
-                    <SelectContent><SelectItem value="trial">Trial</SelectItem><SelectItem value="active">Ativo</SelectItem></SelectContent></Select></FormItem>
-                )} />
-                <FormField control={subscriptionForm.control} name="trialDays" render={({ field }) => (
-                  <FormItem><FormLabel>Dias de Trial</FormLabel>
-                    <FormControl>
-                      <Input 
-                        type="number" 
-                        {...field} 
-                        value={field.value ?? ""}
-                        onChange={(e) => field.onChange(e.target.value === "" ? 0 : parseInt(e.target.value))}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )} />
-              </div>
-              <DialogFooter><Button type="submit" disabled={createSubscriptionMutation.isPending}>Criar Assinatura</Button></DialogFooter>
-            </form>
-          </Form>
-        </DialogContent>
-      </Dialog>
-
-      {/* Record Payment Dialog */}
-      <Dialog open={paymentDialogOpen} onOpenChange={setPaymentDialogOpen}>
-        <DialogContent>
-          <DialogHeader><DialogTitle>Registrar Pagamento - {selectedSubForPayment?.tenantName}</DialogTitle></DialogHeader>
-          <Form {...paymentForm}>
-            <form 
-              onSubmit={paymentForm.handleSubmit((data) => {
-                if (!selectedSubForPayment) return;
-                recordPaymentMutation.mutate({
-                  ...data,
-                  subscriptionId: selectedSubForPayment.id,
-                });
-              })} 
-              className="space-y-4"
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCreateOpen(false)}>Cancelar</Button>
+            <Button
+              disabled={!form.name.trim() || createMutation.isPending}
+              onClick={() => createMutation.mutate({
+                name: form.name.trim(),
+                slug: form.slug.trim() || undefined,
+                planId: form.planId || undefined,
+                trialDays: Number(form.trialDays),
+              })}
             >
-              <FormField control={paymentForm.control} name="amount" render={({ field }) => <FormItem><FormLabel>Valor</FormLabel><FormControl><Input placeholder="29.90" {...field} /></FormControl><FormMessage /></FormItem>} />
-              <FormField control={paymentForm.control} name="status" render={({ field }) => (
-                <FormItem><FormLabel>Status</FormLabel><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl>
-                  <SelectContent><SelectItem value="paid">Pago</SelectItem><SelectItem value="failed">Falhou</SelectItem><SelectItem value="refunded">Reembolsado</SelectItem></SelectContent></Select></FormItem>
-              )} />
-              <FormField control={paymentForm.control} name="externalId" render={({ field }) => <FormItem><FormLabel>ID Externo</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>} />
-              <FormField control={paymentForm.control} name="notes" render={({ field }) => <FormItem><FormLabel>Observações</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>} />
-              <DialogFooter><Button type="submit" disabled={recordPaymentMutation.isPending}>Registrar Pagamento</Button></DialogFooter>
-            </form>
-          </Form>
+              {createMutation.isPending ? "Criando..." : "Criar"}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* Payments History Dialog */}
-      <Dialog open={paymentsDialogOpen} onOpenChange={setPaymentsDialogOpen}>
-        <DialogContent className="max-w-2xl">
-          <DialogHeader><DialogTitle>Histórico de Pagamentos</DialogTitle></DialogHeader>
-          {paymentsLoading ? <Spinner className="size-8 mx-auto" /> : (
-            <Table>
-              <TableHeader><TableRow><TableHead>Data</TableHead><TableHead>Valor</TableHead><TableHead>Status</TableHead><TableHead>Observação</TableHead></TableRow></TableHeader>
-              <TableBody>
-                {payments.length === 0 && <TableRow><TableCell colSpan={4}>Nenhum pagamento registrado.</TableCell></TableRow>}
-                {payments.map((p: any) => (
-                  <TableRow key={p.id}>
-                    <TableCell>{formatDate(p.paidAt || p.createdAt)}</TableCell>
-                    <TableCell>R$ {p.amount}</TableCell>
-                    <TableCell><Badge>{p.status}</Badge></TableCell>
-                    <TableCell className="text-sm text-muted-foreground">{p.notes || p.externalId || "—"}</TableCell>
-                  </TableRow>
+      {/* Editar */}
+      <Dialog open={!!editRow} onOpenChange={() => setEditRow(null)}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader><DialogTitle>Editar domínio</DialogTitle></DialogHeader>
+          {editRow && (
+            <div className="space-y-1.5">
+              <Label>Nome</Label>
+              <Input value={editRow.name} onChange={(e) => setEditRow((r) => r ? { ...r, name: e.target.value } : r)} />
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditRow(null)}>Cancelar</Button>
+            <Button
+              disabled={!editRow?.name.trim() || updateMutation.isPending}
+              onClick={() => editRow && updateMutation.mutate({ id: editRow.id, name: editRow.name.trim() })}
+            >
+              {updateMutation.isPending ? "Salvando..." : "Salvar"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </Card>
+  )
+}
+
+// ── UsersTab ──────────────────────────────────────────────────────────────────
+function UsersTab() {
+  const qc = useQueryClient()
+  const [tenantFilter, setTenantFilter] = useState<string>("")
+  const [banDialog, setBanDialog]     = useState<{ id: string; name: string } | null>(null)
+  const [assignDialog, setAssignDialog] = useState<{ id: string; name: string } | null>(null)
+  const [banReason, setBanReason]     = useState("")
+  const [assignTenantId, setAssignTenantId] = useState("")
+
+  const { data: users = [], isLoading } = useQuery(
+    orpc.admin.user.list.queryOptions({
+      input: tenantFilter ? { tenantId: tenantFilter } : {},
+    })
+  )
+  const { data: tenants = [] } = useQuery(
+    orpc.admin.tenant.list.queryOptions({ input: {} })
+  )
+
+  const invalidate = () => qc.invalidateQueries(orpc.admin.user.list.queryOptions({ input: {} }))
+
+  const banMutation = useMutation({
+    ...orpc.admin.user.ban.mutationOptions(),
+    onSuccess: async () => { toast.success("Usuário banido."); setBanDialog(null); setBanReason(""); await invalidate() },
+    onError: (e: Error) => toast.error(e.message),
+  })
+
+  const unbanMutation = useMutation({
+    ...orpc.admin.user.unban.mutationOptions(),
+    onSuccess: async () => { toast.success("Ban removido."); await invalidate() },
+    onError: (e: Error) => toast.error(e.message),
+  })
+
+  const assignMutation = useMutation({
+    ...orpc.admin.user.assignToTenant.mutationOptions(),
+    onSuccess: async () => { toast.success("Usuário associado ao domínio!"); setAssignDialog(null); setAssignTenantId(""); await invalidate() },
+    onError: (e: Error) => toast.error(e.message),
+  })
+
+  const removeMutation = useMutation({
+    ...orpc.admin.user.removeFromTenant.mutationOptions(),
+    onSuccess: async () => { toast.success("Usuário removido do domínio."); await invalidate() },
+    onError: (e: Error) => toast.error(e.message),
+  })
+
+  // user.list com tenantId retorna shape diferente (membershipId, userId, etc.)
+  const isMembershipView = !!tenantFilter
+  const rows = users as any[]
+
+  return (
+    <Card>
+      <CardHeader className="flex flex-row items-center justify-between gap-4 pb-3">
+        <CardTitle className="text-base">Usuários{!isLoading && ` (${rows.length})`}</CardTitle>
+        <Select value={tenantFilter} onValueChange={setTenantFilter}>
+          <SelectTrigger className="w-56">
+            <SelectValue placeholder="Filtrar por domínio" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="">Todos os usuários</SelectItem>
+            {tenants.map((t) => (
+              <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </CardHeader>
+      <CardContent className="p-0">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Nome</TableHead>
+              <TableHead>E-mail</TableHead>
+              {isMembershipView && <TableHead>Papel</TableHead>}
+              <TableHead>Status</TableHead>
+              <TableHead className="w-10" />
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {isLoading ? (
+              <TableRow><TableCell colSpan={5} className="py-10 text-center text-muted-foreground text-sm"><Spinner className="mx-auto size-10" /></TableCell></TableRow>
+            ) : rows.length === 0 ? (
+              <TableRow><TableCell colSpan={5} className="py-10 text-center text-muted-foreground text-sm">Nenhum usuário encontrado.</TableCell></TableRow>
+            ) : rows.map((u) => {
+              const userId = isMembershipView ? u.userId : u.id
+              const name   = u.name
+              const banned = u.banned
+              return (
+                <TableRow key={userId}>
+                  <TableCell className="font-medium">{name}</TableCell>
+                  <TableCell className="text-sm text-muted-foreground">{u.email}</TableCell>
+                  {isMembershipView && (
+                    <TableCell><Badge variant="outline" className="capitalize">{u.membershipRole}</Badge></TableCell>
+                  )}
+                  <TableCell>
+                    <Badge className={banned && "text-white"} variant={banned ? "destructive" : "secondary"}>
+                      {banned ? "Banido" : "Ativo"}
+                    </Badge>
+                  </TableCell>
+                  <TableCell>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="icon" className="h-8 w-8"><MoreHorizontal className="h-4 w-4" /></Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        {!isMembershipView && (
+                          <DropdownMenuItem onClick={() => setAssignDialog({ id: userId, name })}>
+                            <UserPlus className="mr-2 h-4 w-4" />Associar a domínio
+                          </DropdownMenuItem>
+                        )}
+                        {isMembershipView && (
+                          <DropdownMenuItem
+                            onClick={() => removeMutation.mutate({ userId, tenantId: tenantFilter })}
+                            className="text-destructive"
+                          >
+                            <UserMinus className="mr-2 h-4 w-4" />Remover do domínio
+                          </DropdownMenuItem>
+                        )}
+                        <DropdownMenuSeparator />
+                        {banned ? (
+                          <DropdownMenuItem onClick={() => unbanMutation.mutate({ userId })}>
+                            <CheckCircle2 className="mr-2 h-4 w-4" />Remover ban
+                          </DropdownMenuItem>
+                        ) : (
+                          <DropdownMenuItem onClick={() => setBanDialog({ id: userId, name })} className="text-destructive">
+                            <Ban className="mr-2 h-4 w-4" />Banir usuário
+                          </DropdownMenuItem>
+                        )}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </TableCell>
+                </TableRow>
+              )
+            })}
+          </TableBody>
+        </Table>
+      </CardContent>
+
+      {/* Ban dialog */}
+      <Dialog open={!!banDialog} onOpenChange={() => { setBanDialog(null); setBanReason("") }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader><DialogTitle>Banir {banDialog?.name}</DialogTitle></DialogHeader>
+          <div className="space-y-1.5">
+            <Label>Motivo <span className="text-muted-foreground text-xs">(opcional)</span></Label>
+            <Textarea
+              value={banReason}
+              onChange={(e) => setBanReason(e.target.value)}
+              placeholder="Violação dos termos de uso..."
+              rows={3}
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setBanDialog(null); setBanReason("") }}>Cancelar</Button>
+            <Button
+              variant="destructive"
+              disabled={banMutation.isPending}
+              onClick={() => banDialog && banMutation.mutate({ userId: banDialog.id, reason: banReason || undefined })}
+            >
+              {banMutation.isPending ? "Banindo..." : "Banir"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Assign dialog */}
+      <Dialog open={!!assignDialog} onOpenChange={() => { setAssignDialog(null); setAssignTenantId("") }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader><DialogTitle>Associar {assignDialog?.name} a um domínio</DialogTitle></DialogHeader>
+          <div className="space-y-1.5">
+            <Label>Domínio</Label>
+            <Select value={assignTenantId} onValueChange={setAssignTenantId}>
+              <SelectTrigger><SelectValue placeholder="Selecione um domínio" /></SelectTrigger>
+              <SelectContent>
+                {tenants.map((t) => (
+                  <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
                 ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setAssignDialog(null); setAssignTenantId("") }}>Cancelar</Button>
+            <Button
+              disabled={!assignTenantId || assignMutation.isPending}
+              onClick={() => assignDialog && assignMutation.mutate({ userId: assignDialog.id, tenantId: assignTenantId, role: "owner" })}
+            >
+              {assignMutation.isPending ? "Associando..." : "Associar"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </Card>
+  )
+}
+
+// ── PlansTab ──────────────────────────────────────────────────────────────────
+function PlansTab() {
+  const qc = useQueryClient()
+  const [createOpen, setCreateOpen] = useState(false)
+  const [editRow, setEditRow]       = useState<any>(null)
+  const [form, setForm] = useState({
+    name: "", price: "", interval: "monthly",
+    description: "", maxStations: "",
+  })
+
+  const { data: plans = [], isLoading } = useQuery(
+    orpc.admin.plan.list.queryOptions({ input: {} })
+  )
+
+  const invalidate = () => qc.invalidateQueries(orpc.admin.plan.list.queryOptions({ input: {} }))
+
+  const createMutation = useMutation({
+    ...orpc.admin.plan.create.mutationOptions(),
+    onSuccess: async () => {
+      toast.success("Plano criado!")
+      setCreateOpen(false)
+      setForm({ name: "", price: "", interval: "monthly", description: "", maxStations: "" })
+      await invalidate()
+    },
+    onError: (e: Error) => toast.error(e.message),
+  })
+
+  const updateMutation = useMutation({
+    ...orpc.admin.plan.update.mutationOptions(),
+    onSuccess: async () => { toast.success("Plano atualizado!"); setEditRow(null); await invalidate() },
+    onError: (e: Error) => toast.error(e.message),
+  })
+
+  const toggleMutation = useMutation({
+    ...orpc.admin.plan.update.mutationOptions(),
+    onSuccess: async () => { toast.success("Status alterado!"); await invalidate() },
+    onError: (e: Error) => toast.error(e.message),
+  })
+
+  return (
+    <Card>
+      <CardHeader className="flex flex-row items-center justify-between pb-3">
+        <CardTitle className="text-base">Planos{!isLoading && ` (${plans.length})`}</CardTitle>
+        <Button size="sm" onClick={() => setCreateOpen(true)}>
+          <Plus className="mr-1.5 h-4 w-4" />Novo plano
+        </Button>
+      </CardHeader>
+      <CardContent className="p-0">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Nome</TableHead>
+              <TableHead>Preço</TableHead>
+              <TableHead>Intervalo</TableHead>
+              <TableHead>Max. postos</TableHead>
+              <TableHead>Status</TableHead>
+              <TableHead className="w-10" />
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {isLoading ? (
+              <TableRow><TableCell colSpan={6} className="py-10 text-center text-muted-foreground text-sm"><Spinner className="mx-auto size-10" /></TableCell></TableRow>
+            ) : plans.length === 0 ? (
+              <TableRow><TableCell colSpan={6} className="py-10 text-center text-muted-foreground text-sm">Nenhum plano cadastrado.</TableCell></TableRow>
+            ) : plans.map((p) => (
+              <TableRow key={p.id}>
+                <TableCell className="font-medium">
+                  {p.name}
+                  {p.description && <p className="text-xs text-muted-foreground font-normal">{p.description}</p>}
+                </TableCell>
+                <TableCell>{fmtBRL(p.price)}</TableCell>
+                <TableCell>{p.interval === "monthly" ? "Mensal" : "Anual"}</TableCell>
+                <TableCell className="text-muted-foreground">{p.maxStations ?? "Ilimitado"}</TableCell>
+                <TableCell>
+                  <Badge variant={p.isActive ? "default" : "secondary"}>
+                    {p.isActive ? "Ativo" : "Inativo"}
+                  </Badge>
+                </TableCell>
+                <TableCell>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="ghost" size="icon" className="h-8 w-8"><MoreHorizontal className="h-4 w-4" /></Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem onClick={() => setEditRow(p)}>
+                        <Pencil className="mr-2 h-4 w-4" />Editar
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem onClick={() => toggleMutation.mutate({ id: p.id, isActive: !p.isActive })}>
+                        {p.isActive
+                          ? <><XCircle className="mr-2 h-4 w-4" />Desativar</>
+                          : <><CheckCircle2 className="mr-2 h-4 w-4" />Ativar</>}
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </CardContent>
+
+      {/* Criar */}
+      <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader><DialogTitle>Novo plano</DialogTitle></DialogHeader>
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1.5 col-span-2">
+                <Label>Nome *</Label>
+                <Input value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} placeholder="Básico" />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Preço (R$) *</Label>
+                <Input value={form.price} onChange={(e) => setForm((f) => ({ ...f, price: e.target.value }))} placeholder="99.90" />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Intervalo</Label>
+                <Select value={form.interval} onValueChange={(v) => setForm((f) => ({ ...f, interval: v }))}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="monthly">Mensal</SelectItem>
+                    <SelectItem value="yearly">Anual</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label>Máx. postos <span className="text-muted-foreground text-xs">(opcional)</span></Label>
+                <Input type="number" min="1" value={form.maxStations} onChange={(e) => setForm((f) => ({ ...f, maxStations: e.target.value }))} placeholder="Ilimitado" />
+              </div>
+              <div className="space-y-1.5 col-span-2">
+                <Label>Descrição <span className="text-muted-foreground text-xs">(opcional)</span></Label>
+                <Input value={form.description} onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))} placeholder="Ideal para pequenas redes" />
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCreateOpen(false)}>Cancelar</Button>
+            <Button
+              disabled={!form.name.trim() || !form.price || createMutation.isPending}
+              onClick={() => createMutation.mutate({
+                name: form.name.trim(),
+                price: form.price,
+                interval: form.interval as "monthly" | "yearly",
+                description: form.description || undefined,
+                maxStations: form.maxStations ? Number(form.maxStations) : undefined,
+              })}
+            >
+              {createMutation.isPending ? "Criando..." : "Criar"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Editar */}
+      <Dialog open={!!editRow} onOpenChange={() => setEditRow(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader><DialogTitle>Editar plano</DialogTitle></DialogHeader>
+          {editRow && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1.5 col-span-2">
+                  <Label>Nome</Label>
+                  <Input value={editRow.name} onChange={(e) => setEditRow((r: any) => ({ ...r, name: e.target.value }))} />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Preço (R$)</Label>
+                  <Input value={editRow.price} onChange={(e) => setEditRow((r: any) => ({ ...r, price: e.target.value }))} />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Máx. postos</Label>
+                  <Input type="number" min="1" value={editRow.maxStations ?? ""} onChange={(e) => setEditRow((r: any) => ({ ...r, maxStations: e.target.value ? Number(e.target.value) : null }))} placeholder="Ilimitado" />
+                </div>
+                <div className="space-y-1.5 col-span-2">
+                  <Label>Descrição</Label>
+                  <Input value={editRow.description ?? ""} onChange={(e) => setEditRow((r: any) => ({ ...r, description: e.target.value }))} />
+                </div>
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditRow(null)}>Cancelar</Button>
+            <Button
+              disabled={!editRow?.name.trim() || updateMutation.isPending}
+              onClick={() => editRow && updateMutation.mutate({
+                id: editRow.id,
+                name: editRow.name.trim(),
+                price: editRow.price,
+                description: editRow.description || undefined,
+                maxStations: editRow.maxStations || undefined,
+              })}
+            >
+              {updateMutation.isPending ? "Salvando..." : "Salvar"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </Card>
+  )
+}
+
+// ── SubscriptionsTab ──────────────────────────────────────────────────────────
+function SubscriptionsTab() {
+  const qc = useQueryClient()
+  const [tenantFilter, setTenantFilter]       = useState<string>("")
+  const [createOpen, setCreateOpen]           = useState(false)
+  const [changePlanRow, setChangePlanRow]     = useState<any>(null)
+  const [paymentRow, setPaymentRow]           = useState<any>(null)
+  const [historyRow, setHistoryRow]           = useState<any>(null)
+  const [createForm, setCreateForm]           = useState({ tenantId: "", planId: "", status: "active", trialDays: "0" })
+  const [changePlanId, setChangePlanId]       = useState("")
+  const [paymentForm, setPaymentForm]         = useState({ amount: "", status: "paid", notes: "" })
+
+  const { data: subs = [], isLoading } = useQuery(
+    orpc.admin.subscription.list.queryOptions({
+      input: tenantFilter ? { tenantId: tenantFilter } : {},
+    })
+  )
+  const { data: tenants = [] } = useQuery(orpc.admin.tenant.list.queryOptions({ input: {} }))
+  const { data: plans   = [] } = useQuery(orpc.admin.plan.list.queryOptions({ input: {} }))
+
+
+  const { data: payments = [], isLoading: paymentsLoading } = useQuery({
+    ...orpc.admin.subscription.payments.queryOptions({
+      input: { subscriptionId: historyRow?.id ?? "" },
+    }),
+    enabled: !!historyRow,
+  })
+
+  const invalidate = () => qc.invalidateQueries(orpc.admin.subscription.list.queryOptions({ input: {} }))
+
+  const createMutation = useMutation({
+    ...orpc.admin.subscription.create.mutationOptions(),
+    onSuccess: async () => {
+      toast.success("Assinatura criada!")
+      setCreateOpen(false)
+      setCreateForm({ tenantId: "", planId: "", status: "active", trialDays: "0" })
+      await invalidate()
+    },
+    onError: (e: Error) => toast.error(e.message),
+  })
+
+  const changePlanMutation = useMutation({
+    ...orpc.admin.subscription.changePlan.mutationOptions(),
+    onSuccess: async () => { toast.success("Plano alterado!"); setChangePlanRow(null); setChangePlanId(""); await invalidate() },
+    onError: (e: Error) => toast.error(e.message),
+  })
+
+  const cancelMutation = useMutation({
+    ...orpc.admin.subscription.cancel.mutationOptions(),
+    onSuccess: async () => { toast.success("Assinatura cancelada."); await invalidate() },
+    onError: (e: Error) => toast.error(e.message),
+  })
+
+  const renewMutation = useMutation({
+    ...orpc.admin.subscription.renew.mutationOptions(),
+    onSuccess: async () => { toast.success("Assinatura renovada!"); await invalidate() },
+    onError: (e: Error) => toast.error(e.message),
+  })
+
+  const paymentMutation = useMutation({
+    ...orpc.admin.subscription.recordPayment.mutationOptions(),
+    onSuccess: async () => {
+      toast.success("Pagamento registrado!")
+      setPaymentRow(null)
+      setPaymentForm({ amount: "", status: "paid", notes: "" })
+      await invalidate()
+    },
+    onError: (e: Error) => toast.error(e.message),
+  })
+
+  return (
+    <Card>
+      <CardHeader className="flex flex-row items-center justify-between gap-4 pb-3">
+        <CardTitle className="text-base">Assinaturas{!isLoading && ` (${subs.length})`}</CardTitle>
+        <div className="flex items-center gap-2">
+          <Select value={tenantFilter} onValueChange={setTenantFilter}>
+            <SelectTrigger className="w-52"><SelectValue placeholder="Filtrar por domínio" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="">Todas</SelectItem>
+              {tenants.map((t) => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          <Button size="sm" onClick={() => setCreateOpen(true)}>
+            <Plus className="mr-1.5 h-4 w-4" />Nova
+          </Button>
+        </div>
+      </CardHeader>
+      <CardContent className="p-0">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Domínio</TableHead>
+              <TableHead>Plano</TableHead>
+              <TableHead>Status</TableHead>
+              <TableHead>Período</TableHead>
+              <TableHead>Trial até</TableHead>
+              <TableHead className="w-10" />
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {isLoading ? (
+              <TableRow><TableCell colSpan={6} className="py-10 text-center text-muted-foreground text-sm"><Spinner className="mx-auto size-10" /></TableCell></TableRow>
+            ) : subs.length === 0 ? (
+              <TableRow><TableCell colSpan={6} className="py-10 text-center text-muted-foreground text-sm">Nenhuma assinatura encontrada.</TableCell></TableRow>
+            ) : subs.map((s) => {
+              const st = subStatusMap[s.status] ?? { label: s.status, variant: "outline" as const }
+              return (
+                <TableRow key={s.id}>
+                  <TableCell className="font-medium">{s.tenantName}</TableCell>
+                  <TableCell>
+                    <span>{s.planName}</span>
+                    <span className="ml-1.5 text-xs text-muted-foreground">{fmtBRL(s.planPrice)}/{s.planInterval === "monthly" ? "mês" : "ano"}</span>
+                  </TableCell>
+                  <TableCell><Badge variant={st.variant}>{st.label}</Badge></TableCell>
+                  <TableCell className="text-sm text-muted-foreground">
+                    {fmtDate(s.currentPeriodStart)} – {fmtDate(s.currentPeriodEnd)}
+                  </TableCell>
+                  <TableCell className="text-sm text-muted-foreground">{fmtDate(s.trialEndsAt)}</TableCell>
+                  <TableCell>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="icon" className="h-8 w-8"><MoreHorizontal className="h-4 w-4" /></Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem onClick={() => { setChangePlanRow(s); setChangePlanId(s.planId) }}>
+                          <CreditCard className="mr-2 h-4 w-4" />Mudar plano
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => { setPaymentRow(s); setPaymentForm({ amount: s.planPrice, status: "paid", notes: "" }) }}>
+                          <DollarSign className="mr-2 h-4 w-4" />Registrar pagamento
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => setHistoryRow(s)}>
+                          <History className="mr-2 h-4 w-4" />Ver histórico
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        {s.status !== "active" && (
+                          <DropdownMenuItem onClick={() => renewMutation.mutate({ subscriptionId: s.id })}>
+                            <RefreshCw className="mr-2 h-4 w-4" />Renovar
+                          </DropdownMenuItem>
+                        )}
+                        {s.status !== "cancelled" && (
+                          <DropdownMenuItem
+                            onClick={() => cancelMutation.mutate({ subscriptionId: s.id })}
+                            className="text-destructive"
+                          >
+                            <XCircle className="mr-2 h-4 w-4" />Cancelar
+                          </DropdownMenuItem>
+                        )}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </TableCell>
+                </TableRow>
+              )
+            })}
+          </TableBody>
+        </Table>
+      </CardContent>
+
+      {/* Criar assinatura */}
+      <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader><DialogTitle>Nova assinatura</DialogTitle></DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-1.5">
+              <Label>Domínio *</Label>
+              <Select value={createForm.tenantId} onValueChange={(v) => setCreateForm((f) => ({ ...f, tenantId: v }))}>
+                <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
+                <SelectContent>{tenants.map((t) => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}</SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Plano *</Label>
+              <Select value={createForm.planId} onValueChange={(v) => setCreateForm((f) => ({ ...f, planId: v }))}>
+                <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
+                <SelectContent>{plans.filter((p) => p.isActive).map((p) => <SelectItem key={p.id} value={p.id}>{p.name} — {fmtBRL(p.price)}</SelectItem>)}</SelectContent>
+              </Select>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <Label>Status inicial</Label>
+                <Select value={createForm.status} onValueChange={(v) => setCreateForm((f) => ({ ...f, status: v }))}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="active">Ativo</SelectItem>
+                    <SelectItem value="trial">Trial</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              {createForm.status === "trial" && (
+                <div className="space-y-1.5">
+                  <Label>Dias de trial</Label>
+                  <Input type="number" min="1" value={createForm.trialDays} onChange={(e) => setCreateForm((f) => ({ ...f, trialDays: e.target.value }))} />
+                </div>
+              )}
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCreateOpen(false)}>Cancelar</Button>
+            <Button
+              disabled={!createForm.tenantId || !createForm.planId || createMutation.isPending}
+              onClick={() => createMutation.mutate({
+                tenantId: createForm.tenantId,
+                planId:   createForm.planId,
+                status:   createForm.status as "trial" | "active",
+                trialDays: Number(createForm.trialDays),
+              })}
+            >
+              {createMutation.isPending ? "Criando..." : "Criar"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Mudar plano */}
+      <Dialog open={!!changePlanRow} onOpenChange={() => { setChangePlanRow(null); setChangePlanId("") }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader><DialogTitle>Mudar plano — {changePlanRow?.tenantName}</DialogTitle></DialogHeader>
+          <div className="space-y-1.5">
+            <Label>Novo plano</Label>
+            <Select value={changePlanId} onValueChange={setChangePlanId}>
+              <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
+              <SelectContent>{plans.filter((p) => p.isActive).map((p) => <SelectItem key={p.id} value={p.id}>{p.name} — {fmtBRL(p.price)}</SelectItem>)}</SelectContent>
+            </Select>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setChangePlanRow(null); setChangePlanId("") }}>Cancelar</Button>
+            <Button
+              disabled={!changePlanId || changePlanMutation.isPending}
+              onClick={() => changePlanRow && changePlanMutation.mutate({ subscriptionId: changePlanRow.id, planId: changePlanId })}
+            >
+              {changePlanMutation.isPending ? "Salvando..." : "Alterar"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Registrar pagamento */}
+      <Dialog open={!!paymentRow} onOpenChange={() => { setPaymentRow(null); setPaymentForm({ amount: "", status: "paid", notes: "" }) }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader><DialogTitle>Registrar pagamento — {paymentRow?.tenantName}</DialogTitle></DialogHeader>
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <Label>Valor (R$) *</Label>
+                <Input value={paymentForm.amount} onChange={(e) => setPaymentForm((f) => ({ ...f, amount: e.target.value }))} placeholder="99.90" />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Status</Label>
+                <Select value={paymentForm.status} onValueChange={(v) => setPaymentForm((f) => ({ ...f, status: v }))}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="paid">Pago</SelectItem>
+                    <SelectItem value="failed">Falhou</SelectItem>
+                    <SelectItem value="refunded">Reembolsado</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Observações <span className="text-muted-foreground text-xs">(opcional)</span></Label>
+              <Textarea value={paymentForm.notes} onChange={(e) => setPaymentForm((f) => ({ ...f, notes: e.target.value }))} rows={2} placeholder="PIX, boleto, etc." />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setPaymentRow(null); setPaymentForm({ amount: "", status: "paid", notes: "" }) }}>Cancelar</Button>
+            <Button
+              disabled={!paymentForm.amount || paymentMutation.isPending}
+              onClick={() => paymentRow && paymentMutation.mutate({
+                subscriptionId: paymentRow.id,
+                amount: paymentForm.amount,
+                status: paymentForm.status as "paid" | "failed" | "refunded",
+                notes: paymentForm.notes || undefined,
+              })}
+            >
+              Registrar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Histórico de pagamentos */}
+      <Dialog open={!!historyRow} onOpenChange={() => setHistoryRow(null)}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Histórico de pagamentos — {historyRow?.tenantName}</DialogTitle>
+          </DialogHeader>
+          <div className="max-h-96 overflow-y-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Data</TableHead>
+                  <TableHead>Valor</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Observações</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {paymentsLoading ? (
+                  <TableRow>
+                    <TableCell colSpan={4} className="py-8 text-center text-muted-foreground text-sm">
+                      <Spinner className="mx-auto size-10" />
+                    </TableCell>
+                  </TableRow>
+                ) : payments.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={4} className="py-8 text-center text-muted-foreground text-sm">
+                      Nenhum pagamento registrado.
+                    </TableCell>
+                  </TableRow>
+                ) : payments.map((pay: any) => {
+                  const payStatusMap: Record<string, { label: string; variant: "default" | "destructive" | "secondary" }> = {
+                    paid:     { label: "Pago",         variant: "default"     },
+                    failed:   { label: "Falhou",       variant: "destructive" },
+                    refunded: { label: "Reembolsado",  variant: "secondary"   },
+                  }
+                  const st = payStatusMap[pay.status] ?? { label: pay.status, variant: "secondary" as const }
+                  return (
+                    <TableRow key={pay.id}>
+                      <TableCell className="text-sm">{fmtDate(pay.paidAt ?? pay.createdAt)}</TableCell>
+                      <TableCell className="font-medium">{fmtBRL(pay.amount)}</TableCell>
+                      <TableCell><Badge variant={st.variant}>{st.label}</Badge></TableCell>
+                      <TableCell className="text-sm text-muted-foreground">{pay.notes ?? "—"}</TableCell>
+                    </TableRow>
+                  )
+                })}
               </TableBody>
             </Table>
-          )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setHistoryRow(null)}>Fechar</Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
-  );
+    </Card>
+  )
 }

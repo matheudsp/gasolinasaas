@@ -2,7 +2,7 @@ import { createORPCClient } from "@orpc/client";
 import { RPCLink } from "@orpc/client/fetch";
 import { createTanstackQueryUtils } from "@orpc/tanstack-query";
 import { QueryCache, QueryClient } from "@tanstack/react-query";
-import { authClient } from "@/services/auth";
+import { authClient } from "@/lib/auth";
 import type { AppRouterClient } from "../../../server/src/routers";
 import Config from "@/config";
 

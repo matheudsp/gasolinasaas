@@ -1,12 +1,12 @@
 import { useEffect } from "react"
-import { SplashScreen, useRouter, useSegments, Stack } from "expo-router"
+import { SplashScreen, useRouter, useSegments, Slot } from "expo-router"
 import { useFonts } from "@expo-google-fonts/space-grotesk"
 import { KeyboardProvider } from "react-native-keyboard-controller"
 import { initialWindowMetrics, SafeAreaProvider } from "react-native-safe-area-context"
 
 import { ThemeProvider } from "@/theme/context"
 import { customFontsToLoad } from "@/theme/typography"
-import { authClient } from "@/services/auth" 
+import { authClient } from "@/lib/auth" 
 
 SplashScreen.preventAutoHideAsync()
 
@@ -37,7 +37,7 @@ export default function Root() {
     if (!session && !inAuthGroup) {
       router.replace("/(auth)/sign-in")
     } else if (session && inAuthGroup) {
-      router.replace("/(tabs)")
+      router.replace("/(app)/(tabs)")
     }
   }, [loaded, session, segments])
 
@@ -47,10 +47,7 @@ export default function Root() {
     <SafeAreaProvider initialMetrics={initialWindowMetrics}>
       <ThemeProvider>
         <KeyboardProvider>
-          <Stack screenOptions={{ headerShown: false }} >
-            <Stack.Screen name="(tabs)" />
-            <Stack.Screen name="(auth)" />
-          </Stack>
+          <Slot screenOptions={{ headerShown: false }} />
         </KeyboardProvider>
       </ThemeProvider>
     </SafeAreaProvider>

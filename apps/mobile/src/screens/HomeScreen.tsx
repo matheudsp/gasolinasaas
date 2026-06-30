@@ -27,13 +27,7 @@ export const HomeScreen: FC = function HomeScreen() {
 
           preset="heading"
         />
-        <Text  preset="subheading" />
-        <Image
-          style={$welcomeFace}
-          source={welcomeFace}
-          resizeMode="contain"
-          tintColor={theme.colors.palette.neutral900}
-        />
+        <Text  preset="subheading" text="aqui sera uma página que deve exibir ter pre-selecionado o combustível preferido do usuario, se não houver, deve ser a gasolina comum dos postos. Não quero filtrar por região, mas se houver acesso a localizacão do usuário devemos listar os postos por proximidade(em KM), ao clicar no posto deve redirecionar para a pagina de detalhes do posto"/>
       </View>
 
       <View style={themed([$bottomContainer, $bottomContainerInsets])}>
