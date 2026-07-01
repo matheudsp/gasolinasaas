@@ -4,13 +4,15 @@ import { fuelRouter } from "./fuel";
 import { stationRouter } from "./station";
 import { tenantRouter } from "./tenant";
 import { adminRouter } from "./admin";
+import { pushRouter } from "./push";
 
 export const appRouter = {
   healthCheck: publicProcedure.handler(() => "OK"),
   station: stationRouter,
   fuel: fuelRouter,
   tenant: tenantRouter,
-   admin: adminRouter
+  admin: adminRouter,
+  push: pushRouter,
 };
 
 export type AppRouter = typeof appRouter;

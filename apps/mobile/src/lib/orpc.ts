@@ -7,7 +7,7 @@ import type { AppRouterClient } from "../../../server/src/routers";
 import Config from "@/config";
 
 
-const TENANT_SLUG = process.env.EXPO_PUBLIC_TENANT_SLUG;
+const TENANT_SLUG = Config.TENANT_SLUG;
 
 if (!TENANT_SLUG) {
   throw new Error(

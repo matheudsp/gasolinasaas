@@ -1,7 +1,8 @@
 import { ORPCError } from "@orpc/server";
 import { and, desc, eq } from "drizzle-orm";
 import { z } from "zod";
-import { user } from "../db/schema/auth";
+import { hashPassword } from "better-auth/crypto";
+import { account, user } from "../db/schema/auth";
 import { plan, paymentHistory, subscription } from "../db/schema/subscription";
 import { tenant, tenantMembership } from "../db/schema/tenant";
 import { adminProcedure } from "../lib/orpc";
@@ -300,6 +301,78 @@ export const adminRouter = {
             updatedAt: new Date(),
           } as Partial<typeof user.$inferInsert>)
           .where(eq(user.id, input.userId));
+
+        return { success: true };
+      }),
+
+    create: adminProcedure
+      .input(
+        z.object({
+          name: z.string().min(1),
+          email: z.string().email(),
+          password: z.string().min(8),
+          role: z.enum(["user", "admin"]).default("user"),
+        }),
+      )
+      .handler(async ({ context, input }) => {
+        const existing = await context.db
+          .select({ id: user.id })
+          .from(user)
+          .where(eq(user.email, input.email))
+          .limit(1)
+          .then((r) => r.at(0));
+
+        if (existing) {
+          throw new ORPCError("CONFLICT", {
+            message: "E-mail já está em uso.",
+          });
+        }
+
+        const now = new Date();
+        const userId = crypto.randomUUID();
+
+        const [newUser] = await context.db
+          .insert(user)
+          .values({
+            id: userId,
+            name: input.name,
+            email: input.email,
+            emailVerified: false,
+            role: input.role,
+            banned: false,
+            createdAt: now,
+            updatedAt: now,
+          })
+          .returning();
+
+        const hashedPwd = await hashPassword(input.password);
+
+        await context.db.insert(account).values({
+          id: crypto.randomUUID(),
+          accountId: input.email,
+          providerId: "credential",
+          userId,
+          password: hashedPwd,
+          createdAt: now,
+          updatedAt: now,
+        });
+
+        return newUser;
+      }),
+
+    delete: adminProcedure
+      .input(z.object({ userId: z.string() }))
+      .handler(async ({ context, input }) => {
+        const existing = await context.db
+          .select({ id: user.id })
+          .from(user)
+          .where(eq(user.id, input.userId))
+          .limit(1)
+          .then((r) => r.at(0));
+
+        if (!existing) throw new ORPCError("NOT_FOUND");
+
+        await context.db.delete(user).where(eq(user.id, input.userId));
 
         return { success: true };
       }),

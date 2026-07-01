@@ -4,7 +4,7 @@ import { toast } from "sonner"
 import {
   Ban, Building2, CheckCircle2, CreditCard, DollarSign,
   FileText, History, MoreHorizontal, Pencil, Plus, RefreshCw,
-  UserMinus, UserPlus, Users, XCircle,
+  Trash2, UserMinus, UserPlus, Users, XCircle,
 } from "lucide-react"
 import { orpc } from "@/lib/orpc"
 import { Badge } from "@/components/ui/badge"
@@ -250,10 +250,15 @@ function TenantsTab() {
 function UsersTab() {
   const qc = useQueryClient()
   const [tenantFilter, setTenantFilter] = useState<string>("")
-  const [banDialog, setBanDialog]     = useState<{ id: string; name: string } | null>(null)
+  const [createOpen, setCreateOpen]     = useState(false)
+  const [banDialog, setBanDialog]       = useState<{ id: string; name: string } | null>(null)
+  const [deleteDialog, setDeleteDialog] = useState<{ id: string; name: string } | null>(null)
   const [assignDialog, setAssignDialog] = useState<{ id: string; name: string } | null>(null)
-  const [banReason, setBanReason]     = useState("")
+  const [banReason, setBanReason]       = useState("")
   const [assignTenantId, setAssignTenantId] = useState("")
+  const [createForm, setCreateForm] = useState({
+    name: "", email: "", password: "", role: "user",
+  })
 
   const { data: users = [], isLoading } = useQuery(
     orpc.admin.user.list.queryOptions({
@@ -266,6 +271,17 @@ function UsersTab() {
 
   const invalidate = () => qc.invalidateQueries(orpc.admin.user.list.queryOptions({ input: {} }))
 
+  const createMutation = useMutation({
+    ...orpc.admin.user.create.mutationOptions(),
+    onSuccess: async () => {
+      toast.success("Usuário criado!")
+      setCreateOpen(false)
+      setCreateForm({ name: "", email: "", password: "", role: "user" })
+      await invalidate()
+    },
+    onError: (e: Error) => toast.error(e.message),
+  })
+
   const banMutation = useMutation({
     ...orpc.admin.user.ban.mutationOptions(),
     onSuccess: async () => { toast.success("Usuário banido."); setBanDialog(null); setBanReason(""); await invalidate() },
@@ -275,6 +291,12 @@ function UsersTab() {
   const unbanMutation = useMutation({
     ...orpc.admin.user.unban.mutationOptions(),
     onSuccess: async () => { toast.success("Ban removido."); await invalidate() },
+    onError: (e: Error) => toast.error(e.message),
+  })
+
+  const deleteMutation = useMutation({
+    ...orpc.admin.user.delete.mutationOptions(),
+    onSuccess: async () => { toast.success("Usuário excluído."); setDeleteDialog(null); await invalidate() },
     onError: (e: Error) => toast.error(e.message),
   })
 
@@ -298,17 +320,22 @@ function UsersTab() {
     <Card>
       <CardHeader className="flex flex-row items-center justify-between gap-4 pb-3">
         <CardTitle className="text-base">Usuários{!isLoading && ` (${rows.length})`}</CardTitle>
-        <Select value={tenantFilter} onValueChange={setTenantFilter}>
-          <SelectTrigger className="w-56">
-            <SelectValue placeholder="Filtrar por domínio" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="">Todos os usuários</SelectItem>
-            {tenants.map((t) => (
-              <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <div className="flex items-center gap-2">
+          <Select value={tenantFilter} onValueChange={setTenantFilter}>
+            <SelectTrigger className="w-56">
+              <SelectValue placeholder="Filtrar por domínio" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="">Todos os usuários</SelectItem>
+              {tenants.map((t) => (
+                <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Button size="sm" onClick={() => setCreateOpen(true)}>
+            <Plus className="mr-1.5 h-4 w-4" />Novo usuário
+          </Button>
+        </div>
       </CardHeader>
       <CardContent className="p-0">
         <Table>
@@ -371,6 +398,13 @@ function UsersTab() {
                             <Ban className="mr-2 h-4 w-4" />Banir usuário
                           </DropdownMenuItem>
                         )}
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem
+                          onClick={() => setDeleteDialog({ id: userId, name })}
+                          className="text-destructive"
+                        >
+                          <Trash2 className="mr-2 h-4 w-4" />Excluir usuário
+                        </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
                   </TableCell>
@@ -380,6 +414,65 @@ function UsersTab() {
           </TableBody>
         </Table>
       </CardContent>
+
+      {/* Criar usuário */}
+      <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader><DialogTitle>Novo usuário</DialogTitle></DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-1.5">
+              <Label>Nome *</Label>
+              <Input
+                value={createForm.name}
+                onChange={(e) => setCreateForm((f) => ({ ...f, name: e.target.value }))}
+                placeholder="João Silva"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>E-mail *</Label>
+              <Input
+                type="email"
+                value={createForm.email}
+                onChange={(e) => setCreateForm((f) => ({ ...f, email: e.target.value }))}
+                placeholder="joao@exemplo.com"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Senha * <span className="text-muted-foreground text-xs">(mínimo 8 caracteres)</span></Label>
+              <Input
+                type="password"
+                value={createForm.password}
+                onChange={(e) => setCreateForm((f) => ({ ...f, password: e.target.value }))}
+                placeholder="••••••••"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Papel</Label>
+              <Select value={createForm.role} onValueChange={(v) => setCreateForm((f) => ({ ...f, role: v }))}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="user">Usuário</SelectItem>
+                  <SelectItem value="admin">Admin</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCreateOpen(false)}>Cancelar</Button>
+            <Button
+              disabled={!createForm.name.trim() || !createForm.email.trim() || createForm.password.length < 8 || createMutation.isPending}
+              onClick={() => createMutation.mutate({
+                name: createForm.name.trim(),
+                email: createForm.email.trim(),
+                password: createForm.password,
+                role: createForm.role as "user" | "admin",
+              })}
+            >
+              {createMutation.isPending ? "Criando..." : "Criar"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Ban dialog */}
       <Dialog open={!!banDialog} onOpenChange={() => { setBanDialog(null); setBanReason("") }}>
@@ -402,6 +495,26 @@ function UsersTab() {
               onClick={() => banDialog && banMutation.mutate({ userId: banDialog.id, reason: banReason || undefined })}
             >
               {banMutation.isPending ? "Banindo..." : "Banir"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete dialog */}
+      <Dialog open={!!deleteDialog} onOpenChange={() => setDeleteDialog(null)}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader><DialogTitle>Excluir {deleteDialog?.name}?</DialogTitle></DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            Esta ação é irreversível. O usuário, suas sessões e vínculos com domínios serão permanentemente removidos.
+          </p>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteDialog(null)}>Cancelar</Button>
+            <Button
+              variant="destructive"
+              disabled={deleteMutation.isPending}
+              onClick={() => deleteDialog && deleteMutation.mutate({ userId: deleteDialog.id })}
+            >
+              {deleteMutation.isPending ? "Excluindo..." : "Excluir permanentemente"}
             </Button>
           </DialogFooter>
         </DialogContent>

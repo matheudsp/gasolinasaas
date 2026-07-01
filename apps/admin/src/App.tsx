@@ -8,6 +8,7 @@ import Dashboard from "@/pages/Dashboard";
 import Profile from "@/pages/Profile";
 import StationDetail from "./pages/StationDetail";
 import Admin from "./pages/Admin";
+import PushNotifications from "./pages/PushNotifications";
 
 export default function App() {
   return (
@@ -24,6 +25,7 @@ export default function App() {
         <Route path="/dashboard" element={<Dashboard />} />
         <Route path="/profile" element={<Profile />} />
         <Route path="/stations/:id" element={<StationDetail />} />
+        <Route path="/push-notifications" element={<PushNotifications />} />
       </Route>
       <Route
         element={

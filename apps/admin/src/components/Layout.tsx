@@ -3,6 +3,7 @@ import { useAuth } from "@/context/AuthContext";
 import {
   Building2,
   LayoutDashboard,
+  Bell,
   CreditCard,
   LogOut,
   User,
@@ -23,6 +24,7 @@ import { useState } from "react";
 
 const navItems = [
   { to: "/dashboard", label: "Painel", icon: LayoutDashboard },
+  { to: "/push-notifications", label: "Notificações", icon: Bell },
   {to: "/minha-assinatura", label: "Minha Assinatura", icon: CreditCard},
   { to: "/admin", label: "Admin", icon: TowerControl, adminOnly: true },
 ];

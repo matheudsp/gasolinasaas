@@ -9,8 +9,8 @@
   "updates": {
     "fallbackToCacheTimeout": 0
   },
-  "newArchEnabled": true,
-  "jsEngine": "hermes",
+
+
   "assetBundlePatterns": ["**/*"],
   "android": {
     "icon": "./assets/images/app-icon-android-legacy.png",
@@ -20,17 +20,22 @@
       "backgroundImage": "./assets/images/app-icon-android-adaptive-background.png"
     },
     "allowBackup": false,
-    "edgeToEdgeEnabled": true
+
+    "permissions": ["ACCESS_COARSE_LOCATION", "ACCESS_FINE_LOCATION"]
   },
   "ios": {
     "icon": "./assets/images/app-icon-ios.png",
     "supportsTablet": true,
-    "bundleIdentifier": "com.mdsp.martinez"
+    "bundleIdentifier": "com.mdsp.martinez",
+    "infoPlist": {
+      "NSLocationWhenInUseUsageDescription": "Usamos sua localização para mostrar os postos mais próximos de você."
+    }
   },
   "web": {
     "favicon": "./assets/images/app-icon-web-favicon.png",
     "bundler": "metro"
   },
+
   "plugins": [
     "expo-localization",
     "expo-font",
@@ -53,7 +58,21 @@
       }
     ],
     "expo-build-properties",
-    "expo-router"
+    "expo-router",
+    [
+      "expo-notifications",
+      {
+        "icon": "./assets/images/app-icon-android-legacy.png",
+        "color": "#191015",
+        "sounds": []
+      }
+    ],
+    [
+      "expo-location",
+      {
+        "locationWhenInUsePermission": "Usamos sua localização para mostrar os postos mais próximos de você."
+      }
+    ]
   ],
   "experiments": {
     "tsconfigPaths": true,

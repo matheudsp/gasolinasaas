@@ -1,14 +1,13 @@
 import { eq } from "drizzle-orm";
 import { z } from "zod";
 
+import { user } from "../db/schema/auth";
 import { tenant, tenantMembership } from "../db/schema/tenant";
 import { protectedProcedure, tenantOwnerProcedure } from "../lib/orpc";
 
 export const tenantRouter = {
   /**
    * Descobre o tenant do usuário autenticado.
-   * Usa protectedProcedure — context.session.user já está disponível,
-   * mas context.tenant ainda não (é o que estamos buscando).
    */
   getMyMembership: protectedProcedure.handler(async ({ context }) => {
     const [result] = await context.db
@@ -32,7 +31,6 @@ export const tenantRouter = {
 
   /**
    * Update administrative settings for the authenticated tenant.
-   * tenantId comes from the validated context — never from input.
    */
   updateSettings: tenantOwnerProcedure
     .input(
@@ -48,4 +46,15 @@ export const tenantRouter = {
         .returning();
       return updated;
     }),
+
+  /**
+   * Deleta permanentemente a conta do usuário autenticado.
+   * O cascade no banco remove sessões, memberships e push tokens automaticamente.
+   */
+  deleteAccount: protectedProcedure.handler(async ({ context }) => {
+    await context.db
+      .delete(user)
+      .where(eq(user.id, context.session.user.id));
+    return { success: true };
+  }),
 };

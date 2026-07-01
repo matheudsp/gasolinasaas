@@ -6,6 +6,6 @@
  * https://reactnative.dev/docs/security#storing-sensitive-info
  */
 export default {
-  API_URL: "http://localhost:3000",
+  API_URL: "http://10.0.2.2:15000",
   TENANT_SLUG:"grupo-martinez"
 }
