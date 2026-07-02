@@ -11,10 +11,17 @@ import {
   ViewStyle,
   TextStyle,
 } from "react-native"
-import * as Device from "expo-device"
 import * as Notifications from "expo-notifications"
 import { useMMKVBoolean, useMMKVString } from "react-native-mmkv"
 import { useMutation, useQuery } from "@tanstack/react-query"
+
+// expo-device requer build nativo — lazy require para não quebrar em Expo Go
+let _isDevice = false;
+try {
+  _isDevice = (require("expo-device") as { isDevice?: boolean }).isDevice ?? false;
+} catch {
+  _isDevice = false;
+}
 
 import { Button } from "@/components/Button"
 import { Screen } from "@/components/Screen"
@@ -107,7 +114,7 @@ export function MyAccountScreen() {
 
   async function handleNotifToggle(value: boolean) {
     if (value) {
-      if (!Device.isDevice) return
+      if (!_isDevice) return
       const { status } = await Notifications.requestPermissionsAsync()
       if (status !== "granted") {
         // Permissão negada — precisa ir nas configurações do SO

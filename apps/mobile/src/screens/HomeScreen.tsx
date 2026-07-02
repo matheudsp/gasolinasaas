@@ -152,8 +152,7 @@ export const HomeScreen: FC = function HomeScreen() {
           <StationCard
             station={item}
             locationLoading={locationLoading}
-            // onPress={() => router.push(`/station/${item.id}`)}
-            onPress={() => console.log(`Pressed station ${item.id}`)}
+            onPress={() => router.push(`/station/${item.id}`)}
           />
         )}
       />

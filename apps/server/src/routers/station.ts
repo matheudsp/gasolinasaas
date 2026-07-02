@@ -1,7 +1,7 @@
 import { ORPCError } from "@orpc/server";
 import { and, eq, ilike, or } from "drizzle-orm";
 import { z } from "zod";
-import { station } from "../db/schema/station";
+import { fuel, station, stationFuel } from "../db/schema/station";
 import { protectedProcedure, tenantOwnerProcedure } from "../lib/orpc";
 
 const amenitiesSchema = z.object({
@@ -160,5 +160,55 @@ export const stationRouter = {
         .where(eq(station.id, input.id));
 
       return { success: true };
+    }),
+
+  /**
+   * Retorna um posto pelo ID com todos os preços de combustíveis disponíveis.
+   * Usado pela tela de detalhes do app mobile.
+   */
+  getById: protectedProcedure
+    .input(z.object({ id: z.string() }))
+    .handler(async ({ context, input }) => {
+      if (!context.tenant) {
+        throw new ORPCError("BAD_REQUEST", { message: "Tenant is required" });
+      }
+
+      const row = await context.db
+        .select()
+        .from(station)
+        .where(
+          and(
+            eq(station.id, input.id),
+            eq(station.tenantId, context.tenant.id),
+            eq(station.isActive, true),
+          ),
+        )
+        .limit(1)
+        .then((rows) => rows.at(0));
+
+      if (!row) {
+        throw new ORPCError("NOT_FOUND");
+      }
+
+      const prices = await context.db
+        .select({
+          id: stationFuel.id,
+          fuelId: fuel.id,
+          fuelName: fuel.name,
+          fuelSlug: fuel.slug,
+          currentPrice: stationFuel.currentPrice,
+          isAvailable: stationFuel.isAvailable,
+          updatedAt: stationFuel.updatedAt,
+        })
+        .from(stationFuel)
+        .innerJoin(fuel, eq(stationFuel.fuelId, fuel.id))
+        .where(
+          and(
+            eq(stationFuel.stationId, input.id),
+            eq(stationFuel.isAvailable, true),
+          ),
+        );
+
+      return { ...row, prices };
     }),
 };
