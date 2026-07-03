@@ -16,11 +16,11 @@ import { useMMKVBoolean, useMMKVString } from "react-native-mmkv"
 import { useMutation, useQuery } from "@tanstack/react-query"
 
 // expo-device requer build nativo — lazy require para não quebrar em Expo Go
-let _isDevice = false;
+let _isDevice = false
 try {
-  _isDevice = (require("expo-device") as { isDevice?: boolean }).isDevice ?? false;
+  _isDevice = (require("expo-device") as { isDevice?: boolean }).isDevice ?? false
 } catch {
-  _isDevice = false;
+  _isDevice = false
 }
 
 import { Button } from "@/components/Button"
@@ -51,13 +51,7 @@ function SectionHeader({ title }: { title: string }) {
   return <Text preset="formLabel" text={title} style={themed($sectionLabel)} />
 }
 
-function SettingsRow({
-  label,
-  children,
-}: {
-  label: string
-  children: React.ReactNode
-}) {
+function SettingsRow({ label, children }: { label: string; children: React.ReactNode }) {
   const { themed } = useAppTheme()
   return (
     <View style={themed($settingsRow)}>
@@ -82,9 +76,7 @@ export function MyAccountScreen() {
   // ── Combustível preferido ────────────────────────────────────────────────
   const { preferredFuelSlug, setPreferredFuelSlug } = usePreferredFuel()
 
-  const { data: priceRows = [] } = useQuery(
-    orpc.fuel.listPrices.queryOptions({ input: {} }),
-  )
+  const { data: priceRows = [] } = useQuery(orpc.fuel.listPrices.queryOptions({ input: {} }))
   const availableFuels = useCallback(() => {
     const map = new Map<string, string>()
     for (const p of priceRows) {
@@ -105,12 +97,8 @@ export function MyAccountScreen() {
 
   const notifEnabled = hasPermission && optedOut !== true
 
-  const { mutate: registerToken } = useMutation(
-    orpc.push.registerToken.mutationOptions(),
-  )
-  const { mutate: unregisterToken } = useMutation(
-    orpc.push.unregisterToken.mutationOptions(),
-  )
+  const { mutate: registerToken } = useMutation(orpc.push.registerToken.mutationOptions())
+  const { mutate: unregisterToken } = useMutation(orpc.push.unregisterToken.mutationOptions())
 
   async function handleNotifToggle(value: boolean) {
     if (value) {
@@ -170,7 +158,12 @@ export function MyAccountScreen() {
 
   // ── Initials ──────────────────────────────────────────────────────────────
   const initials = user?.name
-    ? user.name.split(" ").slice(0, 2).map((n) => n[0]).join("").toUpperCase()
+    ? user.name
+        .split(" ")
+        .slice(0, 2)
+        .map((n) => n[0])
+        .join("")
+        .toUpperCase()
     : "?"
 
   return (
@@ -207,10 +200,7 @@ export function MyAccountScreen() {
                     onPress={() => setPreferredFuelSlug(f.slug)}
                     style={themed(active ? $chipActive : $chip)}
                   >
-                    <Text
-                      text={f.name}
-                      style={themed(active ? $chipTextActive : $chipText)}
-                    />
+                    <Text text={f.name} style={themed(active ? $chipTextActive : $chipText)} />
                   </Pressable>
                 )
               })}
@@ -230,10 +220,7 @@ export function MyAccountScreen() {
                   onPress={() => setThemeContextOverride(opt.value)}
                   style={themed(active ? $chipActive : $chip)}
                 >
-                  <Text
-                    text={opt.label}
-                    style={themed(active ? $chipTextActive : $chipText)}
-                  />
+                  <Text text={opt.label} style={themed(active ? $chipTextActive : $chipText)} />
                 </Pressable>
               )
             })}
@@ -241,7 +228,7 @@ export function MyAccountScreen() {
         </View>
 
         {/* Notificações */}
-        <SettingsRow label="Notificações push">
+        <SettingsRow label="Receber notificações">
           <Switch
             value={notifEnabled}
             onValueChange={handleNotifToggle}
@@ -289,16 +276,9 @@ export function MyAccountScreen() {
         animationType="fade"
         onRequestClose={() => setDeleteConfirmVisible(false)}
       >
-        <Pressable
-          style={themed($modalOverlay)}
-          onPress={() => setDeleteConfirmVisible(false)}
-        >
+        <Pressable style={themed($modalOverlay)} onPress={() => setDeleteConfirmVisible(false)}>
           <Pressable style={themed($modalBox)} onPress={() => undefined}>
-            <Text
-              preset="subheading"
-              text="Deletar conta"
-              style={themed($modalTitle)}
-            />
+            <Text preset="subheading" text="Deletar conta" style={themed($modalTitle)} />
             <Text
               text="Essa ação é irreversível. Todos os seus dados serão permanentemente removidos."
               style={themed($modalBody)}
@@ -312,7 +292,7 @@ export function MyAccountScreen() {
               />
               <Button
                 text={isDeleting ? "Deletando..." : "Confirmar"}
-                onPress={() => deleteAccount()}
+                onPress={() => deleteAccount({})}
                 disabled={isDeleting}
                 style={themed($deleteButton)}
                 textStyle={themed($deleteText)}

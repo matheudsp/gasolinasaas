@@ -10,10 +10,14 @@ export function usePreferredFuel() {
     () => loadString(PREFERRED_FUEL_KEY) ?? DEFAULT_FUEL_SLUG,
   )
 
+  const refresh = useCallback(() => {
+    setPreferredFuelSlugState(loadString(PREFERRED_FUEL_KEY) ?? DEFAULT_FUEL_SLUG)
+  }, [])
+
   const setPreferredFuelSlug = useCallback((slug: string) => {
     saveString(PREFERRED_FUEL_KEY, slug)
     setPreferredFuelSlugState(slug)
   }, [])
 
-  return { preferredFuelSlug, setPreferredFuelSlug }
+  return { preferredFuelSlug, setPreferredFuelSlug, refresh }
 }

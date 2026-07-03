@@ -1,4 +1,4 @@
-import { FC, useState } from "react"
+import { FC, useCallback } from "react"
 import {
   ActivityIndicator,
   FlatList,
@@ -8,42 +8,31 @@ import {
   View,
   ViewStyle,
 } from "react-native"
-import { useRouter } from "expo-router"
+import { useRouter, useFocusEffect } from "expo-router"
 
 import { Screen } from "@/components/Screen"
 import { Text } from "@/components/Text"
 import { StationCard } from "@/components/StationCard"
 
-import { useNearbyStations, type SortOption } from "@/hooks/useNearbyStations"
+import { useNearbyStations } from "@/hooks/useNearbyStations"
 import { usePreferredFuel } from "@/hooks/usePreferredFuel"
+import { useSortOption, SORT_LABELS } from "@/hooks/useSortOption"
 import { useUserLocation } from "@/hooks/useUserLocation"
+import { authClient } from "@/lib/auth"
 
 import type { ThemedStyle } from "@/theme/types"
-import { useAppTheme } from "@/theme/context"
 import { $styles } from "@/theme/styles"
 import { useSafeAreaInsetsStyle } from "@/utils/useSafeAreaInsetsStyle"
-
-const SORT_OPTIONS: Array<{ value: SortOption; label: string }> = [
-  { value: "distance-asc", label: "Mais próximo" },
-  { value: "distance-desc", label: "Mais longe" },
-  { value: "price-asc", label: "Menor preço" },
-  { value: "price-desc", label: "Maior preço" },
-]
-
-const SORT_STATUS_LABELS: Record<SortOption, string> = {
-  "distance-asc": "Mais próximo primeiro",
-  "distance-desc": "Mais longe primeiro",
-  "price-asc": "Menor preço primeiro",
-  "price-desc": "Maior preço primeiro",
-}
+import { useAppTheme } from "@/theme/context"
 
 export const HomeScreen: FC = function HomeScreen() {
   const { themed, theme } = useAppTheme()
   const router = useRouter()
   const $topInsets = useSafeAreaInsetsStyle(["top"])
+  const { data } = authClient.useSession()
 
-  const [sortBy, setSortBy] = useState<SortOption>("distance-asc")
-  const { preferredFuelSlug, setPreferredFuelSlug } = usePreferredFuel()
+  const { preferredFuelSlug, refresh: refreshFuel } = usePreferredFuel()
+  const { sortBy, refresh: refreshSort } = useSortOption()
   const {
     location,
     permissionDenied,
@@ -57,10 +46,21 @@ export const HomeScreen: FC = function HomeScreen() {
     sortBy,
   )
 
+  useFocusEffect(
+    useCallback(() => {
+      refreshFuel()
+      refreshSort()
+    }, [refreshFuel, refreshSort]),
+  )
+
+  const preferredFuelName =
+    availableFuels.find((f) => f.slug === preferredFuelSlug)?.name ?? "Combustível"
+  const filterSummary = `${preferredFuelName} · ${SORT_LABELS[sortBy]}`
+
   return (
     <Screen preset="fixed" contentContainerStyle={$styles.flex1} safeAreaEdges={[]}>
       <View style={themed([$header, $topInsets])}>
-        <Text preset="heading" text="Postos próximos" />
+        <Text preset="heading" text={`Olá, ${data?.user?.name ?? "Usuário"}`} />
 
         <View style={themed($locationRow)}>
           {locationLoading ? (
@@ -73,65 +73,21 @@ export const HomeScreen: FC = function HomeScreen() {
                 text={`Erro de localização. Tentar novamente`}
               />
             </Pressable>
-          ) : permissionDenied ? (
-            <Text
-              size="xs"
-              style={themed($dimText)}
-              text="Localização negada — ative nas configurações para ver a distância"
-            />
           ) : (
-            <Text size="xs" style={themed($dimText)} text={SORT_STATUS_LABELS[sortBy]} />
+            permissionDenied && (
+              <Text
+                size="xs"
+                style={themed($dimText)}
+                text="Localização negada — ative nas configurações para ver a distância"
+              />
+            )
           )}
         </View>
 
-        {availableFuels.length > 0 && (
-          <FlatList
-            horizontal
-            data={availableFuels}
-            keyExtractor={(item) => item.slug}
-            showsHorizontalScrollIndicator={false}
-            style={themed($chipRow)}
-            renderItem={({ item }) => {
-              const isActive = item.slug === preferredFuelSlug
-              return (
-                <Pressable
-                  onPress={() => setPreferredFuelSlug(item.slug)}
-                  style={themed(isActive ? $chipActive : $chip)}
-                >
-                  <Text
-                    size="xs"
-                    weight={isActive ? "bold" : "normal"}
-                    style={themed(isActive ? $chipTextActive : $chipText)}
-                    text={item.name}
-                  />
-                </Pressable>
-              )
-            }}
-          />
-        )}
-
-        <FlatList
-          horizontal
-          data={SORT_OPTIONS}
-          keyExtractor={(item) => item.value}
-          showsHorizontalScrollIndicator={false}
-          renderItem={({ item }) => {
-            const isActive = item.value === sortBy
-            return (
-              <Pressable
-                onPress={() => setSortBy(item.value)}
-                style={themed(isActive ? $sortChipActive : $sortChip)}
-              >
-                <Text
-                  size="xs"
-                  weight={isActive ? "bold" : "normal"}
-                  style={themed(isActive ? $chipTextActive : $chipText)}
-                  text={item.label}
-                />
-              </Pressable>
-            )
-          }}
-        />
+        <Pressable onPress={() => router.push("/filters")} style={themed($filterButton)}>
+          <Text size="xs" style={themed($filterButtonText)} text={filterSummary} />
+          <Text size="xs" style={themed($filterButtonChevron)} text="Filtros ›" />
+        </Pressable>
       </View>
 
       <FlatList
@@ -187,28 +143,22 @@ const $dimText: ThemedStyle<TextStyle> = ({ colors }) => ({
   color: colors.textDim,
 })
 
-const $chip: ThemedStyle<ViewStyle> = ({ spacing, colors }) => ({
-  paddingHorizontal: spacing.sm,
-  paddingVertical: spacing.xs,
-  borderRadius: 999,
+const $filterButton: ThemedStyle<ViewStyle> = ({ spacing, colors }) => ({
+  flexDirection: "row",
+  justifyContent: "space-between",
+  alignItems: "center",
+  paddingHorizontal: spacing.md,
+  paddingVertical: spacing.sm,
+  borderRadius: 12,
   backgroundColor: colors.palette.neutral200,
-  marginRight: spacing.xs,
 })
 
-const $chipActive: ThemedStyle<ViewStyle> = ({ spacing, colors }) => ({
-  paddingHorizontal: spacing.sm,
-  paddingVertical: spacing.xs,
-  borderRadius: 999,
-  backgroundColor: colors.tint,
-  marginRight: spacing.xs,
-})
-
-const $chipText: ThemedStyle<TextStyle> = ({ colors }) => ({
+const $filterButtonText: ThemedStyle<TextStyle> = ({ colors }) => ({
   color: colors.text,
 })
 
-const $chipTextActive: ThemedStyle<TextStyle> = ({ colors }) => ({
-  color: colors.palette.neutral100,
+const $filterButtonChevron: ThemedStyle<TextStyle> = ({ colors }) => ({
+  color: colors.tint,
 })
 
 const $listContent: ThemedStyle<ViewStyle> = ({ spacing }) => ({
@@ -223,24 +173,4 @@ const $separator: ThemedStyle<ViewStyle> = ({ spacing }) => ({
 const $emptyContainer: ThemedStyle<ViewStyle> = ({ spacing }) => ({
   paddingTop: spacing.xxl,
   alignItems: "center",
-})
-
-const $chipRow: ThemedStyle<ViewStyle> = ({ spacing }) => ({
-  marginBottom: spacing.xs,
-})
-
-const $sortChip: ThemedStyle<ViewStyle> = ({ spacing, colors }) => ({
-  paddingHorizontal: spacing.sm,
-  paddingVertical: spacing.xs,
-  borderRadius: 999,
-  backgroundColor: colors.palette.neutral200,
-  marginRight: spacing.xs,
-})
-
-const $sortChipActive: ThemedStyle<ViewStyle> = ({ spacing, colors }) => ({
-  paddingHorizontal: spacing.sm,
-  paddingVertical: spacing.xs,
-  borderRadius: 999,
-  backgroundColor: colors.palette.secondary500,
-  marginRight: spacing.xs,
 })
