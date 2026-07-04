@@ -14,7 +14,7 @@
     "start": "wrangler dev",
     "deploy": "wrangler deploy",
     "secrets:setup": "node scripts/setup-secrets.mjs",
-    "sync:secrets": "node scripts/sync-wrangler-secrets.js --env-file=.env --only=DATABASE_URL,DATABASE_URL_POOLER,BETTER_AUTH_SECRET --worker=ship-fullstack-server",
+    "sync:secrets": "node scripts/sync-wrangler-secrets.js --env-file=.env --only=DATABASE_URL,DATABASE_URL_POOLER,BETTER_AUTH_SECRET --worker=gasolina-server",
     "cf-typegen": "wrangler types --env-interface CloudflareBindings",
     "generate-types": "wrangler types",
     "seed:liso": "tsx src/db/seed.ts",

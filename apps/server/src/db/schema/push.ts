@@ -1,4 +1,12 @@
-import { integer, pgEnum, pgTable, text, timestamp, unique } from "drizzle-orm/pg-core";
+import {
+  index,
+  integer,
+  pgEnum,
+  pgTable,
+  text,
+  timestamp,
+  unique,
+} from "drizzle-orm/pg-core";
 import { user } from "./auth";
 import { tenant } from "./tenant";
 
@@ -27,7 +35,7 @@ export const pushToken = pgTable(
   ]
 );
 
-// Histórico de notificações push enviadas pelo tenant.
+// Histórico de campanhas de notificação enviadas pelo tenant (agregado).
 export const pushNotification = pgTable("push_notification", {
   id: text("id").primaryKey(),
   tenantId: text("tenant_id")
@@ -46,3 +54,40 @@ export const pushNotification = pgTable("push_notification", {
   createdAt: timestamp("created_at").notNull(),
   updatedAt: timestamp("updated_at").notNull(),
 });
+
+/**
+ * Registro individual de entrega/leitura de uma notificação por usuário.
+ *
+ * pushNotification é o registro agregado da campanha (quantos no total,
+ * quantos com sucesso/falha); esta tabela é o detalhe por destinatário —
+ * permite responder "este usuário recebeu esta notificação?" e "ele já
+ * leu?", o que o agregado sozinho não permite.
+ *
+ * IMPORTANTE — acoplamento operacional: o serviço que efetivamente dispara
+ * os pushes via FCM/APNs deve inserir uma linha aqui para cada usuário-alvo
+ * no momento do envio (deliveredAt = now() em caso de sucesso na entrega
+ * àquele token, null em caso de falha). Sem isso, a listagem de
+ * notificações do usuário em users.ts sempre retorna vazio.
+ */
+export const pushNotificationRecipient = pgTable(
+  "push_notification_recipient",
+  {
+    id: text("id").primaryKey(),
+    notificationId: text("notification_id")
+      .notNull()
+      .references(() => pushNotification.id, { onDelete: "cascade" }),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    deliveredAt: timestamp("delivered_at"),
+    readAt: timestamp("read_at"),
+    createdAt: timestamp("created_at").notNull(),
+    updatedAt: timestamp("updated_at").notNull(),
+  },
+  (t) => [
+    // Evita duplicar o mesmo destinatário para a mesma notificação
+    // (ex: reenvio acidental, múltiplos tokens do mesmo usuário).
+    unique("unique_notification_recipient").on(t.notificationId, t.userId),
+    index("push_notification_recipient_user_idx").on(t.userId),
+  ]
+);

@@ -9,9 +9,9 @@
   "updates": {
     "fallbackToCacheTimeout": 0
   },
-
-
-  "assetBundlePatterns": ["**/*"],
+  "assetBundlePatterns": [
+    "**/*"
+  ],
   "android": {
     "icon": "./assets/images/app-icon-android-legacy.png",
     "package": "com.mdsp.martinez",
@@ -20,8 +20,11 @@
       "backgroundImage": "./assets/images/app-icon-android-adaptive-background.png"
     },
     "allowBackup": false,
-
-    "permissions": ["ACCESS_COARSE_LOCATION", "ACCESS_FINE_LOCATION"]
+    "permissions": [
+      "ACCESS_COARSE_LOCATION",
+      "ACCESS_FINE_LOCATION"
+    ],
+    "googleServicesFile": "./google-services.json"
   },
   "ios": {
     "icon": "./assets/images/app-icon-ios.png",
@@ -35,7 +38,6 @@
     "favicon": "./assets/images/app-icon-web-favicon.png",
     "bundler": "metro"
   },
-
   "plugins": [
     "expo-localization",
     "expo-font",
@@ -81,6 +83,11 @@
   "extra": {
     "ignite": {
       "version": "11.5.0"
+    },
+    "router": {},
+    "eas": {
+      "projectId": "03973ce3-5940-445b-835e-b8ec12cad043"
     }
-  }
+  },
+  "owner": "matheudsp"
 }

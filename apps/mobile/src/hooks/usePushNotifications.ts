@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import { Platform } from "react-native";
 import * as Notifications from "expo-notifications";
+import Constants from "expo-constants";
 import { useMMKVBoolean } from "react-native-mmkv";
 import { useMutation } from "@tanstack/react-query";
 import { orpc } from "@/lib/orpc";
@@ -38,6 +39,21 @@ export function getPlatform(): "ios" | "android" | "web" {
 }
 
 /**
+ * O Expo Go consegue inferir o projectId automaticamente, mas builds EAS
+ * (development/preview/production) exigem que ele seja passado explicitamente
+ * para getExpoPushTokenAsync() — sem isso, a chamada falha em builds standalone
+ * mesmo que funcione normalmente durante o desenvolvimento no Expo Go.
+ * O valor vem de app.json -> extra.eas.projectId, populado por `eas init`.
+ */
+function getEasProjectId(): string | null {
+  return (
+    Constants.expoConfig?.extra?.eas?.projectId ??
+    Constants.easConfig?.projectId ??
+    null
+  );
+}
+
+/**
  * Solicita permissão, obtém o token e o registra no servidor.
  * Degrada silenciosamente em ambientes sem módulos nativos (Expo Go).
  */
@@ -55,6 +71,14 @@ export function usePushNotifications() {
     // Só prossegue em dispositivo físico com módulos nativos disponíveis
     if (!_isDevice) return;
 
+    const projectId = getEasProjectId();
+    if (!projectId) {
+      console.warn(
+        "[push] projectId ausente — rode `eas init` para vincular o projeto ao EAS",
+      );
+      return;
+    }
+
     let active = true;
 
     async function register() {
@@ -71,12 +95,14 @@ export function usePushNotifications() {
 
         if (finalStatus !== "granted") return;
 
-        const tokenData = await Notifications.getExpoPushTokenAsync();
+        const tokenData = await Notifications.getExpoPushTokenAsync({ projectId });
         if (active) {
           registerToken({ token: tokenData.data, platform: getPlatform() });
         }
-      } catch {
-        // Token indisponível sem projectId EAS ou sem módulo nativo
+      } catch (err) {
+        // Token indisponível — sem projectId válido, sem credencial FCM/APNs
+        // configurada no EAS, ou módulo nativo ausente
+        console.warn("[push] falha ao obter token:", err);
       }
     }
 

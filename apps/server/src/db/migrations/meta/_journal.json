@@ -43,6 +43,13 @@
       "when": 1782910224359,
       "tag": "0005_marvelous_toro",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1783172083238,
+      "tag": "0006_happy_lizard",
+      "breakpoints": true
     }
   ]
 }

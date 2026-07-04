@@ -5,8 +5,8 @@
 	"compatibility_flags": ["nodejs_compat"],
 	"vars": {
 		"NODE_ENV": "production",
-		"CORS_ORIGIN": "https://gasolina.workers.dev",
-		"BETTER_AUTH_URL": "https://gasolina-server.workers.dev",
+		"CORS_ORIGIN": "https://sistema.gasolina.cloud",
+		"BETTER_AUTH_URL": "https://api.gasolina.cloud",
 		// Add non-sensitive public IDs here:
 		// "GOOGLE_CLIENT_ID": "your_google_client_id"
 	}

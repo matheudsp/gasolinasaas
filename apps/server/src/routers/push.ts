@@ -2,7 +2,7 @@ import { and, desc, eq, inArray } from "drizzle-orm";
 import { z } from "zod";
 
 import { user } from "../db/schema/auth";
-import { pushNotification, pushToken } from "../db/schema/push";
+import { pushNotification, pushNotificationRecipient, pushToken } from "../db/schema/push";
 import { ORPCError } from "@orpc/server";
 import { protectedProcedure, tenantOwnerProcedure } from "../lib/orpc";
 
@@ -144,6 +144,11 @@ export const pushRouter = {
    * Envia uma notificação push para todos os usuários do tenant.
    * Processa em lotes de 100 (limite da Expo Push API).
    * Tokens inválidos (DeviceNotRegistered) são removidos automaticamente.
+   *
+   * Além do registro agregado em pushNotification, grava uma linha em
+   * pushNotificationRecipient por USUÁRIO (não por token/dispositivo) —
+   * um usuário com 2 aparelhos gera 1 único recipient, marcado como
+   * entregue se pelo menos um dos aparelhos recebeu com sucesso.
    */
   send: tenantOwnerProcedure
     .input(
@@ -156,7 +161,7 @@ export const pushRouter = {
     )
     .handler(async ({ context, input }) => {
       const tokens = await context.db
-        .select({ id: pushToken.id, token: pushToken.token })
+        .select({ id: pushToken.id, token: pushToken.token, userId: pushToken.userId })
         .from(pushToken)
         .where(eq(pushToken.tenantId, context.tenant.id));
 
@@ -203,23 +208,33 @@ export const pushRouter = {
         tickets.push(...results);
       }
 
-      // Identifica tokens inválidos para remover
+      // Uma passada só: agrega falhas de token, contagens e entrega POR USUÁRIO.
+      // tickets está alinhado 1:1 com tokens (mesmo índice), pois messages
+      // foi construído com tokens.map() na mesma ordem.
       const invalidTokenIds: string[] = [];
       let successCount = 0;
       let failureCount = 0;
+      const userDeliveredMap = new Map<string, boolean>();
 
       for (let i = 0; i < tickets.length; i++) {
         const ticket = tickets[i];
-        if (ticket.status === "ok") {
+        const tokenRow = tokens[i];
+        const wasSuccess = ticket.status === "ok";
+
+        if (wasSuccess) {
           successCount++;
         } else {
           failureCount++;
-          if (ticket.details?.error === "DeviceNotRegistered") {
-            const tokenRow = tokens[i];
-            if (tokenRow) {
-              invalidTokenIds.push(tokenRow.id);
-            }
+          if (ticket.details?.error === "DeviceNotRegistered" && tokenRow) {
+            invalidTokenIds.push(tokenRow.id);
           }
+        }
+
+        if (tokenRow) {
+          // Um usuário conta como "entregue" se QUALQUER um dos seus
+          // dispositivos recebeu com sucesso — não sobrescreve true com false.
+          const alreadyDelivered = userDeliveredMap.get(tokenRow.userId) ?? false;
+          userDeliveredMap.set(tokenRow.userId, alreadyDelivered || wasSuccess);
         }
       }
 
@@ -254,6 +269,34 @@ export const pushRouter = {
           updatedAt: now,
         })
         .returning();
+
+      // Grava o destinatário por usuário — precisa vir DEPOIS do insert acima,
+      // já que pushNotificationRecipient.notificationId referencia esta linha.
+      // Best-effort: se essa gravação falhar, o envio em si já aconteceu com
+      // sucesso e o registro agregado já existe, então não derrubamos a
+      // resposta por causa de um problema no bookkeeping de leitura.
+      if (userDeliveredMap.size > 0) {
+        try {
+          await context.db
+            .insert(pushNotificationRecipient)
+            .values(
+              Array.from(userDeliveredMap.entries()).map(([userId, delivered]) => ({
+                id: crypto.randomUUID(),
+                notificationId,
+                userId,
+                deliveredAt: delivered ? now : null,
+                readAt: null,
+                createdAt: now,
+                updatedAt: now,
+              })),
+            )
+            .onConflictDoNothing({
+              target: [pushNotificationRecipient.notificationId, pushNotificationRecipient.userId],
+            });
+        } catch (err) {
+          console.error("Falha ao gravar pushNotificationRecipient:", err);
+        }
+      }
 
       return record;
     }),
