@@ -84,7 +84,7 @@ export const HomeScreen: FC = function HomeScreen() {
           )}
         </View>
 
-        <Pressable onPress={() => router.push("/filters")} style={themed($filterButton)}>
+        <Pressable onPress={() => router.push("/(app)/(modals)/filters")} style={themed($filterButton)}>
           <Text size="xs" style={themed($filterButtonText)} text={filterSummary} />
           <Text size="xs" style={themed($filterButtonChevron)} text="Filtros ›" />
         </Pressable>

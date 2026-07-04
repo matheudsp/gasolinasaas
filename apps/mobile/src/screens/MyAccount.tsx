@@ -1,19 +1,20 @@
-import { useCallback, useEffect, useState } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 import {
   ActivityIndicator,
   Alert,
   Linking,
   Modal,
   Pressable,
-  ScrollView,
   Switch,
   View,
   ViewStyle,
   TextStyle,
 } from "react-native"
+import { useRouter, useFocusEffect } from "expo-router"
 import * as Notifications from "expo-notifications"
 import { useMMKVBoolean, useMMKVString } from "react-native-mmkv"
 import { useMutation, useQuery } from "@tanstack/react-query"
+import { MaterialDesignIcons, type MaterialDesignIconsIconName} from "@react-native-vector-icons/material-design-icons"
 
 // expo-device requer build nativo — lazy require para não quebrar em Expo Go
 let _isDevice = false
@@ -36,19 +37,25 @@ import { PUSH_OPT_OUT_KEY, getPlatform } from "@/hooks/usePushNotifications"
 
 // ── Constantes de tema ────────────────────────────────────────────────────────
 
-const THEME_OPTIONS: Array<{ value: ThemeContextModeT; label: string }> = [
-  { value: undefined, label: "Auto" },
-  { value: "light", label: "Claro" },
-  { value: "dark", label: "Escuro" },
+const THEME_OPTIONS: Array<{ value: ThemeContextModeT; label: string; icon:  MaterialDesignIconsIconName }> = [
+  { value: undefined, label: "Auto", icon: "brightness-auto" },
+  { value: "light", label: "Claro", icon: "white-balance-sunny" },
+  { value: "dark", label: "Escuro", icon: "weather-night" },
 ]
 
 const THEME_SCHEME_KEY = "ignite.themeScheme"
+const ICON_SIZE = 14
 
 // ── Componentes auxiliares ────────────────────────────────────────────────────
 
-function SectionHeader({ title }: { title: string }) {
-  const { themed } = useAppTheme()
-  return <Text preset="formLabel" text={title} style={themed($sectionLabel)} />
+function SectionHeader({ title, icon }: { title: string; icon: MaterialDesignIconsIconName }) {
+  const { themed, theme } = useAppTheme()
+  return (
+    <View style={themed($sectionHeaderRow)}>
+      <MaterialDesignIcons name={icon} size={ICON_SIZE} color={theme.colors.tint} />
+      <Text preset="formLabel" text={title} style={themed($sectionLabel)} />
+    </View>
+  )
 }
 
 function SettingsRow({ label, children }: { label: string; children: React.ReactNode }) {
@@ -74,16 +81,27 @@ export function MyAccountScreen() {
   const currentTheme = (themeScheme as ThemeContextModeT) ?? undefined
 
   // ── Combustível preferido ────────────────────────────────────────────────
-  const { preferredFuelSlug, setPreferredFuelSlug } = usePreferredFuel()
+  const router = useRouter()
+  const { preferredFuelSlug, refresh: refreshFuel } = usePreferredFuel()
+
+  useFocusEffect(
+    useCallback(() => {
+      refreshFuel()
+    }, [refreshFuel]),
+  )
 
   const { data: priceRows = [] } = useQuery(orpc.fuel.listPrices.queryOptions({ input: {} }))
-  const availableFuels = useCallback(() => {
+
+  const availableFuels = useMemo(() => {
     const map = new Map<string, string>()
     for (const p of priceRows) {
       if (!map.has(p.fuelSlug)) map.set(p.fuelSlug, p.fuelName)
     }
     return Array.from(map, ([slug, name]) => ({ slug, name }))
-  }, [priceRows])()
+  }, [priceRows])
+
+  const preferredFuelName =
+    availableFuels.find((f) => f.slug === preferredFuelSlug)?.name ?? "Selecionar"
 
   // ── Notificações ──────────────────────────────────────────────────────────
   const [optedOut, setOptedOut] = useMMKVBoolean(PUSH_OPT_OUT_KEY, storage)
@@ -97,15 +115,37 @@ export function MyAccountScreen() {
 
   const notifEnabled = hasPermission && optedOut !== true
 
-  const { mutate: registerToken } = useMutation(orpc.push.registerToken.mutationOptions())
-  const { mutate: unregisterToken } = useMutation(orpc.push.unregisterToken.mutationOptions())
+  const { mutate: registerToken, isPending: isRegistering } = useMutation({
+    ...orpc.push.registerToken.mutationOptions(),
+    onError: () => {
+      // OS permission foi genuinamente concedida — mantemos hasPermission.
+      // Mas o token não chegou no servidor, então refletimos "desligado".
+      setOptedOut(true)
+      Alert.alert("Erro", "Não foi possível ativar as notificações. Tente novamente.")
+    },
+  })
+
+  const { mutate: unregisterToken, isPending: isUnregistering } = useMutation({
+    ...orpc.push.unregisterToken.mutationOptions(),
+    onError: () => {
+      setOptedOut(false)
+      Alert.alert("Erro", "Não foi possível desativar as notificações. Tente novamente.")
+    },
+  })
+
+  const isTogglingNotif = isRegistering || isUnregistering
 
   async function handleNotifToggle(value: boolean) {
     if (value) {
-      if (!_isDevice) return
+      if (!_isDevice) {
+        Alert.alert(
+          "Notificações indisponíveis",
+          "Notificações push exigem um dispositivo físico.",
+        )
+        return
+      }
       const { status } = await Notifications.requestPermissionsAsync()
       if (status !== "granted") {
-        // Permissão negada — precisa ir nas configurações do SO
         Alert.alert(
           "Permissão necessária",
           "Para ativar as notificações, vá em Ajustes e habilite as notificações para este app.",
@@ -140,7 +180,13 @@ export function MyAccountScreen() {
 
   async function handleSignOut() {
     setIsSigningOut(true)
-    await authClient.signOut()
+    try {
+      await authClient.signOut()
+    } catch {
+      Alert.alert("Erro", "Não foi possível sair da conta. Tente novamente.")
+    } finally {
+      setIsSigningOut(false)
+    }
   }
 
   // ── Deletar conta ─────────────────────────────────────────────────────────
@@ -169,7 +215,11 @@ export function MyAccountScreen() {
   return (
     <Screen preset="scroll" contentContainerStyle={themed($screen)}>
       {/* ── Avatar ─────────────────────────────────────────────────── */}
-      <View style={themed($avatarSection)}>
+      <View
+        style={themed($avatarSection)}
+        accessible
+        accessibilityLabel={`${user?.name ?? "Usuário"}, ${user?.email ?? ""}`}
+      >
         <View style={themed($avatar)}>
           <Text text={initials} style={themed($avatarText)} />
         </View>
@@ -181,31 +231,35 @@ export function MyAccountScreen() {
 
       {/* ── Preferências ───────────────────────────────────────────── */}
       <View style={themed($section)}>
-        <SectionHeader title="Preferências" />
+        <SectionHeader title="Preferências" icon="tune" />
 
         {/* Combustível */}
         {availableFuels.length > 0 && (
-          <View style={themed($prefRow)}>
-            <Text text="Combustível preferido" style={themed($prefLabel)} />
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={themed($chipRow)}
-            >
-              {availableFuels.map((f) => {
-                const active = f.slug === preferredFuelSlug
-                return (
-                  <Pressable
-                    key={f.slug}
-                    onPress={() => setPreferredFuelSlug(f.slug)}
-                    style={themed(active ? $chipActive : $chip)}
-                  >
-                    <Text text={f.name} style={themed(active ? $chipTextActive : $chipText)} />
-                  </Pressable>
-                )
-              })}
-            </ScrollView>
-          </View>
+          <Pressable
+            onPress={() => router.push("/(app)/(modals)/selectFuel")}
+            accessibilityRole="button"
+            accessibilityLabel="Combustível preferido"
+            accessibilityHint="Abre a seleção de combustível preferido"
+            android_ripple={{ color: theme.colors.palette.neutral300 }}
+            style={themed($fuelRow)}
+          >
+            <View style={themed($fuelRowLeft)}>
+              <MaterialDesignIcons
+                name="gas-station-outline"
+                size={ICON_SIZE}
+                color={theme.colors.tint}
+              />
+              <Text text="Combustível preferido" style={themed($prefLabel)} />
+            </View>
+            <View style={themed($fuelRowRight)}>
+              <Text size="xs" style={themed($fuelRowValue)} text={preferredFuelName} />
+              <MaterialDesignIcons
+                name="chevron-right"
+                size={18}
+                color={theme.colors.textDim}
+              />
+            </View>
+          </Pressable>
         )}
 
         {/* Tema */}
@@ -218,8 +272,17 @@ export function MyAccountScreen() {
                 <Pressable
                   key={String(opt.value)}
                   onPress={() => setThemeContextOverride(opt.value)}
+                  accessibilityRole="radio"
+                  accessibilityState={{ selected: active }}
+                  accessibilityLabel={opt.label}
+                  android_ripple={{ color: theme.colors.palette.neutral300 }}
                   style={themed(active ? $chipActive : $chip)}
                 >
+                  <MaterialDesignIcons
+                    name={opt.icon}
+                    size={ICON_SIZE}
+                    color={active ? theme.colors.palette.neutral100 : theme.colors.textDim}
+                  />
                   <Text text={opt.label} style={themed(active ? $chipTextActive : $chipText)} />
                 </Pressable>
               )
@@ -229,15 +292,20 @@ export function MyAccountScreen() {
 
         {/* Notificações */}
         <SettingsRow label="Receber notificações">
-          <Switch
-            value={notifEnabled}
-            onValueChange={handleNotifToggle}
-            trackColor={{
-              false: theme.colors.separator,
-              true: theme.colors.tint,
-            }}
-            thumbColor={theme.colors.palette.neutral100}
-          />
+          {isTogglingNotif ? (
+            <ActivityIndicator size="small" color={theme.colors.tint} />
+          ) : (
+            <Switch
+              value={notifEnabled}
+              onValueChange={handleNotifToggle}
+              accessibilityLabel="Receber notificações"
+              trackColor={{
+                false: theme.colors.separator,
+                true: theme.colors.tint,
+              }}
+              thumbColor={theme.colors.palette.neutral100}
+            />
+          )}
         </SettingsRow>
       </View>
 
@@ -245,13 +313,16 @@ export function MyAccountScreen() {
 
       {/* ── Conta ──────────────────────────────────────────────────── */}
       <View style={themed($section)}>
-        <SectionHeader title="Conta" />
+        <SectionHeader title="Conta" icon="account-circle-outline" />
 
         <Button
           text={isSigningOut ? "Saindo..." : "Sair da conta"}
           preset="default"
           onPress={handleSignOut}
           disabled={isSigningOut}
+          LeftAccessory={({ style }) => (
+            <MaterialDesignIcons name="logout" size={18} color={theme.colors.text} style={style} />
+          )}
           RightAccessory={
             isSigningOut
               ? ({ style }) => (
@@ -266,6 +337,14 @@ export function MyAccountScreen() {
           onPress={() => setDeleteConfirmVisible(true)}
           style={themed($deleteButton)}
           textStyle={themed($deleteText)}
+          LeftAccessory={({ style }) => (
+            <MaterialDesignIcons
+              name="account-remove-outline"
+              size={18}
+              color={theme.colors.error}
+              style={style}
+            />
+          )}
         />
       </View>
 
@@ -276,8 +355,21 @@ export function MyAccountScreen() {
         animationType="fade"
         onRequestClose={() => setDeleteConfirmVisible(false)}
       >
-        <Pressable style={themed($modalOverlay)} onPress={() => setDeleteConfirmVisible(false)}>
-          <Pressable style={themed($modalBox)} onPress={() => undefined}>
+        <Pressable
+          style={themed($modalOverlay)}
+          onPress={() => !isDeleting && setDeleteConfirmVisible(false)}
+        >
+          <Pressable
+            style={themed($modalBox)}
+            onPress={() => undefined}
+            accessibilityViewIsModal
+          >
+            <MaterialDesignIcons
+              name="alert-circle-outline"
+              size={32}
+              color={theme.colors.error}
+              style={themed($modalIcon)}
+            />
             <Text preset="subheading" text="Deletar conta" style={themed($modalTitle)} />
             <Text
               text="Essa ação é irreversível. Todos os seus dados serão permanentemente removidos."
@@ -288,6 +380,7 @@ export function MyAccountScreen() {
                 text="Cancelar"
                 preset="default"
                 onPress={() => setDeleteConfirmVisible(false)}
+                disabled={isDeleting}
                 style={themed($modalCancelBtn)}
               />
               <Button
@@ -334,6 +427,8 @@ const $avatar: ThemedStyle<ViewStyle> = ({ colors, spacing }) => ({
   alignItems: "center",
   justifyContent: "center",
   marginBottom: spacing.md,
+  borderWidth: 3,
+  borderColor: colors.palette.accent400,
 })
 
 const $avatarText: ThemedStyle<TextStyle> = ({ colors }) => ({
@@ -363,6 +458,12 @@ const $section: ThemedStyle<ViewStyle> = ({ spacing }) => ({
   gap: spacing.md,
 })
 
+const $sectionHeaderRow: ThemedStyle<ViewStyle> = () => ({
+  flexDirection: "row",
+  alignItems: "center",
+  gap: 4,
+})
+
 const $sectionLabel: ThemedStyle<TextStyle> = ({ colors }) => ({
   color: colors.textDim,
 })
@@ -376,10 +477,27 @@ const $prefLabel: ThemedStyle<TextStyle> = ({ colors }) => ({
   fontSize: 15,
 })
 
-const $chipRow: ThemedStyle<ViewStyle> = ({ spacing }) => ({
+const $fuelRow: ThemedStyle<ViewStyle> = ({ spacing }) => ({
   flexDirection: "row",
-  gap: spacing.xs,
-  paddingVertical: spacing.xxs,
+  justifyContent: "space-between",
+  alignItems: "center",
+  paddingVertical: spacing.xs,
+})
+
+const $fuelRowLeft: ThemedStyle<ViewStyle> = () => ({
+  flexDirection: "row",
+  alignItems: "center",
+  gap: 6,
+})
+
+const $fuelRowRight: ThemedStyle<ViewStyle> = () => ({
+  flexDirection: "row",
+  alignItems: "center",
+  gap: 2,
+})
+
+const $fuelRowValue: ThemedStyle<TextStyle> = ({ colors }) => ({
+  color: colors.textDim,
 })
 
 const $chipRowStatic: ThemedStyle<ViewStyle> = ({ spacing }) => ({
@@ -389,6 +507,9 @@ const $chipRowStatic: ThemedStyle<ViewStyle> = ({ spacing }) => ({
 })
 
 const $chip: ThemedStyle<ViewStyle> = ({ colors, spacing }) => ({
+  flexDirection: "row",
+  alignItems: "center",
+  gap: 4,
   paddingHorizontal: spacing.sm,
   paddingVertical: spacing.xxs,
   borderRadius: 20,
@@ -398,6 +519,9 @@ const $chip: ThemedStyle<ViewStyle> = ({ colors, spacing }) => ({
 })
 
 const $chipActive: ThemedStyle<ViewStyle> = ({ colors, spacing }) => ({
+  flexDirection: "row",
+  alignItems: "center",
+  gap: 4,
   paddingHorizontal: spacing.sm,
   paddingVertical: spacing.xxs,
   borderRadius: 20,
@@ -451,6 +575,10 @@ const $modalBox: ThemedStyle<ViewStyle> = ({ colors, spacing }) => ({
   padding: spacing.lg,
   width: "100%",
   gap: spacing.md,
+})
+
+const $modalIcon: ThemedStyle<TextStyle> = () => ({
+  alignSelf: "center",
 })
 
 const $modalTitle: ThemedStyle<TextStyle> = () => ({

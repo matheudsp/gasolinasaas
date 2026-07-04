@@ -36,6 +36,10 @@ module.exports = ({ config }: ConfigContext): Partial<ExpoConfig> => {
         ],
       },
     },
-    plugins: [...existingPlugins],
+    plugins: [
+      "@react-native-vector-icons/material-icons",
+      "@react-native-vector-icons/material-design-icons",
+      ...existingPlugins,
+    ],
   }
 }

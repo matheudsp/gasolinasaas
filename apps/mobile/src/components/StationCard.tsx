@@ -1,10 +1,11 @@
 import { FC } from "react"
 import { ActivityIndicator, Pressable, TextStyle, View, ViewStyle } from "react-native"
-import MaterialCommunityIcons from "@expo/vector-icons"
+import { MaterialDesignIcons } from "@react-native-vector-icons/material-design-icons"
 
 import { Text } from "@/components/Text"
 import type { NearbyStation } from "@/hooks/useNearbyStations"
 import { formatDistance } from "@/utils/distance"
+import { formatPriceBRL } from "@/utils/formatCurrency"
 
 import type { ThemedStyle } from "@/theme/types"
 import { useAppTheme } from "@/theme/context"
@@ -16,6 +17,7 @@ interface StationCardProps {
 }
 
 const PERFORATION_DOTS = 6
+const ICON_SIZE = 14
 
 export const StationCard: FC<StationCardProps> = function StationCard({
   station,
@@ -26,15 +28,35 @@ export const StationCard: FC<StationCardProps> = function StationCard({
 
   const showDistance = station.distanceKm !== null && isFinite(station.distanceKm)
   const hasPrice = !!station.price
+  const displayPrice = hasPrice ? formatPriceBRL(station.price!) : null
+
+  const accessibilityLabel = [
+    station.name,
+    station.address,
+    showDistance ? `a ${formatDistance(station.distanceKm!)}` : null,
+    hasPrice
+      ? `${station.fuelName ?? "combustível"} a ${displayPrice} reais`
+      : "preço não informado",
+  ]
+    .filter(Boolean)
+    .join(", ")
 
   return (
     <Pressable
       onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel}
+      accessibilityHint="Abre os detalhes do posto"
+      android_ripple={{ color: theme.colors.palette.neutral300 }}
       style={({ pressed }) => [themed($container), pressed && themed($pressed)]}
     >
       <View style={themed($info)}>
         <View style={themed($overlineRow)}>
-          <MaterialCommunityIcons name="gas-station-outline" size={11} color={theme.colors.tint} />
+          <MaterialDesignIcons
+            name="gas-station-outline"
+            size={ICON_SIZE}
+            color={theme.colors.tint}
+          />
           <Text
             size="xxs"
             weight="bold"
@@ -52,9 +74,9 @@ export const StationCard: FC<StationCardProps> = function StationCard({
             <ActivityIndicator size="small" color={theme.colors.tint} />
           ) : showDistance ? (
             <>
-              <MaterialCommunityIcons
+              <MaterialDesignIcons
                 name="map-marker-distance"
-                size={13}
+                size={ICON_SIZE}
                 color={theme.colors.textDim}
               />
               <Text
@@ -81,9 +103,12 @@ export const StationCard: FC<StationCardProps> = function StationCard({
       <View style={themed(hasPrice ? $pricePlate : $pricePlateEmpty)}>
         <View style={themed($priceRow)}>
           <Text style={themed($plateCurrency)} text="R$" />
+          {/* allowFontScaling intentionally left enabled — clipping the
+              plate at large accessibility text sizes is preferable to
+              locking out low-vision users from readable prices. */}
           <Text
             style={themed(hasPrice ? $plateValue : $plateValueEmpty)}
-            text={hasPrice ? station.price! : "—"}
+            text={hasPrice ? displayPrice! : "—"}
           />
         </View>
         {hasPrice && station.fuelName ? (
@@ -135,7 +160,7 @@ const $bottomRow: ThemedStyle<ViewStyle> = ({ spacing }) => ({
   alignItems: "center",
   gap: 4,
   marginTop: spacing.sm,
-  minHeight: 16,
+  minHeight: 18,
 })
 
 const $distanceText: ThemedStyle<TextStyle> = ({ colors }) => ({
