@@ -190,7 +190,11 @@ export const StationDetailScreen: FC = function StationDetailScreen() {
 
                     <View style={themed($priceRow)}>
                       <Text style={themed($plateCurrency)} text="R$" />
-                      <Text style={themed($plateValue)} text={formatPriceBRL(p.currentPrice)} />
+                      <Text
+                        weight="bold"
+                        style={themed($plateValue)}
+                        text={formatPriceBRL(p.currentPrice)}
+                      />
                     </View>
 
                     <View style={themed($updatedRow)}>
@@ -341,16 +345,14 @@ const $priceGrid: ThemedStyle<ViewStyle> = ({ spacing }) => ({
 const $priceCard: ThemedStyle<ViewStyle> = ({ colors, spacing }) => ({
   flex: 1,
   minWidth: 130,
-  backgroundColor: colors.palette.neutral800,
+  backgroundColor: colors.palette.primary600,
   borderRadius: 12,
-  borderTopWidth: 3,
-  borderTopColor: colors.palette.accent400,
   padding: spacing.sm,
   gap: spacing.xxs,
 })
 
 const $fuelName: ThemedStyle<TextStyle> = ({ colors }) => ({
-  color: colors.palette.neutral300,
+  color: colors.palette.neutral200,
   lineHeight: 16,
 })
 
@@ -361,15 +363,14 @@ const $priceRow: ThemedStyle<ViewStyle> = () => ({
 })
 
 const $plateCurrency: ThemedStyle<TextStyle> = ({ colors }) => ({
-  color: colors.palette.neutral400,
+  color: colors.palette.neutral200,
   fontSize: 10,
   marginTop: 5,
 })
 
 const $plateValue: ThemedStyle<TextStyle> = ({ colors }) => ({
-  color: colors.palette.accent300,
-  fontSize: 20,
-  fontWeight: "700",
+  color: colors.palette.secondary100,
+  fontSize: 24,
   fontVariant: ["tabular-nums"],
 })
 
@@ -381,7 +382,7 @@ const $updatedRow: ThemedStyle<ViewStyle> = ({ spacing }) => ({
 })
 
 const $updatedAt: ThemedStyle<TextStyle> = ({ colors }) => ({
-  color: colors.palette.neutral400,
+  color: colors.palette.neutral200,
 })
 
 const $badgeRow: ThemedStyle<ViewStyle> = ({ spacing }) => ({

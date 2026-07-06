@@ -8,7 +8,7 @@ import {
   View,
   ViewStyle,
 } from "react-native"
-import { useRouter, useFocusEffect } from "expo-router"
+import { useRouter, useFocusEffect, Link } from "expo-router"
 
 import { Screen } from "@/components/Screen"
 import { Text } from "@/components/Text"
@@ -24,6 +24,7 @@ import type { ThemedStyle } from "@/theme/types"
 import { $styles } from "@/theme/styles"
 import { useSafeAreaInsetsStyle } from "@/utils/useSafeAreaInsetsStyle"
 import { useAppTheme } from "@/theme/context"
+import { Icon } from "@/components/Icon"
 
 export const HomeScreen: FC = function HomeScreen() {
   const { themed, theme } = useAppTheme()
@@ -55,7 +56,7 @@ export const HomeScreen: FC = function HomeScreen() {
 
   const preferredFuelName =
     availableFuels.find((f) => f.slug === preferredFuelSlug)?.name ?? "Combustível"
-  const filterSummary = `${preferredFuelName} · ${SORT_LABELS[sortBy]}`
+  const filterSummary = `${preferredFuelName} / ${SORT_LABELS[sortBy]}`
 
   return (
     <Screen preset="fixed" contentContainerStyle={$styles.flex1} safeAreaEdges={[]}>
@@ -84,10 +85,18 @@ export const HomeScreen: FC = function HomeScreen() {
           )}
         </View>
 
-        <Pressable onPress={() => router.push("/(app)/(modals)/filters")} style={themed($filterButton)}>
-          <Text size="xs" style={themed($filterButtonText)} text={filterSummary} />
-          <Text size="xs" style={themed($filterButtonChevron)} text="Filtros ›" />
-        </Pressable>
+        <Link asChild href="/(app)/(modals)/filters">
+          <Pressable
+            // onPress={() => router.push("/(app)/(modals)/filters")}
+            style={themed($filterButton)}
+          >
+            <Text size="xs" style={themed($filterButtonText)} text={filterSummary} />
+            <View style={{ flexDirection: "row", alignItems: "center" }}>
+              <Text size="xs" style={themed($filterButtonChevron)} text="Filtros" />
+              <Icon icon="caretRight" size={16} color={theme.colors.tint} />
+            </View>
+          </Pressable>
+        </Link>
       </View>
 
       <FlatList
@@ -96,7 +105,9 @@ export const HomeScreen: FC = function HomeScreen() {
         extraData={location}
         contentContainerStyle={themed($listContent)}
         ItemSeparatorComponent={() => <View style={themed($separator)} />}
-        refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetch} />}
+        refreshControl={
+          <RefreshControl refreshing={isRefetching || isLoading} onRefresh={refetch} />
+        }
         ListEmptyComponent={
           !isLoading ? (
             <View style={themed($emptyContainer)}>

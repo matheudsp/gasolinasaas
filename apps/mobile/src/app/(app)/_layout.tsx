@@ -1,4 +1,4 @@
-import { Redirect, Stack } from "expo-router"
+import { Redirect, Slot } from "expo-router"
 import { ActivityIndicator, View } from "react-native"
 import { authClient } from "@/lib/auth"
 
@@ -15,8 +15,8 @@ export default function AppLayout() {
   if (!data?.user) return <Redirect href="/(auth)/sign-in" />
 
   return (
-    <Stack screenOptions={{ headerShown: false }}>
-      <Stack.Screen name="filters" options={{ presentation: "modal" }} />
-    </Stack>
+     <Slot screenOptions={{ headerShown: false }} />
   )
 }
+
+

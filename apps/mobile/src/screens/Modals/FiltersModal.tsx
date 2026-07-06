@@ -1,5 +1,5 @@
 import { Pressable, View, ViewStyle, TextStyle } from "react-native"
-import { useRouter } from "expo-router"
+import { Link, useRouter } from "expo-router"
 import { useQuery } from "@tanstack/react-query"
 
 import { Screen } from "@/components/Screen"
@@ -11,6 +11,8 @@ import { useSortOption, SORT_OPTIONS } from "@/hooks/useSortOption"
 import type { ThemedStyle } from "@/theme/types"
 import { useAppTheme } from "@/theme/context"
 import { useSafeAreaInsetsStyle } from "@/utils/useSafeAreaInsetsStyle"
+import { Button } from "@/components/Button"
+import { Icon } from "@/components/Icon"
 
 export default function FiltersModal() {
   const { themed } = useAppTheme()
@@ -31,9 +33,9 @@ export default function FiltersModal() {
     <Screen preset="fixed" contentContainerStyle={themed($screen)} safeAreaEdges={[]}>
       <View style={themed([$header, $topInsets])}>
         <Text preset="heading" text="Filtros" />
-        <Pressable onPress={() => router.back()} hitSlop={12}>
-          <Text preset="bold" size="lg" text="✕" />
-        </Pressable>
+        <Link href=".." asChild>
+          <Button preset="ghost" RightAccessory={() => <Icon icon="x" size={24} />} />
+        </Link>
       </View>
 
       <View style={themed($section)}>
@@ -83,9 +85,13 @@ export default function FiltersModal() {
       </View>
 
       <View style={themed([$footer, $bottomInsets])}>
-        <Pressable onPress={() => router.back()} style={themed($doneButton)}>
-          <Text preset="bold" style={themed($doneButtonText)} text="Concluído" />
-        </Pressable>
+        <Button
+          // style={themed($doneButton)}
+          // textStyle={themed($doneButtonText)}
+          preset="primary"
+          text="Concluído"
+          onPress={() => router.back()}
+        />
       </View>
     </Screen>
   )
@@ -146,11 +152,8 @@ const $footer: ThemedStyle<ViewStyle> = ({ spacing }) => ({
   paddingTop: spacing.md,
 })
 
-const $doneButton: ThemedStyle<ViewStyle> = ({ spacing, colors }) => ({
-  paddingVertical: spacing.sm,
-  borderRadius: 12,
+const $doneButton: ThemedStyle<ViewStyle> = ({ colors }) => ({
   backgroundColor: colors.tint,
-  alignItems: "center",
 })
 
 const $doneButtonText: ThemedStyle<TextStyle> = ({ colors }) => ({

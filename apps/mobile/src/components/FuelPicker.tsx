@@ -1,5 +1,5 @@
 import { FC } from "react"
-import { Pressable, View, ViewStyle, TextStyle } from "react-native"
+import { ActivityIndicator, Pressable, View, ViewStyle, TextStyle } from "react-native"
 import { useQuery } from "@tanstack/react-query"
 
 import { Text } from "@/components/Text"
@@ -14,26 +14,59 @@ interface FuelPickerProps {
 }
 
 /**
- * Renders the list of available fuel types as selectable chips.
- * Shared between the Home filters modal and the Account fuel
- * preference modal so both stay visually/behaviorally in sync.
+ * Lista vertical e acessível dos combustíveis vendidos pela rede.
+ * Compartilhado entre o modal de filtros da Home e a preferência de
+ * combustível da tela de Conta, para manter os dois em sincronia.
+ *
+ * Usa fuel.listAvailable (server-side, já deduplicado e escopado ao
+ * tenant) em vez de derivar a lista a partir de fuel.listPrices no
+ * cliente — sem Map manual, sem risco de trazer combustíveis que a
+ * rede não vende.
  */
-export const FuelPicker: FC<FuelPickerProps> = function FuelPicker({
-  selectedSlug,
-  onSelect,
-}) {
+export const FuelPicker: FC<FuelPickerProps> = function FuelPicker({ selectedSlug, onSelect }) {
   const { themed, theme } = useAppTheme()
 
-  const { data: prices = [] } = useQuery(orpc.fuel.listPrices.queryOptions({ input: {} }))
+  const {
+    data: fuels = [],
+    isLoading,
+    isError,
+    refetch,
+  } = useQuery(orpc.fuel.listAvailable.queryOptions({ input: {} }))
 
-  const availableFuels = Array.from(
-    new Map(prices.map((p) => [p.fuelSlug, p.fuelName])).entries(),
-  ).map(([slug, name]) => ({ slug, name }))
+  if (isLoading) {
+    return (
+      <View style={themed($stateContainer)}>
+        <ActivityIndicator color={theme.colors.tint} />
+      </View>
+    )
+  }
+
+  if (isError) {
+    return (
+      <Pressable onPress={() => refetch()} style={themed($stateContainer)}>
+        <Text
+          size="sm"
+          style={themed($errorText)}
+          text="Erro ao carregar combustíveis — toque para tentar de novo"
+        />
+      </Pressable>
+    )
+  }
+
+  if (fuels.length === 0) {
+    return (
+      <View style={themed($stateContainer)}>
+        <Text size="sm" style={themed($dimText)} text="Nenhum combustível disponível" />
+      </View>
+    )
+  }
 
   return (
-    <View style={themed($wrapRow)}>
-      {availableFuels.map((item) => {
+    <View accessibilityRole="radiogroup" style={themed($listContainer)}>
+      {fuels.map((item, index) => {
         const isActive = item.slug === selectedSlug
+        const isLast = index === fuels.length - 1
+
         return (
           <Pressable
             key={item.slug}
@@ -42,12 +75,16 @@ export const FuelPicker: FC<FuelPickerProps> = function FuelPicker({
             accessibilityState={{ selected: isActive }}
             accessibilityLabel={item.name}
             android_ripple={{ color: theme.colors.palette.neutral300 }}
-            style={themed(isActive ? $chipActive : $chip)}
+            style={themed(isLast ? $rowLast : $row)}
           >
+            <View style={themed(isActive ? $radioOuterActive : $radioOuter)}>
+              {isActive && <View style={themed($radioInner)} />}
+            </View>
+
             <Text
-              size="xs"
+              size="sm"
               weight={isActive ? "bold" : "normal"}
-              style={themed(isActive ? $chipTextActive : $chipText)}
+              style={themed(isActive ? $labelActive : $label)}
               text={item.name}
             />
           </Pressable>
@@ -57,30 +94,84 @@ export const FuelPicker: FC<FuelPickerProps> = function FuelPicker({
   )
 }
 
-const $wrapRow: ThemedStyle<ViewStyle> = ({ spacing }) => ({
+// ── Styles ────────────────────────────────────────────────────────
+
+const $stateContainer: ThemedStyle<ViewStyle> = ({ spacing }) => ({
+  paddingVertical: spacing.lg,
+  alignItems: "center",
+  justifyContent: "center",
+})
+
+const $errorText: ThemedStyle<TextStyle> = ({ colors }) => ({
+  color: colors.error,
+  textAlign: "center",
+})
+
+const $dimText: ThemedStyle<TextStyle> = ({ colors }) => ({
+  color: colors.textDim,
+})
+
+const $listContainer: ThemedStyle<ViewStyle> = ({ colors }) => ({
+  borderRadius: 4,
+  borderWidth: 1,
+  borderColor: colors.separator,
+  backgroundColor: colors.palette.neutral100,
+  overflow: "hidden",
+})
+
+// Touch target de 52pt — acima do mínimo de 44/48pt recomendado em
+// ambas as plataformas.
+const $row: ThemedStyle<ViewStyle> = ({ spacing, colors }) => ({
   flexDirection: "row",
-  flexWrap: "wrap",
-  gap: spacing.xs,
+  alignItems: "center",
+  minHeight: 52,
+  paddingHorizontal: spacing.md,
+  gap: spacing.sm,
+  borderBottomWidth: 1,
+  borderBottomColor: colors.separator,
 })
 
-const $chip: ThemedStyle<ViewStyle> = ({ spacing, colors }) => ({
-  paddingHorizontal: spacing.sm,
-  paddingVertical: spacing.xs,
-  borderRadius: 999,
-  backgroundColor: colors.palette.neutral200,
+const $rowLast: ThemedStyle<ViewStyle> = ({ spacing }) => ({
+  flexDirection: "row",
+  alignItems: "center",
+  minHeight: 52,
+  paddingHorizontal: spacing.md,
+  gap: spacing.sm,
 })
 
-const $chipActive: ThemedStyle<ViewStyle> = ({ spacing, colors }) => ({
-  paddingHorizontal: spacing.sm,
-  paddingVertical: spacing.xs,
-  borderRadius: 999,
+const $radioOuter: ThemedStyle<ViewStyle> = ({ colors }) => ({
+  width: 22,
+  height: 22,
+  borderRadius: 12,
+  borderWidth: 2,
+  borderColor: colors.border,
+  alignItems: "center",
+  justifyContent: "center",
+})
+
+const $radioOuterActive: ThemedStyle<ViewStyle> = ({ colors }) => ({
+  width: 22,
+  height: 22,
+  borderRadius: 12,
+  borderWidth: 2,
+  borderColor: colors.tint,
+  alignItems: "center",
+  justifyContent: "center",
+})
+
+const $radioInner: ThemedStyle<ViewStyle> = ({ colors }) => ({
+  width: 12,
+  height: 12,
+  borderRadius: 6,
   backgroundColor: colors.tint,
 })
 
-const $chipText: ThemedStyle<TextStyle> = ({ colors }) => ({
+const $label: ThemedStyle<TextStyle> = ({ colors }) => ({
   color: colors.text,
+  flexShrink: 1,
 })
 
-const $chipTextActive: ThemedStyle<TextStyle> = ({ colors }) => ({
-  color: colors.palette.neutral100,
+const $labelActive: ThemedStyle<TextStyle> = ({ colors }) => ({
+  color: colors.tint,
+  flexShrink: 1,
 })

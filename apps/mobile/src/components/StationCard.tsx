@@ -16,7 +16,6 @@ interface StationCardProps {
   onPress: () => void
 }
 
-const PERFORATION_DOTS = 6
 const ICON_SIZE = 14
 
 export const StationCard: FC<StationCardProps> = function StationCard({
@@ -27,16 +26,13 @@ export const StationCard: FC<StationCardProps> = function StationCard({
   const { themed, theme } = useAppTheme()
 
   const showDistance = station.distanceKm !== null && isFinite(station.distanceKm)
-  const hasPrice = !!station.price
-  const displayPrice = hasPrice ? formatPriceBRL(station.price!) : null
+  const displayPrice = formatPriceBRL(station.price!)
 
   const accessibilityLabel = [
     station.name,
     station.address,
     showDistance ? `a ${formatDistance(station.distanceKm!)}` : null,
-    hasPrice
-      ? `${station.fuelName ?? "combustível"} a ${displayPrice} reais`
-      : "preço não informado",
+    `${station.fuelName ?? "combustível"} a ${displayPrice} reais`,
   ]
     .filter(Boolean)
     .join(", ")
@@ -90,28 +86,15 @@ export const StationCard: FC<StationCardProps> = function StationCard({
         </View>
       </View>
 
-      <View style={themed($perforationColumn)}>
-        <View style={themed($notchTop)} />
-        <View style={themed($dotsColumn)}>
-          {Array.from({ length: PERFORATION_DOTS }).map((_, i) => (
-            <View key={i} style={themed($dot)} />
-          ))}
-        </View>
-        <View style={themed($notchBottom)} />
-      </View>
-
-      <View style={themed(hasPrice ? $pricePlate : $pricePlateEmpty)}>
+      <View style={themed($pricePlate)}>
         <View style={themed($priceRow)}>
           <Text style={themed($plateCurrency)} text="R$" />
           {/* allowFontScaling intentionally left enabled — clipping the
               plate at large accessibility text sizes is preferable to
               locking out low-vision users from readable prices. */}
-          <Text
-            style={themed(hasPrice ? $plateValue : $plateValueEmpty)}
-            text={hasPrice ? displayPrice! : "—"}
-          />
+          <Text style={themed($plateValue)} weight="bold" text={displayPrice} />
         </View>
-        {hasPrice && station.fuelName ? (
+        {station.fuelName ? (
           <Text size="xxs" numberOfLines={1} style={themed($plateFuel)} text={station.fuelName} />
         ) : null}
       </View>
@@ -122,7 +105,7 @@ export const StationCard: FC<StationCardProps> = function StationCard({
 const $container: ThemedStyle<ViewStyle> = ({ colors }) => ({
   flexDirection: "row",
   alignItems: "stretch",
-  borderRadius: 14,
+  borderRadius: 4,
   overflow: "hidden",
   backgroundColor: colors.palette.neutral100,
   borderWidth: 1,
@@ -167,64 +150,13 @@ const $distanceText: ThemedStyle<TextStyle> = ({ colors }) => ({
   color: colors.textDim,
 })
 
-const $perforationColumn: ThemedStyle<ViewStyle> = () => ({
-  width: 16,
-  position: "relative",
-  alignItems: "center",
-})
-
-const $notchTop: ThemedStyle<ViewStyle> = ({ colors }) => ({
-  position: "absolute",
-  top: -7,
-  width: 14,
-  height: 14,
-  borderRadius: 7,
-  backgroundColor: colors.background,
-  zIndex: 2,
-})
-
-const $notchBottom: ThemedStyle<ViewStyle> = ({ colors }) => ({
-  position: "absolute",
-  bottom: -7,
-  width: 14,
-  height: 14,
-  borderRadius: 7,
-  backgroundColor: colors.background,
-  zIndex: 2,
-})
-
-const $dotsColumn: ThemedStyle<ViewStyle> = ({ spacing }) => ({
-  flex: 1,
-  justifyContent: "space-evenly",
-  alignItems: "center",
-  paddingVertical: spacing.lg,
-})
-
-const $dot: ThemedStyle<ViewStyle> = ({ colors }) => ({
-  width: 3,
-  height: 3,
-  borderRadius: 1.5,
-  backgroundColor: colors.separator,
-})
-
 const $pricePlate: ThemedStyle<ViewStyle> = ({ spacing, colors }) => ({
-  width: 92,
+  width: 100,
   alignItems: "center",
   justifyContent: "center",
   paddingVertical: spacing.sm,
   paddingHorizontal: spacing.xxs,
-  backgroundColor: colors.palette.neutral800,
-  borderTopWidth: 3,
-  borderTopColor: colors.palette.accent400,
-})
-
-const $pricePlateEmpty: ThemedStyle<ViewStyle> = ({ spacing, colors }) => ({
-  width: 92,
-  alignItems: "center",
-  justifyContent: "center",
-  paddingVertical: spacing.sm,
-  paddingHorizontal: spacing.xxs,
-  backgroundColor: colors.palette.neutral200,
+  backgroundColor: colors.palette.primary600,
 })
 
 const $priceRow: ThemedStyle<ViewStyle> = () => ({
@@ -234,26 +166,19 @@ const $priceRow: ThemedStyle<ViewStyle> = () => ({
 })
 
 const $plateCurrency: ThemedStyle<TextStyle> = ({ colors }) => ({
-  color: colors.palette.neutral400,
+  color: colors.palette.neutral300,
   fontSize: 10,
   marginTop: 3,
 })
 
 const $plateValue: ThemedStyle<TextStyle> = ({ colors }) => ({
-  color: colors.palette.accent300,
-  fontSize: 18,
-  fontWeight: "700",
+  color: colors.palette.neutral100,
+  fontSize: 24,
   fontVariant: ["tabular-nums"],
 })
 
-const $plateValueEmpty: ThemedStyle<TextStyle> = ({ colors }) => ({
-  color: colors.textDim,
-  fontSize: 18,
-  fontWeight: "700",
-})
-
 const $plateFuel: ThemedStyle<TextStyle> = ({ colors, spacing }) => ({
-  color: colors.palette.neutral400,
+  color: colors.palette.neutral300,
   marginTop: spacing.xxxs,
   textAlign: "center",
 })

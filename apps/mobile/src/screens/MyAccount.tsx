@@ -1,94 +1,99 @@
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { useCallback, useMemo, useState } from "react"
 import {
-  ActivityIndicator,
   Alert,
-  Linking,
   Modal,
   Pressable,
-  Switch,
   View,
   ViewStyle,
   TextStyle,
+  ActivityIndicator,
 } from "react-native"
-import { useRouter, useFocusEffect } from "expo-router"
-import * as Notifications from "expo-notifications"
-import { useMMKVBoolean, useMMKVString } from "react-native-mmkv"
+import { useFocusEffect, Link, type Href } from "expo-router"
 import { useMutation, useQuery } from "@tanstack/react-query"
-import { MaterialDesignIcons, type MaterialDesignIconsIconName} from "@react-native-vector-icons/material-design-icons"
-
-// expo-device requer build nativo — lazy require para não quebrar em Expo Go
-let _isDevice = false
-try {
-  _isDevice = (require("expo-device") as { isDevice?: boolean }).isDevice ?? false
-} catch {
-  _isDevice = false
-}
+import { useMMKVString } from "react-native-mmkv"
+import {
+  MaterialDesignIcons,
+  type MaterialDesignIconsIconName,
+} from "@react-native-vector-icons/material-design-icons"
 
 import { Button } from "@/components/Button"
 import { Screen } from "@/components/Screen"
 import { Text } from "@/components/Text"
+import { Icon } from "@/components/Icon"
 import { authClient } from "@/lib/auth"
 import { orpc } from "@/lib/orpc"
 import { useAppTheme } from "@/theme/context"
 import type { ThemedStyle, ThemeContextModeT } from "@/theme/types"
 import { storage } from "@/utils/storage"
 import { usePreferredFuel } from "@/hooks/usePreferredFuel"
-import { PUSH_OPT_OUT_KEY, getPlatform } from "@/hooks/usePushNotifications"
-
-// ── Constantes de tema ────────────────────────────────────────────────────────
-
-const THEME_OPTIONS: Array<{ value: ThemeContextModeT; label: string; icon:  MaterialDesignIconsIconName }> = [
-  { value: undefined, label: "Auto", icon: "brightness-auto" },
-  { value: "light", label: "Claro", icon: "white-balance-sunny" },
-  { value: "dark", label: "Escuro", icon: "weather-night" },
-]
+import { useNotificationSettings } from "@/hooks/useNotificationSettings"
 
 const THEME_SCHEME_KEY = "ignite.themeScheme"
-const ICON_SIZE = 14
 
-// ── Componentes auxiliares ────────────────────────────────────────────────────
+const THEME_LABELS: Record<string, string> = {
+  light: "Claro",
+  dark: "Escuro",
+}
+
+const ICON_SIZE = 16
 
 function SectionHeader({ title, icon }: { title: string; icon: MaterialDesignIconsIconName }) {
   const { themed, theme } = useAppTheme()
   return (
     <View style={themed($sectionHeaderRow)}>
-      <MaterialDesignIcons name={icon} size={ICON_SIZE} color={theme.colors.tint} />
-      <Text preset="formLabel" text={title} style={themed($sectionLabel)} />
+      <MaterialDesignIcons name={icon} size={ICON_SIZE} color={theme.colors.palette.primary500} />
+      <Text preset="formLabel" weight="bold" text={title} style={themed($sectionLabel)} />
     </View>
   )
 }
-
-function SettingsRow({ label, children }: { label: string; children: React.ReactNode }) {
-  const { themed } = useAppTheme()
+function PreferenceRow({
+  href,
+  icon,
+  label,
+  value,
+}: {
+  href: Href
+  icon: MaterialDesignIconsIconName
+  label: string
+  value: string
+}) {
+  const { themed, theme } = useAppTheme()
   return (
-    <View style={themed($settingsRow)}>
-      <Text text={label} style={themed($settingsRowLabel)} />
-      {children}
-    </View>
+    <Link href={href} asChild>
+      <Button
+        accessibilityRole="button"
+        accessibilityLabel={label}
+        accessibilityHint={`Abre a seleção de ${label.toLowerCase()}`}
+        android_ripple={{ color: theme.colors.palette.neutral300 }}
+        style={themed($prefRowButton)}
+        preset="ghost"
+      >
+        <View style={themed($prefRowContent)}>
+          <MaterialDesignIcons
+            name={icon}
+            size={ICON_SIZE}
+            color={theme.colors.palette.primary500}
+          />
+          <View style={themed($prefRowTextColumn)}>
+            <Text text={label} weight="semiBold" size="md" />
+            <Text size="xs" style={themed($prefRowValue)} text={value} />
+          </View>
+          <Icon icon="caretRight" size={ICON_SIZE} color={theme.colors.palette.primary500} />
+        </View>
+      </Button>
+    </Link>
   )
 }
-
-// ── Screen ────────────────────────────────────────────────────────────────────
 
 export function MyAccountScreen() {
-  const { themed, theme, setThemeContextOverride } = useAppTheme()
+  const { themed, theme } = useAppTheme()
   const { data: session } = authClient.useSession()
   const user = session?.user
 
-  // ── Tema ──────────────────────────────────────────────────────────────────
   const [themeScheme] = useMMKVString(THEME_SCHEME_KEY, storage)
-  // themeScheme é "light" | "dark" | undefined (auto)
-  const currentTheme = (themeScheme as ThemeContextModeT) ?? undefined
+  const themeLabel = THEME_LABELS[themeScheme ?? ""] ?? "Auto"
 
-  // ── Combustível preferido ────────────────────────────────────────────────
-  const router = useRouter()
   const { preferredFuelSlug, refresh: refreshFuel } = usePreferredFuel()
-
-  useFocusEffect(
-    useCallback(() => {
-      refreshFuel()
-    }, [refreshFuel]),
-  )
 
   const { data: priceRows = [] } = useQuery(orpc.fuel.listPrices.queryOptions({ input: {} }))
 
@@ -103,79 +108,15 @@ export function MyAccountScreen() {
   const preferredFuelName =
     availableFuels.find((f) => f.slug === preferredFuelSlug)?.name ?? "Selecionar"
 
-  // ── Notificações ──────────────────────────────────────────────────────────
-  const [optedOut, setOptedOut] = useMMKVBoolean(PUSH_OPT_OUT_KEY, storage)
-  const [hasPermission, setHasPermission] = useState(false)
+  const { notifEnabled, refresh: refreshNotif } = useNotificationSettings()
 
-  useEffect(() => {
-    Notifications.getPermissionsAsync().then(({ status }) => {
-      setHasPermission(status === "granted")
-    })
-  }, [])
+  useFocusEffect(
+    useCallback(() => {
+      refreshFuel()
+      refreshNotif()
+    }, [refreshFuel, refreshNotif]),
+  )
 
-  const notifEnabled = hasPermission && optedOut !== true
-
-  const { mutate: registerToken, isPending: isRegistering } = useMutation({
-    ...orpc.push.registerToken.mutationOptions(),
-    onError: () => {
-      // OS permission foi genuinamente concedida — mantemos hasPermission.
-      // Mas o token não chegou no servidor, então refletimos "desligado".
-      setOptedOut(true)
-      Alert.alert("Erro", "Não foi possível ativar as notificações. Tente novamente.")
-    },
-  })
-
-  const { mutate: unregisterToken, isPending: isUnregistering } = useMutation({
-    ...orpc.push.unregisterToken.mutationOptions(),
-    onError: () => {
-      setOptedOut(false)
-      Alert.alert("Erro", "Não foi possível desativar as notificações. Tente novamente.")
-    },
-  })
-
-  const isTogglingNotif = isRegistering || isUnregistering
-
-  async function handleNotifToggle(value: boolean) {
-    if (value) {
-      if (!_isDevice) {
-        Alert.alert(
-          "Notificações indisponíveis",
-          "Notificações push exigem um dispositivo físico.",
-        )
-        return
-      }
-      const { status } = await Notifications.requestPermissionsAsync()
-      if (status !== "granted") {
-        Alert.alert(
-          "Permissão necessária",
-          "Para ativar as notificações, vá em Ajustes e habilite as notificações para este app.",
-          [
-            { text: "Cancelar", style: "cancel" },
-            { text: "Abrir Ajustes", onPress: () => Linking.openSettings() },
-          ],
-        )
-        return
-      }
-      setHasPermission(true)
-      setOptedOut(false)
-      try {
-        const tokenData = await Notifications.getExpoPushTokenAsync()
-        registerToken({ token: tokenData.data, platform: getPlatform() })
-      } catch {
-        // Sem projectId EAS — ignorar em dev
-      }
-    } else {
-      setOptedOut(true)
-      try {
-        const tokenData = await Notifications.getExpoPushTokenAsync()
-        unregisterToken({ token: tokenData.data })
-      } catch {
-        // Ignora — token pode não existir
-      }
-    }
-  }
-
-  // ── Sair ──────────────────────────────────────────────────────────────────
   const [isSigningOut, setIsSigningOut] = useState(false)
 
   async function handleSignOut() {
@@ -189,7 +130,6 @@ export function MyAccountScreen() {
     }
   }
 
-  // ── Deletar conta ─────────────────────────────────────────────────────────
   const [deleteConfirmVisible, setDeleteConfirmVisible] = useState(false)
 
   const { mutate: deleteAccount, isPending: isDeleting } = useMutation({
@@ -202,7 +142,6 @@ export function MyAccountScreen() {
     },
   })
 
-  // ── Initials ──────────────────────────────────────────────────────────────
   const initials = user?.name
     ? user.name
         .split(" ")
@@ -214,7 +153,6 @@ export function MyAccountScreen() {
 
   return (
     <Screen preset="scroll" contentContainerStyle={themed($screen)}>
-      {/* ── Avatar ─────────────────────────────────────────────────── */}
       <View
         style={themed($avatarSection)}
         accessible
@@ -227,91 +165,35 @@ export function MyAccountScreen() {
         <Text text={user?.email ?? "—"} style={themed($userEmail)} />
       </View>
 
-      <View style={themed($divider)} />
-
-      {/* ── Preferências ───────────────────────────────────────────── */}
       <View style={themed($section)}>
         <SectionHeader title="Preferências" icon="tune" />
 
-        {/* Combustível */}
         {availableFuels.length > 0 && (
-          <Pressable
-            onPress={() => router.push("/(app)/(modals)/selectFuel")}
-            accessibilityRole="button"
-            accessibilityLabel="Combustível preferido"
-            accessibilityHint="Abre a seleção de combustível preferido"
-            android_ripple={{ color: theme.colors.palette.neutral300 }}
-            style={themed($fuelRow)}
-          >
-            <View style={themed($fuelRowLeft)}>
-              <MaterialDesignIcons
-                name="gas-station-outline"
-                size={ICON_SIZE}
-                color={theme.colors.tint}
-              />
-              <Text text="Combustível preferido" style={themed($prefLabel)} />
-            </View>
-            <View style={themed($fuelRowRight)}>
-              <Text size="xs" style={themed($fuelRowValue)} text={preferredFuelName} />
-              <MaterialDesignIcons
-                name="chevron-right"
-                size={18}
-                color={theme.colors.textDim}
-              />
-            </View>
-          </Pressable>
+          <PreferenceRow
+            href="/(app)/(modals)/selectFuel"
+            icon="gas-station-outline"
+            label="Combustível preferido"
+            value={preferredFuelName}
+          />
         )}
 
-        {/* Tema */}
-        <View style={themed($prefRow)}>
-          <Text text="Tema" style={themed($prefLabel)} />
-          <View style={themed($chipRowStatic)}>
-            {THEME_OPTIONS.map((opt) => {
-              const active = currentTheme === opt.value
-              return (
-                <Pressable
-                  key={String(opt.value)}
-                  onPress={() => setThemeContextOverride(opt.value)}
-                  accessibilityRole="radio"
-                  accessibilityState={{ selected: active }}
-                  accessibilityLabel={opt.label}
-                  android_ripple={{ color: theme.colors.palette.neutral300 }}
-                  style={themed(active ? $chipActive : $chip)}
-                >
-                  <MaterialDesignIcons
-                    name={opt.icon}
-                    size={ICON_SIZE}
-                    color={active ? theme.colors.palette.neutral100 : theme.colors.textDim}
-                  />
-                  <Text text={opt.label} style={themed(active ? $chipTextActive : $chipText)} />
-                </Pressable>
-              )
-            })}
-          </View>
-        </View>
+        <PreferenceRow
+          href="/(app)/(modals)/selectTheme"
+          icon="theme-light-dark"
+          label="Tema"
+          value={themeLabel}
+        />
 
-        {/* Notificações */}
-        <SettingsRow label="Receber notificações">
-          {isTogglingNotif ? (
-            <ActivityIndicator size="small" color={theme.colors.tint} />
-          ) : (
-            <Switch
-              value={notifEnabled}
-              onValueChange={handleNotifToggle}
-              accessibilityLabel="Receber notificações"
-              trackColor={{
-                false: theme.colors.separator,
-                true: theme.colors.tint,
-              }}
-              thumbColor={theme.colors.palette.neutral100}
-            />
-          )}
-        </SettingsRow>
+        <PreferenceRow
+          href="/(app)/(modals)/notificationSettings"
+          icon="bell-outline"
+          label="Notificações"
+          value={notifEnabled ? "Ativadas" : "Desativadas"}
+        />
       </View>
 
       <View style={themed($divider)} />
 
-      {/* ── Conta ──────────────────────────────────────────────────── */}
       <View style={themed($section)}>
         <SectionHeader title="Conta" icon="account-circle-outline" />
 
@@ -348,7 +230,6 @@ export function MyAccountScreen() {
         />
       </View>
 
-      {/* ── Modal confirmação de deletar ────────────────────────────── */}
       <Modal
         visible={deleteConfirmVisible}
         transparent
@@ -359,11 +240,7 @@ export function MyAccountScreen() {
           style={themed($modalOverlay)}
           onPress={() => !isDeleting && setDeleteConfirmVisible(false)}
         >
-          <Pressable
-            style={themed($modalBox)}
-            onPress={() => undefined}
-            accessibilityViewIsModal
-          >
+          <Pressable style={themed($modalBox)} onPress={() => undefined} accessibilityViewIsModal>
             <MaterialDesignIcons
               name="alert-circle-outline"
               size={32}
@@ -405,13 +282,10 @@ export function MyAccountScreen() {
   )
 }
 
-// ── Styles ────────────────────────────────────────────────────────────────────
-
 const $screen: ThemedStyle<ViewStyle> = ({ spacing }) => ({
   flexGrow: 1,
   paddingHorizontal: spacing.lg,
-  paddingTop: spacing.xxl,
-  paddingBottom: spacing.xxl,
+  paddingVertical: spacing.xxxxl,
 })
 
 const $avatarSection: ThemedStyle<ViewStyle> = ({ spacing }) => ({
@@ -422,8 +296,8 @@ const $avatarSection: ThemedStyle<ViewStyle> = ({ spacing }) => ({
 const $avatar: ThemedStyle<ViewStyle> = ({ colors, spacing }) => ({
   width: 80,
   height: 80,
-  borderRadius: 40,
-  backgroundColor: colors.tint,
+  borderRadius: 4,
+  backgroundColor: colors.palette.primary500,
   alignItems: "center",
   justifyContent: "center",
   marginBottom: spacing.md,
@@ -455,7 +329,7 @@ const $divider: ThemedStyle<ViewStyle> = ({ colors, spacing }) => ({
 })
 
 const $section: ThemedStyle<ViewStyle> = ({ spacing }) => ({
-  gap: spacing.md,
+  gap: spacing.sm,
 })
 
 const $sectionHeaderRow: ThemedStyle<ViewStyle> = () => ({
@@ -468,89 +342,33 @@ const $sectionLabel: ThemedStyle<TextStyle> = ({ colors }) => ({
   color: colors.textDim,
 })
 
-const $prefRow: ThemedStyle<ViewStyle> = ({ spacing }) => ({
-  gap: spacing.xs,
+const $prefRowButton: ThemedStyle<ViewStyle> = ({ spacing, colors }) => ({
+  minHeight: 0,
+  justifyContent: "center",
+  paddingVertical: spacing.sm,
+  paddingHorizontal: spacing.md,
+  borderRadius: 4,
+  borderWidth: 1,
+  borderColor: colors.border,
+  backgroundColor: colors.palette.neutral100,
 })
 
-const $prefLabel: ThemedStyle<TextStyle> = ({ colors }) => ({
-  color: colors.text,
-  fontSize: 15,
-})
-
-const $fuelRow: ThemedStyle<ViewStyle> = ({ spacing }) => ({
-  flexDirection: "row",
-  justifyContent: "space-between",
-  alignItems: "center",
-  paddingVertical: spacing.xs,
-})
-
-const $fuelRowLeft: ThemedStyle<ViewStyle> = () => ({
+const $prefRowContent: ThemedStyle<ViewStyle> = ({ spacing }) => ({
+  flex: 1,
   flexDirection: "row",
   alignItems: "center",
-  gap: 6,
+  gap: spacing.sm,
 })
 
-const $fuelRowRight: ThemedStyle<ViewStyle> = () => ({
-  flexDirection: "row",
-  alignItems: "center",
+const $prefRowTextColumn: ThemedStyle<ViewStyle> = () => ({
+  flex: 1,
+  flexDirection: "column",
+  alignItems: "flex-start",
   gap: 2,
 })
 
-const $fuelRowValue: ThemedStyle<TextStyle> = ({ colors }) => ({
+const $prefRowValue: ThemedStyle<TextStyle> = ({ colors }) => ({
   color: colors.textDim,
-})
-
-const $chipRowStatic: ThemedStyle<ViewStyle> = ({ spacing }) => ({
-  flexDirection: "row",
-  flexWrap: "wrap",
-  gap: spacing.xs,
-})
-
-const $chip: ThemedStyle<ViewStyle> = ({ colors, spacing }) => ({
-  flexDirection: "row",
-  alignItems: "center",
-  gap: 4,
-  paddingHorizontal: spacing.sm,
-  paddingVertical: spacing.xxs,
-  borderRadius: 20,
-  borderWidth: 1,
-  borderColor: colors.border,
-  backgroundColor: colors.background,
-})
-
-const $chipActive: ThemedStyle<ViewStyle> = ({ colors, spacing }) => ({
-  flexDirection: "row",
-  alignItems: "center",
-  gap: 4,
-  paddingHorizontal: spacing.sm,
-  paddingVertical: spacing.xxs,
-  borderRadius: 20,
-  borderWidth: 1,
-  borderColor: colors.tint,
-  backgroundColor: colors.tint,
-})
-
-const $chipText: ThemedStyle<TextStyle> = ({ colors }) => ({
-  color: colors.textDim,
-  fontSize: 13,
-})
-
-const $chipTextActive: ThemedStyle<TextStyle> = ({ colors }) => ({
-  color: colors.palette.neutral100,
-  fontSize: 13,
-  fontWeight: "600",
-})
-
-const $settingsRow: ThemedStyle<ViewStyle> = ({ spacing }) => ({
-  flexDirection: "row",
-  alignItems: "center",
-  justifyContent: "space-between",
-  paddingVertical: spacing.xs,
-})
-
-const $settingsRowLabel: ThemedStyle<TextStyle> = ({ colors }) => ({
-  color: colors.text,
-  fontSize: 15,
 })
 
 const $deleteButton: ThemedStyle<ViewStyle> = ({ colors }) => ({
@@ -571,7 +389,9 @@ const $modalOverlay: ThemedStyle<ViewStyle> = () => ({
 
 const $modalBox: ThemedStyle<ViewStyle> = ({ colors, spacing }) => ({
   backgroundColor: colors.background,
-  borderRadius: 16,
+  borderRadius: 4,
+  borderWidth: 1,
+  borderColor: colors.border,
   padding: spacing.lg,
   width: "100%",
   gap: spacing.md,

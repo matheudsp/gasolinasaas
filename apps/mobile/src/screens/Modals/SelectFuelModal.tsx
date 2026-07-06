@@ -1,5 +1,5 @@
-import { Pressable, View, ViewStyle, TextStyle } from "react-native"
-import { useRouter } from "expo-router"
+import { View, ViewStyle, TextStyle } from "react-native"
+import { Link } from "expo-router"
 
 import { Screen } from "@/components/Screen"
 import { Text } from "@/components/Text"
@@ -9,37 +9,32 @@ import { usePreferredFuel } from "@/hooks/usePreferredFuel"
 import type { ThemedStyle } from "@/theme/types"
 import { useAppTheme } from "@/theme/context"
 import { useSafeAreaInsetsStyle } from "@/utils/useSafeAreaInsetsStyle"
+import { Icon } from "@/components/Icon"
+import { Button } from "@/components/Button"
 
 export default function SelectFuelModal() {
   const { themed } = useAppTheme()
-  const router = useRouter()
   const $topInsets = useSafeAreaInsetsStyle(["top"])
   const $bottomInsets = useSafeAreaInsetsStyle(["bottom"])
 
   const { preferredFuelSlug, setPreferredFuelSlug } = usePreferredFuel()
 
   return (
-    <Screen preset="fixed" contentContainerStyle={themed($screen)} safeAreaEdges={[]}>
+    <Screen preset="scroll" contentContainerStyle={themed($screen)} safeAreaEdges={[]}>
       <View style={themed([$header, $topInsets])}>
-        <Text preset="heading" text="Combustível preferido" />
-        <Pressable onPress={() => router.back()} hitSlop={12}>
-          <Text preset="bold" size="lg" text="✕" />
-        </Pressable>
+        <Text preset="heading" text="Preferências" />
+        <Link href=".." asChild>
+          <Button hitSlop={12} preset="ghost" RightAccessory={() => <Icon icon="x" size={24} />} />
+        </Link>
       </View>
 
       <View style={themed($content)}>
         <Text
           size="xs"
           style={themed($helperText)}
-          text="Usado para destacar o preço nos postos próximos."
+          text="Para te oferecer uma experiência personalizada, selecione seu combustível preferido."
         />
         <FuelPicker selectedSlug={preferredFuelSlug} onSelect={setPreferredFuelSlug} />
-      </View>
-
-      <View style={themed([$footer, $bottomInsets])}>
-        <Pressable onPress={() => router.back()} style={themed($doneButton)}>
-          <Text preset="bold" style={themed($doneButtonText)} text="Concluído" />
-        </Pressable>
       </View>
     </Screen>
   )
@@ -70,15 +65,4 @@ const $footer: ThemedStyle<ViewStyle> = ({ spacing }) => ({
   marginTop: "auto",
   paddingHorizontal: spacing.lg,
   paddingTop: spacing.md,
-})
-
-const $doneButton: ThemedStyle<ViewStyle> = ({ spacing, colors }) => ({
-  paddingVertical: spacing.sm,
-  borderRadius: 12,
-  backgroundColor: colors.tint,
-  alignItems: "center",
-})
-
-const $doneButtonText: ThemedStyle<TextStyle> = ({ colors }) => ({
-  color: colors.palette.neutral100,
 })

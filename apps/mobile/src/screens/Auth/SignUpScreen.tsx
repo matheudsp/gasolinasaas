@@ -1,5 +1,12 @@
 import { useRef, useState } from "react"
-import { ActivityIndicator, TextInput, TouchableOpacity, View, ViewStyle, TextStyle } from "react-native"
+import {
+  ActivityIndicator,
+  TextInput,
+  TouchableOpacity,
+  View,
+  ViewStyle,
+  TextStyle,
+} from "react-native"
 import { useRouter } from "expo-router"
 
 import { Button } from "@/components/Button"
@@ -9,6 +16,7 @@ import { TextField } from "@/components/TextField"
 import { authClient } from "@/lib/auth"
 import { useAppTheme } from "@/theme/context"
 import type { ThemedStyle } from "@/theme/types"
+import { Icon } from "@/components/Icon"
 
 export function SignUpScreen() {
   const { themed, theme } = useAppTheme()
@@ -58,18 +66,15 @@ export function SignUpScreen() {
       contentContainerStyle={themed($screen)}
       keyboardShouldPersistTaps="handled"
     >
-      {/* Voltar */}
       <TouchableOpacity style={themed($backButton)} onPress={() => router.back()}>
-        <Text text="← Voltar" style={themed($backText)} />
+        <Icon icon="caretLeft" size={24} color={theme.colors.tint} style={{ marginRight: 4 }} />
+        <Text text="Voltar" style={themed($backText)} />
       </TouchableOpacity>
 
       {/* Cabeçalho */}
       <View style={themed($header)}>
         <Text preset="heading" text="Criar conta" style={themed($title)} />
-        <Text
-          text="Preencha os dados para acessar o sistema"
-          style={themed($subtitle)}
-        />
+        <Text text="Preencha os dados para acessar o sistema" style={themed($subtitle)} />
       </View>
 
       {/* Erro geral */}
@@ -123,10 +128,7 @@ export function SignUpScreen() {
           status={errors.password ? "error" : undefined}
           helper={errors.password ?? "Mínimo 8 caracteres"}
           RightAccessory={() => (
-            <TouchableOpacity
-              style={themed($eyeButton)}
-              onPress={() => setShowPassword((v) => !v)}
-            >
+            <TouchableOpacity style={themed($eyeButton)} onPress={() => setShowPassword((v) => !v)}>
               <Text style={$eyeIcon}>{showPassword ? "🙈" : "👁️"}</Text>
             </TouchableOpacity>
           )}
@@ -177,16 +179,20 @@ export function SignUpScreen() {
   )
 }
 
-
 const $screen: ThemedStyle<ViewStyle> = ({ spacing }) => ({
-  flexGrow: 1,
+  // flexGrow: 1,
   paddingHorizontal: spacing.lg,
   paddingTop: spacing.xl,
   paddingBottom: spacing.xxl,
 })
 
 const $backButton: ThemedStyle<ViewStyle> = ({ spacing }) => ({
-  marginBottom: spacing.xl,
+  flex: 1,
+  flexDirection: "row",
+  // borderWidth: 1,
+  width: 100,
+  alignItems: "center",
+  paddingBottom: spacing.sm,
 })
 
 const $backText: ThemedStyle<TextStyle> = ({ colors }) => ({
