@@ -44,6 +44,34 @@ export const fuelRouter = {
         .where(and(...conditions));
     }),
 
+  /**
+   * Combustíveis que o tenant efetivamente vende (ao menos um posto ativo
+   * com esse combustível disponível) — não a lista global de fuel, que é
+   * compartilhada entre todos os tenants e pode incluir combustíveis que
+   * esta rede específica não comercializa (ex: GNV).
+   */
+  listAvailable: protectedProcedure.handler(async ({ context }) => {
+    if (!context.tenant) {
+      throw new ORPCError("BAD_REQUEST", { message: "Tenant is required" });
+    }
+
+    return context.db
+      .selectDistinct({
+        slug: fuel.slug,
+        name: fuel.name,
+      })
+      .from(stationFuel)
+      .innerJoin(station, eq(stationFuel.stationId, station.id))
+      .innerJoin(fuel, eq(stationFuel.fuelId, fuel.id))
+      .where(
+        and(
+          eq(station.tenantId, context.tenant.id),
+          eq(station.isActive, true),
+          eq(stationFuel.isAvailable, true),
+        ),
+      );
+  }),
+
   updatePrice: tenantOwnerProcedure
     .input(
       z.object({

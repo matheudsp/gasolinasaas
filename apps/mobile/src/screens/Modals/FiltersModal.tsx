@@ -1,10 +1,9 @@
 import { Pressable, View, ViewStyle, TextStyle } from "react-native"
-import { Link, useRouter } from "expo-router"
-import { useQuery } from "@tanstack/react-query"
+import { useRouter } from "expo-router"
 
 import { Screen } from "@/components/Screen"
 import { Text } from "@/components/Text"
-import { orpc } from "@/lib/orpc"
+import { FuelPicker } from "@/components/FuelPicker"
 import { usePreferredFuel } from "@/hooks/usePreferredFuel"
 import { useSortOption, SORT_OPTIONS } from "@/hooks/useSortOption"
 
@@ -15,7 +14,7 @@ import { Button } from "@/components/Button"
 import { Icon } from "@/components/Icon"
 
 export default function FiltersModal() {
-  const { themed } = useAppTheme()
+  const { themed, theme } = useAppTheme()
   const router = useRouter()
   const $topInsets = useSafeAreaInsetsStyle(["top"])
   const $bottomInsets = useSafeAreaInsetsStyle(["bottom"])
@@ -23,42 +22,21 @@ export default function FiltersModal() {
   const { preferredFuelSlug, setPreferredFuelSlug } = usePreferredFuel()
   const { sortBy, setSortBy } = useSortOption()
 
-  const { data: prices = [] } = useQuery(orpc.fuel.listPrices.queryOptions({ input: {} }))
-
-  const availableFuels = Array.from(
-    new Map(prices.map((p) => [p.fuelSlug, p.fuelName])).entries(),
-  ).map(([slug, name]) => ({ slug, name }))
-
   return (
     <Screen preset="fixed" contentContainerStyle={themed($screen)} safeAreaEdges={[]}>
       <View style={themed([$header, $topInsets])}>
-        <Text preset="heading" text="Filtros" />
-        <Link href=".." asChild>
-          <Button preset="ghost" RightAccessory={() => <Icon icon="x" size={24} />} />
-        </Link>
+        <Text preset="heading" text="Filtrar" />
+        <Button
+          preset="ghost"
+          accessibilityLabel="Fechar"
+          onPress={() => router.back()}
+          RightAccessory={() => <Icon icon="x" size={24} />}
+        />
       </View>
 
       <View style={themed($section)}>
         <Text preset="subheading" style={themed($sectionTitle)} text="Combustível" />
-        <View style={themed($wrapRow)}>
-          {availableFuels.map((item) => {
-            const isActive = item.slug === preferredFuelSlug
-            return (
-              <Pressable
-                key={item.slug}
-                onPress={() => setPreferredFuelSlug(item.slug)}
-                style={themed(isActive ? $chipActive : $chip)}
-              >
-                <Text
-                  size="xs"
-                  weight={isActive ? "bold" : "normal"}
-                  style={themed(isActive ? $chipTextActive : $chipText)}
-                  text={item.name}
-                />
-              </Pressable>
-            )
-          })}
-        </View>
+        <FuelPicker selectedSlug={preferredFuelSlug} onSelect={setPreferredFuelSlug} />
       </View>
 
       <View style={themed($section)}>
@@ -70,6 +48,10 @@ export default function FiltersModal() {
               <Pressable
                 key={item.value}
                 onPress={() => setSortBy(item.value)}
+                accessibilityRole="radio"
+                accessibilityState={{ selected: isActive }}
+                accessibilityLabel={item.label}
+                android_ripple={{ color: theme.colors.palette.neutral300 }}
                 style={themed(isActive ? $chipActive : $chip)}
               >
                 <Text
@@ -85,13 +67,7 @@ export default function FiltersModal() {
       </View>
 
       <View style={themed([$footer, $bottomInsets])}>
-        <Button
-          // style={themed($doneButton)}
-          // textStyle={themed($doneButtonText)}
-          preset="primary"
-          text="Concluído"
-          onPress={() => router.back()}
-        />
+        <Button preset="primary" text="Filtrar" onPress={() => router.back()} />
       </View>
     </Screen>
   )
@@ -124,18 +100,25 @@ const $wrapRow: ThemedStyle<ViewStyle> = ({ spacing }) => ({
   gap: spacing.xs,
 })
 
+// borderRadius 4 + cores literais de palette (não colors.tint) — mesmo
+// padrão de FuelPicker/selectTheme, pra evitar o bug de contraste que
+// colors.tint causa quando o tema muda entre claro/escuro.
 const $chip: ThemedStyle<ViewStyle> = ({ spacing, colors }) => ({
   paddingHorizontal: spacing.sm,
   paddingVertical: spacing.xs,
-  borderRadius: 999,
-  backgroundColor: colors.palette.neutral200,
+  borderRadius: 4,
+  borderWidth: 1,
+  borderColor: colors.border,
+  backgroundColor: colors.palette.neutral100,
 })
 
 const $chipActive: ThemedStyle<ViewStyle> = ({ spacing, colors }) => ({
   paddingHorizontal: spacing.sm,
   paddingVertical: spacing.xs,
-  borderRadius: 999,
-  backgroundColor: colors.tint,
+  borderRadius: 4,
+  borderWidth: 1,
+  borderColor: colors.palette.primary500,
+  backgroundColor: colors.palette.primary500,
 })
 
 const $chipText: ThemedStyle<TextStyle> = ({ colors }) => ({
@@ -150,12 +133,4 @@ const $footer: ThemedStyle<ViewStyle> = ({ spacing }) => ({
   marginTop: "auto",
   paddingHorizontal: spacing.lg,
   paddingTop: spacing.md,
-})
-
-const $doneButton: ThemedStyle<ViewStyle> = ({ colors }) => ({
-  backgroundColor: colors.tint,
-})
-
-const $doneButtonText: ThemedStyle<TextStyle> = ({ colors }) => ({
-  color: colors.palette.neutral100,
 })

@@ -1,6 +1,7 @@
 import { useRef, useState } from "react"
-import { ActivityIndicator, TextInput, TouchableOpacity, View, ViewStyle, TextStyle } from "react-native"
+import { ActivityIndicator, Pressable, TextInput, View, ViewStyle, TextStyle } from "react-native"
 import { useRouter } from "expo-router"
+import { MaterialDesignIcons } from "@react-native-vector-icons/material-design-icons"
 
 import { Button } from "@/components/Button"
 import { Screen } from "@/components/Screen"
@@ -22,28 +23,50 @@ export function SignInScreen() {
   const [isGoogleLoading, setIsGoogleLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  const isBusy = isLoading || isGoogleLoading
+
+  function handleEmailChange(value: string) {
+    setEmail(value)
+    if (error) setError(null)
+  }
+
+  function handlePasswordChange(value: string) {
+    setPassword(value)
+    if (error) setError(null)
+  }
+
   async function handleSignIn() {
     if (!email.trim() || !password) return
     setIsLoading(true)
     setError(null)
-    const { error: signInError } = await authClient.signIn.email({
-      email: email.trim().toLowerCase(),
-      password,
-    })
-    if (signInError) {
-      setError(signInError.message ?? "Credenciais inválidas. Tente novamente.")
+    try {
+      const { error: signInError } = await authClient.signIn.email({
+        email: email.trim().toLowerCase(),
+        password,
+      })
+      if (signInError) {
+        setError(signInError.message ?? "Credenciais inválidas. Tente novamente.")
+      }
+    } catch {
+      setError("Não foi possível conectar. Verifique sua internet e tente novamente.")
+    } finally {
+      setIsLoading(false)
     }
-    setIsLoading(false)
   }
 
   async function handleGoogleSignIn() {
     setIsGoogleLoading(true)
     setError(null)
-    const { error: googleError } = await authClient.signIn.social({ provider: "google" })
-    if (googleError) {
-      setError(googleError.message ?? "Erro ao entrar com Google.")
+    try {
+      const { error: googleError } = await authClient.signIn.social({ provider: "google" })
+      if (googleError) {
+        setError(googleError.message ?? "Erro ao entrar com Google.")
+      }
+    } catch {
+      setError("Não foi possível conectar. Verifique sua internet e tente novamente.")
+    } finally {
+      setIsGoogleLoading(false)
     }
-    setIsGoogleLoading(false)
   }
 
   return (
@@ -55,10 +78,14 @@ export function SignInScreen() {
       {/* Branding */}
       <View style={themed($header)}>
         <View style={themed($logoContainer)}>
-          <Text style={$logoText}>⛽</Text>
+          <MaterialDesignIcons
+            name="gas-station"
+            size={36}
+            color={theme.colors.palette.neutral100}
+          />
         </View>
         <Text preset="heading" text="Martinez" style={themed($appName)} />
-        <Text text="Gestão de postos de combustível" style={themed($tagline)} />
+        <Text text="Muito mais que combustível" style={themed($tagline)} />
       </View>
 
       {/* Form */}
@@ -74,7 +101,8 @@ export function SignInScreen() {
         <TextField
           label="E-mail"
           value={email}
-          onChangeText={setEmail}
+          onChangeText={handleEmailChange}
+          autoFocus
           autoCapitalize="none"
           autoCorrect={false}
           keyboardType="email-address"
@@ -89,7 +117,7 @@ export function SignInScreen() {
           ref={passwordRef}
           label="Senha"
           value={password}
-          onChangeText={setPassword}
+          onChangeText={handlePasswordChange}
           secureTextEntry={!showPassword}
           autoComplete="password"
           returnKeyType="done"
@@ -97,20 +125,27 @@ export function SignInScreen() {
           containerStyle={themed($field)}
           status={error ? "error" : undefined}
           RightAccessory={() => (
-            <TouchableOpacity
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={showPassword ? "Ocultar senha" : "Mostrar senha"}
+              android_ripple={{ color: theme.colors.palette.neutral300, borderless: true }}
               style={themed($eyeButton)}
               onPress={() => setShowPassword((v) => !v)}
             >
-              <Text style={$eyeIcon}>{showPassword ? "🙈" : "👁️"}</Text>
-            </TouchableOpacity>
+              <MaterialDesignIcons
+                name={showPassword ? "eye-off-outline" : "eye-outline"}
+                size={20}
+                color={theme.colors.palette.neutral600}
+              />
+            </Pressable>
           )}
         />
 
         <Button
           text={isLoading ? "Entrando..." : "Entrar"}
-          preset="filled"
+          preset="primary"
           onPress={handleSignIn}
-          disabled={isLoading || !email || !password}
+          disabled={isBusy || !email || !password}
           style={themed($primaryButton)}
           RightAccessory={
             isLoading
@@ -137,7 +172,7 @@ export function SignInScreen() {
           text={isGoogleLoading ? "Aguarde..." : "Entrar com Google"}
           preset="default"
           onPress={handleGoogleSignIn}
-          disabled={isGoogleLoading}
+          disabled={isBusy}
           style={themed($googleButton)}
           LeftAccessory={
             isGoogleLoading
@@ -145,7 +180,12 @@ export function SignInScreen() {
                   <ActivityIndicator size="small" color={theme.colors.text} style={style} />
                 )
               : ({ style }) => (
-                  <Text text="G" style={[style, themed($googleIcon)]} />
+                  <MaterialDesignIcons
+                    name="google"
+                    size={18}
+                    color={theme.colors.palette.primary500}
+                    style={style}
+                  />
                 )
           }
         />
@@ -154,9 +194,13 @@ export function SignInScreen() {
       {/* Rodapé */}
       <View style={$footer}>
         <Text text="Ainda não tem conta? " style={themed($footerText)} />
-        <TouchableOpacity onPress={() => router.push("/(auth)/sign-up")}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Cadastre-se"
+          onPress={() => router.push("/(auth)/sign-up")}
+        >
           <Text text="Cadastre-se" style={themed($footerLink)} />
-        </TouchableOpacity>
+        </Pressable>
       </View>
     </Screen>
   )
@@ -174,19 +218,18 @@ const $header: ThemedStyle<ViewStyle> = ({ spacing }) => ({
   marginBottom: spacing.xxl,
 })
 
+// Fundo e ícone LITERAIS (não colors.tint/colors.text) — a badge da marca
+// deve ficar sempre navy+branco, independente do tema do app, mesmo motivo
+// da placa de preço do StationCard.
 const $logoContainer: ThemedStyle<ViewStyle> = ({ colors, spacing }) => ({
   width: 72,
   height: 72,
-  borderRadius: 20,
-  backgroundColor: colors.tint,
+  borderRadius: 4,
+  backgroundColor: colors.palette.primary500,
   alignItems: "center",
   justifyContent: "center",
   marginBottom: spacing.md,
 })
-
-const $logoText: TextStyle = {
-  fontSize: 36,
-}
 
 const $appName: ThemedStyle<TextStyle> = ({ spacing }) => ({
   textAlign: "center",
@@ -208,8 +251,8 @@ const $formTitle: ThemedStyle<TextStyle> = ({ spacing }) => ({
 })
 
 const $errorBox: ThemedStyle<ViewStyle> = ({ colors, spacing }) => ({
-  backgroundColor: colors.error + "18",
-  borderRadius: 8,
+  backgroundColor: colors.errorBackground,
+  borderRadius: 4,
   borderLeftWidth: 3,
   borderLeftColor: colors.error,
   padding: spacing.sm,
@@ -226,13 +269,9 @@ const $field: ThemedStyle<ViewStyle> = ({ spacing }) => ({
 })
 
 const $eyeButton: ThemedStyle<ViewStyle> = ({ spacing }) => ({
-  paddingHorizontal: spacing.sm,
+  padding: spacing.xs,
   alignSelf: "center",
 })
-
-const $eyeIcon: TextStyle = {
-  fontSize: 16,
-}
 
 const $primaryButton: ThemedStyle<ViewStyle> = ({ spacing }) => ({
   marginTop: spacing.xs,
@@ -258,12 +297,6 @@ const $dividerText: ThemedStyle<TextStyle> = ({ colors, spacing }) => ({
 
 const $googleButton: ThemedStyle<ViewStyle> = ({ colors }) => ({
   borderColor: colors.border,
-})
-
-const $googleIcon: ThemedStyle<TextStyle> = ({ colors }) => ({
-  fontWeight: "700",
-  fontSize: 16,
-  color: colors.text,
 })
 
 const $footer: ViewStyle = {

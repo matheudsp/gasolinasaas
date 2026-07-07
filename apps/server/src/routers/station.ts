@@ -1,5 +1,5 @@
 import { ORPCError } from "@orpc/server";
-import { and, eq, ilike, or } from "drizzle-orm";
+import { and, asc, desc, eq, gte, ilike, lte, or, sql } from "drizzle-orm";
 import { z } from "zod";
 import { fuel, station, stationFuel } from "../db/schema/station";
 import { protectedProcedure, tenantOwnerProcedure } from "../lib/orpc";
@@ -78,6 +78,108 @@ export const stationRouter = {
         .select()
         .from(station)
         .where(and(...conditions));
+    }),
+
+  /**
+   * Lista postos próximos com filtro real por combustível, preço e
+   * distância
+   *
+   * Distância via Haversine direto na query (o schema não usa PostGIS,
+   * latitude/longitude são doublePrecision simples). Quando latitude/
+   * longitude não são informados, distanceKm vem null para cada posto
+   * e qualquer filtro/ordenação por distância é ignorado.
+   *
+   */
+  listNearby: protectedProcedure
+    .input(
+      z.object({
+        fuelSlug: z.string().min(1),
+        latitude: z.number().min(-90).max(90).optional(),
+        longitude: z.number().min(-180).max(180).optional(),
+        sortBy: z
+          .enum(["distance-asc", "distance-desc", "price-asc", "price-desc"])
+          .default("distance-asc"),
+        maxDistanceKm: z.number().positive().optional(),
+        minPrice: z.coerce.number().nonnegative().optional(),
+        maxPrice: z.coerce.number().nonnegative().optional(),
+        limit: z.number().int().min(1).max(100).default(50),
+      }),
+    )
+    .handler(async ({ context, input }) => {
+      if (!context.tenant) {
+        throw new ORPCError("BAD_REQUEST", { message: "Tenant is required" });
+      }
+
+      const hasCoords =
+        input.latitude !== undefined && input.longitude !== undefined;
+      const lat = input.latitude ?? null;
+      const lng = input.longitude ?? null;
+
+      // CASE WHEN explícito é necessário aqui: least()/greatest() do Postgres
+      // IGNORAM null entre os argumentos em vez de propagar — sem o guard,
+      // "sem coordenadas" calcularia acos(-1) e retornaria ~20015km em vez
+      // de null.
+      const distanceKmExpr = sql<number | null>`(
+        CASE WHEN ${lat}::double precision IS NULL THEN NULL
+        ELSE 6371 * acos(
+          least(1, greatest(-1,
+            cos(radians(${lat})) * cos(radians(${station.latitude})) *
+            cos(radians(${station.longitude}) - radians(${lng})) +
+            sin(radians(${lat})) * sin(radians(${station.latitude}))
+          ))
+        ) END
+      )`;
+
+      const conditions = [
+        eq(station.tenantId, context.tenant.id),
+        eq(station.isActive, true),
+        eq(stationFuel.isAvailable, true),
+        eq(fuel.slug, input.fuelSlug),
+      ];
+
+      if (hasCoords && input.maxDistanceKm !== undefined) {
+        conditions.push(sql`${distanceKmExpr} <= ${input.maxDistanceKm}`);
+      }
+      if (input.minPrice !== undefined) {
+        conditions.push(gte(stationFuel.currentPrice, input.minPrice.toString()));
+      }
+      if (input.maxPrice !== undefined) {
+        conditions.push(lte(stationFuel.currentPrice, input.maxPrice.toString()));
+      }
+
+      // Sem coordenadas, ordenar por distância não faz sentido (tudo null)
+      // — cai para ordem alfabética como default previsível.
+      const orderByClause = (() => {
+        switch (input.sortBy) {
+          case "distance-asc":
+            return hasCoords ? sql`${distanceKmExpr} ASC NULLS LAST` : asc(station.name);
+          case "distance-desc":
+            return hasCoords ? sql`${distanceKmExpr} DESC NULLS LAST` : asc(station.name);
+          case "price-asc":
+            return asc(stationFuel.currentPrice);
+          case "price-desc":
+            return desc(stationFuel.currentPrice);
+        }
+      })();
+
+      return context.db
+        .select({
+          id: station.id,
+          name: station.name,
+          address: station.address,
+          city: station.city,
+          latitude: station.latitude,
+          longitude: station.longitude,
+          price: stationFuel.currentPrice,
+          fuelName: fuel.name,
+          distanceKm: distanceKmExpr,
+        })
+        .from(station)
+        .innerJoin(stationFuel, eq(stationFuel.stationId, station.id))
+        .innerJoin(fuel, eq(stationFuel.fuelId, fuel.id))
+        .where(and(...conditions))
+        .orderBy(orderByClause)
+        .limit(input.limit);
     }),
 
   create: tenantOwnerProcedure
