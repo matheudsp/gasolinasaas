@@ -4,6 +4,7 @@ import { apiHandler } from "./handlers/api";
 import { rpcHandler } from "./handlers/rpc";
 import { auth } from "./lib/auth";
 import { createContext } from "./lib/context";
+import { executionCtxStorage } from "./lib/execution-context";
 import { apiCorsMiddleware, authCorsMiddleware } from "./middlewares/cors";
 import { errorHandler } from "./middlewares/error";
 import { sessionMiddleware } from "./middlewares/session";
@@ -28,6 +29,7 @@ app.use("/rpc/*", sessionMiddleware);
 
 // CORS for auth endpoints
 app.use("/api/auth/*", authCorsMiddleware);
+app.use("/api/auth/*", async (c, next) => executionCtxStorage.run(c.executionCtx, next));
 
 // Better Auth handler
 app.on(["POST", "GET"], "/api/auth/*", (c) => auth.handler(c.req.raw));

@@ -2,13 +2,15 @@
 	"name": "gasolina-server",
 	"main": "src/index.ts",
 	"compatibility_date": "2025-06-15",
-	"compatibility_flags": ["nodejs_compat"],
+	"compatibility_flags": [
+		"nodejs_compat"
+	],
 	"vars": {
 		"NODE_ENV": "production",
 		"CORS_ORIGIN": "https://sistema.gasolina.cloud",
 		"BETTER_AUTH_URL": "https://api.gasolina.cloud",
-		// Add non-sensitive public IDs here:
-		// "GOOGLE_CLIENT_ID": "your_google_client_id"
+		"GOOGLE_CLIENT_ID": "484457928446-lp1cvif4co0gghj01ff16sbosloh8na3.apps.googleusercontent.com",
+		"AWS_ACCESS_KEY_ID": "AKIA4E2VVK3DIBGVPPMN"
 	}
 	// For sensitive data, use:
 	// pnpm run secrets:setup
