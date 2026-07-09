@@ -7,5 +7,6 @@
  */
 export default {
   API_URL: process.env.EXPO_PUBLIC_SERVER_URL,
-  TENANT_SLUG: process.env.EXPO_PUBLIC_TENANT_SLUG
+  TENANT_SLUG: process.env.EXPO_PUBLIC_TENANT_SLUG,
+  FRONTEND_URL: `https://sistema.gasolina.cloud/reset-password`,
 }

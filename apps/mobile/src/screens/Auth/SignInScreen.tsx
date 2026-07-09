@@ -58,7 +58,10 @@ export function SignInScreen() {
     setIsGoogleLoading(true)
     setError(null)
     try {
-      const { error: googleError } = await authClient.signIn.social({ provider: "google" })
+      const { error: googleError } = await authClient.signIn.social({
+        provider: "google",
+        callbackURL: "martinezapp://",
+      })
       if (googleError) {
         setError(googleError.message ?? "Erro ao entrar com Google.")
       }
@@ -140,7 +143,21 @@ export function SignInScreen() {
             </Pressable>
           )}
         />
-
+        <View
+          style={{
+            flexDirection: "row",
+            justifyContent: "flex-end",
+            marginBottom: theme.spacing.md,
+          }}
+        >
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Esqueci minha senha"
+            onPress={() => router.push("/(auth)/forgot-password")}
+          >
+            <Text text="Esqueci minha senha" style={themed($footerLink)} />
+          </Pressable>
+        </View>
         <Button
           text={isLoading ? "Entrando..." : "Entrar"}
           preset="primary"
@@ -265,7 +282,7 @@ const $errorText: ThemedStyle<TextStyle> = ({ colors }) => ({
 })
 
 const $field: ThemedStyle<ViewStyle> = ({ spacing }) => ({
-  marginBottom: spacing.md,
+  marginBottom: spacing.xs,
 })
 
 const $eyeButton: ThemedStyle<ViewStyle> = ({ spacing }) => ({

@@ -7,7 +7,7 @@ import {
   ViewStyle,
   TextStyle,
 } from "react-native"
-import { useRouter } from "expo-router"
+import { Link, useRouter } from "expo-router"
 
 import { Button } from "@/components/Button"
 import { Screen } from "@/components/Screen"
@@ -66,14 +66,23 @@ export function SignUpScreen() {
       contentContainerStyle={themed($screen)}
       keyboardShouldPersistTaps="handled"
     >
-      <TouchableOpacity style={themed($backButton)} onPress={() => router.back()}>
-        <Icon icon="caretLeft" size={24} color={theme.colors.tint} style={{ marginRight: 4 }} />
-        <Text text="Voltar" style={themed($backText)} />
-      </TouchableOpacity>
-
-      {/* Cabeçalho */}
       <View style={themed($header)}>
-        <Text preset="heading" text="Criar conta" style={themed($title)} />
+        <View
+          style={{
+            flex: 1,
+            flexDirection: "row",
+            justifyContent: "space-between",
+            alignItems: "center",
+            // marginBottom: theme.spacing.xs,
+          }}
+        >
+          <Text preset="heading" text="Criar conta" />
+          <Link href=".." asChild>
+            <Button preset="ghost" accessibilityRole="button" accessibilityLabel="Fechar">
+              <Icon icon="x" size={24} color={theme.colors.tint} />
+            </Button>
+          </Link>
+        </View>
         <Text text="Preencha os dados para acessar o sistema" style={themed($subtitle)} />
       </View>
 
@@ -186,26 +195,8 @@ const $screen: ThemedStyle<ViewStyle> = ({ spacing }) => ({
   paddingBottom: spacing.xxl,
 })
 
-const $backButton: ThemedStyle<ViewStyle> = ({ spacing }) => ({
-  flex: 1,
-  flexDirection: "row",
-  // borderWidth: 1,
-  width: 100,
-  alignItems: "center",
-  paddingBottom: spacing.sm,
-})
-
-const $backText: ThemedStyle<TextStyle> = ({ colors }) => ({
-  color: colors.tint,
-  fontSize: 15,
-})
-
 const $header: ThemedStyle<ViewStyle> = ({ spacing }) => ({
   marginBottom: spacing.xl,
-})
-
-const $title: ThemedStyle<TextStyle> = ({ spacing }) => ({
-  marginBottom: spacing.xs,
 })
 
 const $subtitle: ThemedStyle<TextStyle> = ({ colors }) => ({
