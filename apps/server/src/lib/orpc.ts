@@ -18,12 +18,19 @@ const requireAuth = o.middleware(({ context, next }) => {
   });
 });
 
+// Operador da plataforma (plugin admin do Better Auth) — eixo de
+// autorização independente do tenant_membership. Admins gerenciam
+// qualquer tenant sem precisar de membership: basta o tenant estar
+// resolvido (header x-tenant-id/x-tenant-slug).
+const isPlatformAdmin = (context: Context): boolean =>
+  (context.session?.user as { role?: string } | undefined)?.role === "admin";
+
 const requireTenantAccess = o.middleware(({ context, next }) => {
   if (!context.tenant) {
     throw new ORPCError("BAD_REQUEST", { message: "Tenant is required" });
   }
 
-  if (!context.tenantMembership) {
+  if (!context.tenantMembership && !isPlatformAdmin(context)) {
     throw new ORPCError("FORBIDDEN");
   }
 
@@ -35,7 +42,9 @@ const requireOwnerAccess = o.middleware(({ context, next }) => {
     throw new ORPCError("BAD_REQUEST", { message: "Tenant is required" });
   }
 
-  if (!context.tenantMembership || context.tenantMembership.role !== "owner") {
+  const isOwner = context.tenantMembership?.role === "owner";
+
+  if (!isOwner && !isPlatformAdmin(context)) {
     throw new ORPCError("FORBIDDEN");
   }
 
@@ -43,6 +52,7 @@ const requireOwnerAccess = o.middleware(({ context, next }) => {
     context: {
       db: context.db,
       tenant: context.tenant,
+      // undefined quando quem acessa é o admin da plataforma.
       tenantOwnerMembership: context.tenantMembership,
     },
   });

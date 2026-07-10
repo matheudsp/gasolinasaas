@@ -16,21 +16,23 @@ import { Fuel, LockKeyhole } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 
 export default function Login() {
-  const { signIn, session } = useAuth();
+  const { signIn, session, isAdmin } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
 
-  if (session) return <Navigate to="/dashboard" replace />;
+  if (session) {
+    return <Navigate to={isAdmin ? "/admin" : "/dashboard"} replace />;
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
     try {
-      await signIn(email, password);
-      navigate("/dashboard");
+      const role = await signIn(email, password);
+      navigate(role === "admin" ? "/admin" : "/dashboard");
     } catch (err: unknown) {
       let msg = "Falha na autenticação";
       if (err && typeof err === "object" && "response" in err) {

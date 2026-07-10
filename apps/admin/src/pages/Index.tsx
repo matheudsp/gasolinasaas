@@ -13,11 +13,13 @@ const TITLE_TEXT = `
 `;
 
 export default function Register() {
-  const { session } = useAuth();
+  const { session, isAdmin } = useAuth();
   const navigate = useNavigate();
 
   // Redireciona caso já exista sessão ativa
-  if (session) return <Navigate to="/dashboard" replace />;
+  if (session) {
+    return <Navigate to={isAdmin ? "/admin" : "/dashboard"} replace />;
+  }
 
   const { data: healthCheck = [], isLoading: healthCheckLoading } = useQuery(
     orpc.healthCheck.queryOptions({ input: {} }),

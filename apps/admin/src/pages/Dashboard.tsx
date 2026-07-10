@@ -35,6 +35,7 @@ import {
   Building2,
   Fuel,
   MoreHorizontal,
+  Pencil,
   Phone,
   Plus,
   Trash2,
@@ -65,17 +66,44 @@ const emptyStationForm = {
   amenities: {} as Partial<Record<AmenityKey, boolean>>,
 };
 
+type StationForm = typeof emptyStationForm;
+
 export default function Dashboard() {
   const { user, isAdmin, activeTenant } = useAuth();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
 
-  const [createOpen, setCreateOpen] = useState(false);
-  const [form, setForm] = useState(emptyStationForm);
+  const [formOpen, setFormOpen] = useState(false);
+  // null = criando um posto novo; string = id do posto em edição
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [form, setForm] = useState<StationForm>(emptyStationForm);
   const [removeTarget, setRemoveTarget] = useState<{
     id: string;
     name: string;
   } | null>(null);
+
+  const openCreate = () => {
+    setEditingId(null);
+    setForm(emptyStationForm);
+    setFormOpen(true);
+  };
+
+  const openEdit = (station: Record<string, unknown>) => {
+    setEditingId(station.id as string);
+    setForm({
+      name: String(station.name ?? ""),
+      address: String(station.address ?? ""),
+      city: String(station.city ?? ""),
+      latitude: String(station.latitude ?? ""),
+      longitude: String(station.longitude ?? ""),
+      amenities: Object.fromEntries(
+        amenityFields
+          .filter(({ key }) => station[key] === true)
+          .map(({ key }) => [key, true]),
+      ),
+    });
+    setFormOpen(true);
+  };
 
   const { data: stations = [], isLoading: stationsLoading } = useQuery(
     orpc.station.search.queryOptions({ input: {}, enabled: !!activeTenant }),
@@ -98,11 +126,23 @@ export default function Dashboard() {
     ...orpc.station.create.mutationOptions(),
     onSuccess: () => {
       toast.success("Posto criado!");
-      setCreateOpen(false);
+      setFormOpen(false);
       setForm(emptyStationForm);
       invalidateStations();
     },
     onError: (e: Error) => toast.error(`Erro ao criar posto: ${e.message}`),
+  });
+
+  const updateMutation = useMutation({
+    ...orpc.station.update.mutationOptions(),
+    onSuccess: () => {
+      toast.success("Posto atualizado!");
+      setFormOpen(false);
+      setEditingId(null);
+      setForm(emptyStationForm);
+      invalidateStations();
+    },
+    onError: (e: Error) => toast.error(`Erro ao atualizar posto: ${e.message}`),
   });
 
   const removeMutation = useMutation({
@@ -130,16 +170,28 @@ export default function Dashboard() {
     Math.abs(latitude) <= 90 &&
     Math.abs(longitude) <= 180;
 
-  const handleCreate = () => {
-    createMutation.mutate({
+  const submitStation = () => {
+    const data = {
       name: form.name.trim(),
       address: form.address.trim(),
       city: form.city.trim(),
       latitude,
       longitude,
-      ...form.amenities,
-    });
+      // Envia todas as comodidades explicitamente: no update parcial,
+      // desmarcar uma exige mandar false — omitir manteria o valor antigo.
+      ...Object.fromEntries(
+        amenityFields.map(({ key }) => [key, !!form.amenities[key]]),
+      ),
+    };
+
+    if (editingId) {
+      updateMutation.mutate({ id: editingId, data });
+    } else {
+      createMutation.mutate(data);
+    }
   };
+
+  const isSaving = createMutation.isPending || updateMutation.isPending;
 
   // Admin geral ainda não escolheu qual tenant vai gerenciar
   if (isAdmin && !activeTenant) {
@@ -185,7 +237,7 @@ export default function Dashboard() {
             {activeTenant?.name}
           </p>
         </div>
-        <Button onClick={() => setCreateOpen(true)}>
+        <Button onClick={openCreate}>
           <Plus className="mr-1.5 h-4 w-4" />
           Novo posto
         </Button>
@@ -357,6 +409,10 @@ export default function Dashboard() {
                               <Fuel className="mr-2 h-4 w-4" />
                               Combustíveis e preços
                             </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => openEdit(s)}>
+                              <Pencil className="mr-2 h-4 w-4" />
+                              Editar posto
+                            </DropdownMenuItem>
                             <DropdownMenuItem
                               className="text-destructive focus:text-destructive"
                               onClick={() =>
@@ -378,11 +434,17 @@ export default function Dashboard() {
         </Card>
       </div>
 
-      {/* Criar posto */}
-      <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+      {/* Criar/editar posto */}
+      <Dialog
+        open={formOpen}
+        onOpenChange={(open) => {
+          setFormOpen(open);
+          if (!open) setEditingId(null);
+        }}
+      >
         <DialogContent className="max-w-lg">
           <DialogHeader>
-            <DialogTitle>Novo posto</DialogTitle>
+            <DialogTitle>{editingId ? "Editar posto" : "Novo posto"}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
             <div className="space-y-1.5">
@@ -470,14 +532,15 @@ export default function Dashboard() {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setCreateOpen(false)}>
+            <Button variant="outline" onClick={() => setFormOpen(false)}>
               Cancelar
             </Button>
-            <Button
-              disabled={!formValid || createMutation.isPending}
-              onClick={handleCreate}
-            >
-              {createMutation.isPending ? "Criando..." : "Criar posto"}
+            <Button disabled={!formValid || isSaving} onClick={submitStation}>
+              {isSaving
+                ? "Salvando..."
+                : editingId
+                  ? "Salvar alterações"
+                  : "Criar posto"}
             </Button>
           </DialogFooter>
         </DialogContent>
