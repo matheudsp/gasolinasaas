@@ -1,4 +1,140 @@
-# Project Context
+# Gasolina — Project Context
+
+SaaS multi-tenant que vende apps mobile white-label para postos e redes de postos.
+Cada rede (tenant) tem seu app, seus postos, seus preços de combustível e envia push
+notifications para os próprios clientes. **Uma única infraestrutura de servidor serve
+todos os tenants** — o isolamento é feito em software, não por deploy separado.
+
+## Monorepo
+
+pnpm workspaces + Turborepo. Três apps, sem `packages/` compartilhados por enquanto.
+
+| App | Stack | Dev |
+|---|---|---|
+| `apps/server` | Hono + oRPC + Drizzle + Better Auth em Cloudflare Workers | `pnpm dev:server` (porta 15000) |
+| `apps/admin` | React + Vite + Radix/shadcn + TanStack Query, deploy em CF Pages | `vite dev` (porta 15001) |
+| `apps/mobile` | Expo + expo-router | `expo start --dev-client` |
+
+Banco: **Neon Postgres** (serverless driver). Migrations via `drizzle-kit`
+(`pnpm db:generate` → `pnpm db:migrate`; `db:push` para iterar rápido em dev).
+
+## Multi-tenancy — o conceito central
+
+Um tenant é uma rede de postos (`tenant`). Usuários se ligam a tenants via
+`tenant_membership`, hoje com um único papel: `owner`. Toda tabela de negócio
+(`station`, `push_token`, `push_notification`, `subscription`) carrega `tenant_id`
+com `onDelete: "cascade"`.
+
+Há **dois eixos de autorização independentes** — não confunda:
+- `user.role` (`admin` | `user`), do plugin admin do Better Auth: operador da
+  plataforma Gasolina. Governa o `adminRouter` (CRUD de tenants, planos, usuários).
+- `tenant_membership.role` (`owner`): dono de uma rede específica. Governa os
+  dados daquele tenant.
+
+### Como o tenant é resolvido
+
+`lib/tenant.ts:resolveTenantContext` tenta, **nesta ordem de precedência**:
+1. header `x-tenant-id`
+2. header `x-tenant-slug`
+3. subdomínio (`rede.gasolina.cloud` → `rede`; ignora `localhost` e `www`)
+4. primeiro segmento do path (`/rede/rpc/...` → `rede`)
+
+Quem usa o quê hoje: o **admin** manda `x-tenant-id` (tenant ativo selecionado na
+UI, `apps/admin/src/lib/orpc.ts`); o **mobile** manda `x-tenant-slug` fixo via
+`EXPO_PUBLIC_TENANT_SLUG` — é isso que torna o app white-label por rede.
+
+Resolvido o tenant, `lib/context.ts:createContext` injeta `{ db, session, tenant,
+tenantMembership }` no contexto oRPC. **Se o tenant não existe ou o usuário não é
+membro, os campos simplesmente vêm `undefined`** — a rejeição acontece no
+middleware da procedure, não aqui.
+
+### Prefixo de tenant na URL
+
+`utils/tenant.ts:stripTenantPrefixFromRequest` remove o primeiro segmento quando a
+URL é `/{tenant}/api/*` ou `/{tenant}/rpc/*`, para que os handlers oRPC (montados em
+`/api` e `/rpc`) continuem casando. Requests já em `/api/*` ou `/rpc/*` passam intactos.
+
+## Autorização — sempre via procedure, nunca à mão
+
+`lib/orpc.ts` define a escada. **Escolher a procedure certa É o controle de acesso**;
+não refaça a checagem dentro do handler.
+
+- `publicProcedure` — sem sessão.
+- `protectedProcedure` — exige sessão.
+- `tenantProcedure` — sessão + tenant resolvido + membership qualquer.
+- `tenantOwnerProcedure` — sessão + membership com `role === "owner"`. Injeta
+  `context.tenant` já tipado como não-nulo. **Padrão para tudo que escreve dados do tenant.**
+- `adminProcedure` — sessão + `user.role === "admin"` (operador da plataforma).
+
+Ao adicionar um endpoint, a pergunta é: *isso é dado de um tenant específico?* Se sim,
+`tenantOwnerProcedure` (ou `tenantProcedure` para leitura de membro comum). Nunca
+filtre por `tenantId` vindo do input do cliente — use `context.tenant.id`.
+
+## Estrutura do server
+
+```
+apps/server/src/
+├── index.ts          # composição do app Hono (89 linhas — mantenha assim)
+├── handlers/         # api.ts (OpenAPIHandler) · rpc.ts (RPCHandler)
+├── middlewares/      # cors.ts · error.ts · session.ts
+├── lib/              # auth.ts · context.ts · orpc.ts · tenant.ts · email.ts · execution-context.ts
+├── routers/          # station · fuel · tenant · admin · push (+ users, não registrado)
+├── db/schema/        # auth · tenant · station · push · subscription
+└── utils/tenant.ts   # strip do prefixo de tenant da URL
+```
+
+Ordem dos middlewares em `index.ts`: error handler → logger → session (`/api/*`,
+`/rpc/*`) → CORS → Better Auth (`/api/auth/*`) → handlers RPC/API → rotas soltas
+(`/`, `/session`).
+
+O handler catch-all tenta **RPC primeiro, depois OpenAPI**; se nenhum casar, cai no
+`next()`. Ambos compartilham o mesmo `appRouter` — um router, dois transportes.
+
+## Cloudflare Workers — restrições que já mordem
+
+- `nodejs_compat` está ligado, mas nem tudo funciona. E-mail usa **`aws4fetch`
+  contra a API do SES**, não `@aws-sdk/client-ses` (depende de `node:fs`, quebra no Worker).
+- Trabalho assíncrono pós-resposta (envio de e-mail) precisa de `waitUntil`. Como o
+  Better Auth não recebe o `ExecutionContext`, ele é propagado por `AsyncLocalStorage`
+  em `lib/execution-context.ts`, e `auth.ts` consome via
+  `executionCtxStorage.getStore()?.waitUntil(...)`. Se você adicionar background work
+  em auth, siga esse caminho — sem `waitUntil` o Worker mata a promise.
+- Secrets vão em `wrangler secret put` / `pnpm secrets:setup`. **Nunca em `vars` do
+  `wrangler.jsonc`** — ficam visíveis no dashboard.
+
+## Push notifications — acoplamento a respeitar
+
+`push_notification` é o **agregado da campanha** (totais de sucesso/falha).
+`push_notification_recipient` é o **detalhe por destinatário** (`deliveredAt`, `readAt`).
+
+Quem dispara os pushes precisa inserir uma linha em `push_notification_recipient` por
+usuário-alvo no momento do envio. Sem isso, a listagem de notificações do usuário
+retorna vazia — o agregado sozinho não sabe quem recebeu o quê.
+
+`push_token` é único por `(tenantId, token)`, não por `token` global: projetos
+FCM/APNs distintos podem emitir o mesmo valor de token.
+
+## Convenções
+
+- IDs são `text` gerados na aplicação, não `serial`.
+- `createdAt`/`updatedAt` são `notNull` sem default — passe explicitamente.
+- Preços: `numeric(10, 3)`. Coordenadas: `doublePrecision`.
+- Comentários de código e strings voltadas ao usuário em **português**.
+- Commits: conventional commits via `pnpm commit` (commitizen).
+- `pnpm check` roda o Biome/Ultracite com `--write`.
+
+## Pontas soltas conhecidas
+
+- `routers/users.ts` exporta `userRouter` mas **não está registrado em
+  `routers/index.ts`** — os endpoints de notificação do usuário estão inacessíveis.
+- `tenantProcedure` está definido mas nenhum router o usa hoje (todos vão direto a
+  `protectedProcedure` ou `tenantOwnerProcedure`).
+- `tenantRole` só tem `owner`; não existe papel de membro comum ainda.
+
+---
+
+# Code Quality Tooling (Ultracite)
+
 Ultracite enforces strict type safety, accessibility standards, and consistent code quality for JavaScript/TypeScript projects using Biome's lightning-fast formatter and linter.
 
 ## Key Principles

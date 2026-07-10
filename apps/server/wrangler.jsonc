@@ -11,9 +11,21 @@
 		"BETTER_AUTH_URL": "https://api.gasolina.cloud",
 		"GOOGLE_CLIENT_ID": "484457928446-lp1cvif4co0gghj01ff16sbosloh8na3.apps.googleusercontent.com",
 		"AWS_ACCESS_KEY_ID": "AKIA4E2VVK3DIBGVPPMN"
-	}
+	},
 	// For sensitive data, use:
 	// pnpm run secrets:setup
 	// or: wrangler secret put SECRET_NAME
 	// Don't add secrets to "vars" - they're visible in the dashboard!
+
+	"routes": [
+    {
+      "pattern": "api.gasolina.cloud",
+      "zone_name": "gasolina.cloud",
+      "custom_domain": true,
+	  "enabled": true,
+	  "previews_enabled":false
+    }
+  ],
+  "workers_dev": false,
+  "preview_urls": false
 }

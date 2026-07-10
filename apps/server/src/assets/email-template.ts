@@ -19,7 +19,21 @@ interface EmailTemplateParams {
   buttonText?: string;
   buttonUrl?: string;
   footerNote?: string;
+  /**
+   * Nome exibido no cabeçalho do e-mail. Em fluxos multi-tenant é o nome
+   * da rede (tenant); sem tenant resolvido, cai no padrão da plataforma.
+   */
+  brandName?: string;
 }
+
+// Único valor interpolado que vem do banco (nome do tenant) — os demais
+// são strings estáticas do código.
+const escapeHtml = (value: string): string =>
+  value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
 
 const NAVY = "#22396D";
 const TEXT_DARK = "#161A24";
@@ -34,6 +48,7 @@ export function renderEmailHtml({
   buttonText,
   buttonUrl,
   footerNote,
+  brandName = "Gasolina Cloud",
 }: EmailTemplateParams): string {
   const buttonBlock =
     buttonText && buttonUrl
@@ -65,7 +80,7 @@ export function renderEmailHtml({
             <tr>
               <td style="background-color:${NAVY}; padding:24px 32px; text-align:center;">
                 <span style="color:#FFFFFF; font-size:20px; font-weight:bold; letter-spacing:0.5px; font-family:Arial, Helvetica, sans-serif;">
-                  Gasolina Cloud  
+                  ${escapeHtml(brandName)}
                 </span>
               </td>
             </tr>

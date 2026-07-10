@@ -1,24 +1,25 @@
 import type { MiddlewareHandler } from "hono";
 import { cors } from "hono/cors";
 
-// CORS_ORIGIN aceita lista separada por vírgula (ex: admin + expo web).
-// hono/cors com string exige igualdade exata com o Origin da request,
-// então uma lista precisa virar array.
-const parseOrigins = (value: string | undefined): string | string[] => {
-  if (!value) return "*";
-  const origins = value
-    .split(",")
-    .map((origin) => origin.trim())
-    .filter(Boolean);
-  return origins.length === 1 ? origins[0] : origins;
-};
+// CORS_ORIGIN aceita múltiplas origins separadas por vírgula
+// (ex: painel admin + Expo web em dev).
+const parseOrigins = (value: string | undefined): string[] | string =>
+  value ? value.split(",").map((o) => o.trim()) : "*";
 
 // CORS middleware for auth endpoints
 export const authCorsMiddleware: MiddlewareHandler = (c, next) => {
   const env = c.env as Record<string, string>;
   const corsMiddleware = cors({
     origin: parseOrigins(env.CORS_ORIGIN),
-    allowHeaders: ["Content-Type", "Authorization", "Cookie"],
+    allowHeaders: [
+      "Content-Type",
+      "Authorization",
+      "Cookie",
+      // Clientes web mandam o tenant também nas rotas de auth, para
+      // brandear os e-mails transacionais (ver lib/auth.ts).
+      "x-tenant-id",
+      "x-tenant-slug",
+    ],
     allowMethods: ["POST", "GET", "OPTIONS"],
     exposeHeaders: ["Content-Length", "Set-Cookie"],
     maxAge: 600,

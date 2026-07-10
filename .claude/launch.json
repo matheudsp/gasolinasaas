@@ -1,0 +1,23 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "admin",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["--dir", "apps/admin", "dev"],
+      "port": 15001
+    },
+    {
+      "name": "mobile-web",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["--dir", "apps/mobile", "web"],
+      "port": 8081
+    },
+    {
+      "name": "server",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["--dir", "apps/server", "dev"],
+      "port": 15000
+    }
+  ]
+}

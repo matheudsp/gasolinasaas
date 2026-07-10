@@ -91,6 +91,12 @@ export default function Login() {
                 <Label htmlFor="password" className="font-medium">
                   Senha
                 </Label>
+                <Link
+                  to="/forgot-password"
+                  className="text-xs text-muted-foreground hover:text-foreground underline-offset-2 hover:underline"
+                >
+                  Esqueceu a senha?
+                </Link>
               </div>
               <Input
                 id="password"

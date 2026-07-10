@@ -1,7 +1,6 @@
 import { Outlet, Link, useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
 import {
-  Building2,
   LayoutDashboard,
   Bell,
   CreditCard,
@@ -25,7 +24,7 @@ import { useState } from "react";
 const navItems = [
   { to: "/dashboard", label: "Painel", icon: LayoutDashboard },
   { to: "/push-notifications", label: "Notificações", icon: Bell },
-  {to: "/minha-assinatura", label: "Minha Assinatura", icon: CreditCard},
+  { to: "/minha-assinatura", label: "Minha Assinatura", icon: CreditCard },
   { to: "/admin", label: "Admin", icon: TowerControl, adminOnly: true },
 ];
 
@@ -45,8 +44,6 @@ export function Layout() {
 
   return (
     <div className="flex min-h-screen flex-col bg-background text-foreground">
-      
-
       <header className="sticky top-0 z-50 flex h-16 items-center justify-between border-b border-border bg-background/95 px-4 backdrop-blur supports-[backdrop-filter]:bg-background/60 sm:px-6">
         <Link
           to="/dashboard"
@@ -58,7 +55,6 @@ export function Layout() {
         </Link>
 
         <nav className="flex items-center gap-2">
-
           <div className="hidden md:flex md:items-center md:gap-1">
             {navItems.map((item) => {
               if (item.adminOnly && !isAdmin) return null;
@@ -69,7 +65,9 @@ export function Layout() {
                   key={item.to}
                   variant={isActive ? "default" : "ghost"}
                   size="sm"
-                  className={isActive ? "font-semibold" : "text-muted-foreground"}
+                  className={
+                    isActive ? "font-semibold" : "text-muted-foreground"
+                  }
                   asChild
                 >
                   <Link to={item.to}>
@@ -81,9 +79,7 @@ export function Layout() {
             })}
           </div>
 
-
           <div className="hidden h-5 w-px bg-border md:block mx-1" />
-
 
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -95,21 +91,29 @@ export function Layout() {
                 </Avatar>
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-52 border-border bg-popover text-popover-foreground">
+            <DropdownMenuContent
+              align="end"
+              className="w-52 border-border bg-popover text-popover-foreground"
+            >
               <div className="px-3 py-2 text-xs font-medium text-muted-foreground truncate">
                 {user?.email}
               </div>
               <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={() => navigate("/profile")} className="cursor-pointer">
+              <DropdownMenuItem
+                onClick={() => navigate("/profile")}
+                className="cursor-pointer"
+              >
                 <User className="mr-2 h-4 w-4" /> Minha Conta
               </DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={signOut} className="cursor-pointer text-destructive focus:text-destructive focus:bg-destructive/10">
+              <DropdownMenuItem
+                onClick={signOut}
+                className="cursor-pointer text-destructive focus:text-destructive focus:bg-destructive/10"
+              >
                 <LogOut className="mr-2 h-4 w-4" /> Sair
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
-
 
           <Button
             variant="ghost"
@@ -126,7 +130,6 @@ export function Layout() {
           </Button>
         </nav>
       </header>
-
 
       {mobileOpen && (
         <div className="border-b border-border bg-card text-card-foreground md:hidden transition-all">
@@ -154,13 +157,11 @@ export function Layout() {
         </div>
       )}
 
-
       <main className="flex-1">
         <div className="container mx-auto p-4 sm:p-6 lg:p-8">
           <Outlet />
         </div>
       </main>
-      
     </div>
   );
 }

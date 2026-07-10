@@ -82,13 +82,17 @@ const normalizeIdentifier = (value: string | null): string | undefined => {
   return trimmed ? trimmed.toLowerCase() : undefined;
 };
 
+// Subdomínios de infraestrutura que nunca identificam um tenant —
+// "api" é onde o próprio Worker atende (api.gasolina.cloud).
+const RESERVED_SUBDOMAINS = new Set(["www", "api", "sistema"]);
+
 const extractSubdomainSlug = (hostname: string): string | undefined => {
   const safe = hostname.toLowerCase();
   if (safe === "localhost" || safe.endsWith(".localhost")) return undefined;
   const segments = safe.split(".");
   if (segments.length < 3) return undefined;
   const [candidate] = segments;
-  return candidate === "www" ? undefined : candidate;
+  return RESERVED_SUBDOMAINS.has(candidate) ? undefined : candidate;
 };
 
 const extractPathSlug = (pathname: string): string | undefined => {

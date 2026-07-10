@@ -9,6 +9,7 @@ import Profile from "@/pages/Profile";
 import StationDetail from "./pages/StationDetail";
 import Admin from "./pages/Admin";
 import PushNotifications from "./pages/PushNotifications";
+import ForgotPassword from "./pages/ForgotPassword";
 import ResetPassword from "./pages/ResetPassword";
 import OnPasswordReset from "./pages/OnPasswordReset";
 import VerifyEmail from "./pages/VerifyEmail";
@@ -18,6 +19,7 @@ export default function App() {
     <Routes>
       <Route path="/login" element={<Login />} />
       <Route path="/" element={<Index />} />
+      <Route path="/forgot-password" element={<ForgotPassword />} />
       <Route path="/reset-password" element={<ResetPassword />} />
       <Route path="/on-password-reset" element={<OnPasswordReset />} />
       <Route path="/verify-email" element={<VerifyEmail />} />

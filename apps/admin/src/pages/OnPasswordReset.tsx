@@ -1,3 +1,4 @@
+import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -12,12 +13,11 @@ import { CheckCircle2, Smartphone } from "lucide-react";
 /**
  * Página de destino após redefinir a senha com sucesso.
  *
- * Não redireciona para /login: este sistema web é o painel de gestão de
- * postos, restrito a tenantOwners e admins — mas a tabela `user` do Better
- * Auth é compartilhada com o app mobile (clientes finais), e quem passou
- * por este fluxo é, na maioria dos casos, um usuário do app mobile. Por
- * isso a orientação aqui é sempre voltar ao Expo, nunca ao login deste
- * painel.
+ * A ação principal volta ao app mobile: a tabela `user` do Better Auth é
+ * compartilhada com o app (clientes finais), e quem passa por este fluxo
+ * é, na maioria dos casos, um usuário do app mobile. O link secundário
+ * para /login cobre o outro caso: tenantOwners/admins que iniciaram o
+ * "esqueci a senha" pelo próprio painel.
  */
 export default function OnPasswordReset() {
   return (
@@ -55,6 +55,15 @@ export default function OnPasswordReset() {
           <p className="text-xs text-muted-foreground text-center px-4">
             Se o app não abrir automaticamente, abra-o manualmente e faça login
             com sua nova senha.
+          </p>
+          <p className="text-xs text-muted-foreground text-center">
+            Gestor da rede?{" "}
+            <Link
+              to="/login"
+              className="underline underline-offset-2 hover:text-foreground"
+            >
+              Acesse o painel
+            </Link>
           </p>
         </CardFooter>
       </Card>
