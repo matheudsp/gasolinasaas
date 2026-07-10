@@ -20,7 +20,7 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 
-import { User, Mail, Calendar, ShieldCheck, Building2 } from "lucide-react";
+import { User, Mail, Calendar, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
 
 const profileSchema = z.object({

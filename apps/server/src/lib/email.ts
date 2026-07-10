@@ -10,7 +10,8 @@ import { AwsClient } from "aws4fetch";
  * AWS_REGION (default sa-east-1), EMAIL_FROM.
  */
 
-const FROM_ADDRESS = "Gasolina Cloud <nao-responda@gasolina.cloud>";
+const FROM_EMAIL = "nao-responda@gasolina.cloud";
+const DEFAULT_FROM_NAME = "Gasolina Cloud";
 const SES_ENDPOINT = `https://email.sa-east-1.amazonaws.com/v2/email/outbound-emails`;
 
 
@@ -32,9 +33,20 @@ interface SendEmailParams {
   subject: string;
   text: string;
   html?: string;
+  /**
+   * Nome de exibição do remetente (ex: o nome da rede/tenant). O endereço
+   * é sempre o mesmo domínio verificado no SES — só o nome muda.
+   */
+  fromName?: string;
 }
 
-export async function sendEmail({ to, subject, text, html }: SendEmailParams) {
+export async function sendEmail({
+  to,
+  subject,
+  text,
+  html,
+  fromName,
+}: SendEmailParams) {
   if (!sesClient) {
     console.error(
       "[email] AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY ausentes — e-mail não enviado",
@@ -42,8 +54,11 @@ export async function sendEmail({ to, subject, text, html }: SendEmailParams) {
     return;
   }
 
+  // Aspas e quebras de linha no nome quebrariam o header From do SES.
+  const safeName = (fromName ?? DEFAULT_FROM_NAME).replace(/["\r\n]/g, "").trim();
+
   const body = {
-    FromEmailAddress: FROM_ADDRESS,
+    FromEmailAddress: `${safeName || DEFAULT_FROM_NAME} <${FROM_EMAIL}>`,
     Destination: {
       ToAddresses: [to],
     },

@@ -6,7 +6,7 @@ import { initialWindowMetrics, SafeAreaProvider } from "react-native-safe-area-c
 
 import { ThemeProvider } from "@/theme/context"
 import { customFontsToLoad } from "@/theme/typography"
-import { authClient } from "@/lib/auth" 
+import { authClient } from "@/lib/auth"
 import { QueryClientProvider } from "@tanstack/react-query"
 import { queryClient } from "@/lib/orpc"
 import { usePushNotifications } from "@/hooks/usePushNotifications"
@@ -54,12 +54,12 @@ export default function Root() {
   return (
     <SafeAreaProvider initialMetrics={initialWindowMetrics}>
       <QueryClientProvider client={queryClient}>
-      <ThemeProvider>
-        <KeyboardProvider>
-          {session && <PushNotificationRegistrar />}
-          <Slot screenOptions={{ headerShown: false }} />
-        </KeyboardProvider>
-      </ThemeProvider>
+        <ThemeProvider>
+          <KeyboardProvider>
+            {session && <PushNotificationRegistrar />}
+            <Slot screenOptions={{ headerShown: false }} />
+          </KeyboardProvider>
+        </ThemeProvider>
       </QueryClientProvider>
     </SafeAreaProvider>
   )
