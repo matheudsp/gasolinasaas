@@ -14,9 +14,7 @@ export default function AppLayout() {
   }
   if (!data?.user) return <Redirect href="/(auth)/sign-in" />
 
-  return (
-     <Slot screenOptions={{ headerShown: false }} />
-  )
+  return <Slot />
 }
 
 

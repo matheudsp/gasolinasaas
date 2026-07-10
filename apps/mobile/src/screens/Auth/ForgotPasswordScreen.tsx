@@ -63,7 +63,7 @@ export function ForgotPasswordScreen() {
     >
       <View style={themed([$header, $topInsets])}>
         <Text preset="heading" text="Redefinir senha" />
-        <Link href=".." asChild>
+        <Link href="/(auth)/sign-in" dismissTo asChild>
           <Button
             // onPress={() => router.back()}
             preset="ghost"

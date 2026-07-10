@@ -12,7 +12,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { KeyRound, ArrowLeft } from "lucide-react";
+import { KeyRound } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 
 export default function ResetPassword() {

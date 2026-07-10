@@ -25,7 +25,12 @@ export const auth = betterAuth<BetterAuthOptions>({
     },
   }),
   trustedOrigins: [
-    env.CORS_ORIGIN || "",
+    // CORS_ORIGIN é lista separada por vírgula; cada origem precisa ser
+    // uma entrada própria para o better-auth confiar nela.
+    ...(env.CORS_ORIGIN || "")
+      .split(",")
+      .map((origin) => origin.trim())
+      .filter(Boolean),
     "martinezapp://",
     "exp://",
     "http://10.0.2.2:8081",
