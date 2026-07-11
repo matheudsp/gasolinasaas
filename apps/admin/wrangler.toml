@@ -1,3 +1,6 @@
 name = "gasolina-admin"
 pages_build_output_dir = "dist"
 compatibility_date = "2025-01-01"
+
+[vars]
+VITE_API_URL = "https://api.gasolina.cloud"

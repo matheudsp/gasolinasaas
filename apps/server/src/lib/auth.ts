@@ -55,9 +55,10 @@ export const auth = betterAuth<BetterAuthOptions>({
     ...(env.CORS_ORIGIN?.split(",").map((o) => o.trim()) ?? []),
     "martinezapp://",
     "exp://",
-    "http://10.0.2.2:8081",
+    
+    ...(env.NODE_ENV === "development" ? ["http://10.0.2.2:8081",
     "http://localhost:8081",
-    "http://localhost:15001",
+    "http://localhost:15001",] : []),
   ],
   emailAndPassword: {
     enabled: true,

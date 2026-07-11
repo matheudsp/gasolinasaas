@@ -8,15 +8,15 @@ Dashboard administrativo React SPA que consume la API multi-tenant de [`multi-te
 npm run dev
 ```
 
-Open `http://localhost:5173`.
+Open `http://localhost:15001`.
 
 ---
 
 ## Documentation
 
-| Section | File |
-|---|---|
-| Quick Start | [docs/getting-started.md](docs/getting-started.md) |
-| Architecture | [docs/architecture.md](docs/architecture.md) |
-| Configuration | [docs/configuration.md](docs/configuration.md) |
+| Section           | File                                                   |
+| ----------------- | ------------------------------------------------------ |
+| Quick Start       | [docs/getting-started.md](docs/getting-started.md)     |
+| Architecture      | [docs/architecture.md](docs/architecture.md)           |
+| Configuration     | [docs/configuration.md](docs/configuration.md)         |
 | Project Structure | [docs/project-structure.md](docs/project-structure.md) |

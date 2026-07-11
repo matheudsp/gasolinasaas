@@ -1,23 +1,19 @@
 import type { MiddlewareHandler } from "hono";
 import { cors } from "hono/cors";
 
-// CORS_ORIGIN aceita múltiplas origins separadas por vírgula
-// (ex: painel admin + Expo web em dev).
-const parseOrigins = (value: string | undefined): string[] | string =>
-  value ? value.split(",").map((o) => o.trim()) : "*";
-
 // CORS middleware for auth endpoints
 export const authCorsMiddleware: MiddlewareHandler = (c, next) => {
   const env = c.env as Record<string, string>;
   const corsMiddleware = cors({
-    origin: parseOrigins(env.CORS_ORIGIN),
+    origin: [  ...(env.CORS_ORIGIN?.split(",").map((o) => o.trim()) ?? []),...(env.NODE_ENV === "development" ? ["http://10.0.2.2:8081",
+        "http://localhost:8081",
+        "http://localhost:15001",] : []),],
     allowHeaders: [
       "Content-Type",
       "Authorization",
       "Cookie",
       // Clientes web mandam o tenant também nas rotas de auth, para
       // brandear os e-mails transacionais (ver lib/auth.ts).
-
       
       "x-tenant-id",
       "x-tenant-slug",
@@ -34,7 +30,9 @@ export const authCorsMiddleware: MiddlewareHandler = (c, next) => {
 export const apiCorsMiddleware: MiddlewareHandler = (c, next) => {
   const env = c.env as Record<string, string>;
   const corsMiddleware = cors({
-    origin: parseOrigins(env.CORS_ORIGIN),
+    origin: [  ...(env.CORS_ORIGIN?.split(",").map((o) => o.trim()) ?? []),...(env.NODE_ENV === "development" ? ["http://10.0.2.2:8081",
+        "http://localhost:8081",
+        "http://localhost:15001",] : []),],
     allowMethods: ["GET", "POST", "OPTIONS"],
     allowHeaders: [
       "Content-Type",
