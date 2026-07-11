@@ -8,6 +8,8 @@ import Dashboard from "@/pages/Dashboard";
 import Profile from "@/pages/Profile";
 import StationDetail from "./pages/StationDetail";
 import Admin from "./pages/Admin";
+import SubscriptionDetail from "./pages/SubscriptionDetail";
+import MySubscription from "./pages/MySubscription";
 import PushNotifications from "./pages/PushNotifications";
 import ForgotPassword from "./pages/ForgotPassword";
 import ResetPassword from "./pages/ResetPassword";
@@ -34,6 +36,7 @@ export default function App() {
         <Route path="/profile" element={<Profile />} />
         <Route path="/stations/:id" element={<StationDetail />} />
         <Route path="/push-notifications" element={<PushNotifications />} />
+        <Route path="/minha-assinatura" element={<MySubscription />} />
       </Route>
       <Route
         element={
@@ -43,6 +46,7 @@ export default function App() {
         }
       >
         <Route path="/admin" element={<Admin />} />
+        <Route path="/assinaturas/:id" element={<SubscriptionDetail />} />
       </Route>
     </Routes>
   );

@@ -5,6 +5,7 @@ import { orpc } from "@/lib/orpc";
 import {
   LayoutDashboard,
   Bell,
+  CreditCard,
   LogOut,
   User,
   Menu,
@@ -93,6 +94,17 @@ export function Layout() {
       ? [
           { to: "/dashboard", label: "Painel", icon: LayoutDashboard },
           { to: "/push-notifications", label: "Notificações", icon: Bell },
+        ]
+      : []),
+    // Owner acompanha a própria assinatura; admin gerencia todas em
+    // /admin → aba Assinaturas.
+    ...(!isAdmin && activeTenant
+      ? [
+          {
+            to: "/minha-assinatura",
+            label: "Minha Assinatura",
+            icon: CreditCard,
+          },
         ]
       : []),
     ...(isAdmin ? [{ to: "/admin", label: "Admin", icon: TowerControl }] : []),

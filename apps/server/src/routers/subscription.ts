@@ -5,7 +5,7 @@ import { z } from "zod";
 import type { Db } from "../db";
 import { paymentHistory, plan, subscription } from "../db/schema/subscription";
 import { tenant } from "../db/schema/tenant";
-import { adminProcedure } from "../lib/orpc";
+import { adminProcedure, tenantOwnerProcedure } from "../lib/orpc";
 
 /**
  * Gestão manual de assinaturas e pagamentos (sem gateway).
@@ -37,6 +37,64 @@ function addInterval(date: Date, interval: string): Date {
 function nextPeriod(currentEnd: Date, interval: string, now: Date) {
   const start = currentEnd > now ? currentEnd : now;
   return { start, end: addInterval(start, interval) };
+}
+
+/**
+ * Detalhe completo de uma assinatura (tenant + plano + pagamentos +
+ * isOverdue derivado). Compartilhado pelo getById do admin e pelo
+ * getMine do owner.
+ */
+async function loadSubscriptionDetail(db: Db, subscriptionId: string) {
+  const record = await db
+    .select({
+      id: subscription.id,
+      status: subscription.status,
+      currentPeriodStart: subscription.currentPeriodStart,
+      currentPeriodEnd: subscription.currentPeriodEnd,
+      trialEndsAt: subscription.trialEndsAt,
+      cancelledAt: subscription.cancelledAt,
+      createdAt: subscription.createdAt,
+      tenantId: tenant.id,
+      tenantName: tenant.name,
+      tenantSlug: tenant.slug,
+      planId: plan.id,
+      planName: plan.name,
+      planPrice: plan.price,
+      planInterval: plan.interval,
+      planDescription: plan.description,
+      planMaxStations: plan.maxStations,
+    })
+    .from(subscription)
+    .innerJoin(tenant, eq(subscription.tenantId, tenant.id))
+    .innerJoin(plan, eq(subscription.planId, plan.id))
+    .where(eq(subscription.id, subscriptionId))
+    .limit(1)
+    .then((rows) => rows.at(0));
+
+  if (!record) return null;
+
+  const payments = await db
+    .select()
+    .from(paymentHistory)
+    .where(eq(paymentHistory.subscriptionId, record.id))
+    .orderBy(desc(paymentHistory.createdAt));
+
+  const now = new Date();
+  const lastPaidAt = payments
+    .filter((p) => p.status === "paid" && p.paidAt)
+    .reduce<Date | null>(
+      (latest, p) => (!latest || (p.paidAt && p.paidAt > latest) ? p.paidAt : latest),
+      null,
+    );
+
+  return {
+    ...record,
+    lastPaidAt,
+    isOverdue:
+      (record.status === "active" || record.status === "trial") &&
+      record.currentPeriodEnd < now,
+    payments,
+  };
 }
 
 async function findSubscriptionWithPlan(db: Db, subscriptionId: string) {
@@ -123,6 +181,74 @@ export const subscriptionRouter = {
           (row.status === "active" || row.status === "trial") &&
           row.currentPeriodEnd < now,
       }));
+    }),
+
+  /** Detalhe completo para a página assinaturas/{id} do admin. */
+  getById: adminProcedure
+    .input(z.object({ id: z.string() }))
+    .handler(async ({ context, input }) => {
+      const detail = await loadSubscriptionDetail(context.db, input.id);
+      if (!detail) {
+        throw new ORPCError("NOT_FOUND", {
+          message: "Assinatura não encontrada.",
+        });
+      }
+      return detail;
+    }),
+
+  /**
+   * Assinatura do tenant do próprio owner (página "Minha Assinatura").
+   * Retorna a mais recente — inclusive cancelada, para o owner entender
+   * a própria situação — ou null se a rede nunca teve assinatura.
+   */
+  getMine: tenantOwnerProcedure.handler(async ({ context }) => {
+    const latest = await context.db
+      .select({ id: subscription.id })
+      .from(subscription)
+      .where(eq(subscription.tenantId, context.tenant.id))
+      .orderBy(desc(subscription.createdAt))
+      .limit(1)
+      .then((rows) => rows.at(0));
+
+    if (!latest) return null;
+    return loadSubscriptionDetail(context.db, latest.id);
+  }),
+
+  /**
+   * Ajuste manual do período vigente (correções administrativas —
+   * ex: acerto de data combinado com o cliente).
+   */
+  updatePeriod: adminProcedure
+    .input(
+      z.object({
+        subscriptionId: z.string(),
+        currentPeriodStart: z.coerce.date(),
+        currentPeriodEnd: z.coerce.date(),
+      }),
+    )
+    .handler(async ({ context, input }) => {
+      if (input.currentPeriodEnd <= input.currentPeriodStart) {
+        throw new ORPCError("BAD_REQUEST", {
+          message: "O fim do período precisa ser depois do início.",
+        });
+      }
+
+      const [updated] = await context.db
+        .update(subscription)
+        .set({
+          currentPeriodStart: input.currentPeriodStart,
+          currentPeriodEnd: input.currentPeriodEnd,
+          updatedAt: new Date(),
+        })
+        .where(eq(subscription.id, input.subscriptionId))
+        .returning();
+
+      if (!updated) {
+        throw new ORPCError("NOT_FOUND", {
+          message: "Assinatura não encontrada.",
+        });
+      }
+      return updated;
     }),
 
   create: adminProcedure

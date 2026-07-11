@@ -1274,6 +1274,7 @@ function PlansTab() {
 // ── SubscriptionsTab ──────────────────────────────────────────────────────────
 function SubscriptionsTab() {
   const qc = useQueryClient();
+  const navigate = useNavigate();
   const [tenantFilter, setTenantFilter] = useState<string>("");
   const [createOpen, setCreateOpen] = useState(false);
   const [changePlanRow, setChangePlanRow] = useState<any>(null);
@@ -1447,7 +1448,13 @@ function SubscriptionsTab() {
                 return (
                   <TableRow key={s.id}>
                     <TableCell className="font-medium">
-                      {s.tenantName}
+                      <button
+                        type="button"
+                        className="hover:underline"
+                        onClick={() => navigate(`/assinaturas/${s.id}`)}
+                      >
+                        {s.tenantName}
+                      </button>
                     </TableCell>
                     <TableCell>
                       <span>{s.planName}</span>
@@ -1483,6 +1490,13 @@ function SubscriptionsTab() {
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
+                          <DropdownMenuItem
+                            onClick={() => navigate(`/assinaturas/${s.id}`)}
+                          >
+                            <FileText className="mr-2 h-4 w-4" />
+                            Gerenciar assinatura
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
                           <DropdownMenuItem
                             onClick={() => {
                               setChangePlanRow(s);
