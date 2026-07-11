@@ -16,14 +16,17 @@ export default function Register() {
   const { session, isAdmin } = useAuth();
   const navigate = useNavigate();
 
+  // Hooks sempre antes de qualquer return condicional: um early return
+  // acima de um hook derruba o app inteiro com React error #300
+  // ("Rendered fewer hooks than expected") quando a condição muda.
+  const { data: healthCheck = [], isLoading: healthCheckLoading } = useQuery(
+    orpc.healthCheck.queryOptions({ input: {} }),
+  );
+
   // Redireciona caso já exista sessão ativa
   if (session) {
     return <Navigate to={isAdmin ? "/admin" : "/dashboard"} replace />;
   }
-
-  const { data: healthCheck = [], isLoading: healthCheckLoading } = useQuery(
-    orpc.healthCheck.queryOptions({ input: {} }),
-  );
 
   return (
     <div className="flex min-h-screen flex-col items-center justify-center bg-background p-6 text-foreground">
