@@ -2,6 +2,7 @@ import type { RouterClient } from "@orpc/server";
 import { publicProcedure } from "../lib/orpc";
 import { fuelRouter } from "./fuel";
 import { stationRouter } from "./station";
+import { subscriptionRouter } from "./subscription";
 import { tenantRouter } from "./tenant";
 import { adminRouter } from "./admin";
 import { pushRouter } from "./push";
@@ -12,6 +13,7 @@ export const appRouter = {
   fuel: fuelRouter,
   tenant: tenantRouter,
   admin: adminRouter,
+  subscription: subscriptionRouter,
   push: pushRouter,
 };
 

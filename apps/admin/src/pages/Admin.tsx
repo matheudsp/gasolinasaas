@@ -1293,7 +1293,7 @@ function SubscriptionsTab() {
   });
 
   const { data: subs = [], isLoading } = useQuery(
-    orpc.admin.subscription.list.queryOptions({
+    orpc.subscription.list.queryOptions({
       input: tenantFilter ? { tenantId: tenantFilter } : {},
     }),
   );
@@ -1305,7 +1305,7 @@ function SubscriptionsTab() {
   );
 
   const { data: payments = [], isLoading: paymentsLoading } = useQuery({
-    ...orpc.admin.subscription.payments.queryOptions({
+    ...orpc.subscription.payments.queryOptions({
       input: { subscriptionId: historyRow?.id ?? "" },
     }),
     enabled: !!historyRow,
@@ -1313,11 +1313,11 @@ function SubscriptionsTab() {
 
   const invalidate = () =>
     qc.invalidateQueries(
-      orpc.admin.subscription.list.queryOptions({ input: {} }),
+      orpc.subscription.list.queryOptions({ input: {} }),
     );
 
   const createMutation = useMutation({
-    ...orpc.admin.subscription.create.mutationOptions(),
+    ...orpc.subscription.create.mutationOptions(),
     onSuccess: async () => {
       toast.success("Assinatura criada!");
       setCreateOpen(false);
@@ -1333,7 +1333,7 @@ function SubscriptionsTab() {
   });
 
   const changePlanMutation = useMutation({
-    ...orpc.admin.subscription.changePlan.mutationOptions(),
+    ...orpc.subscription.changePlan.mutationOptions(),
     onSuccess: async () => {
       toast.success("Plano alterado!");
       setChangePlanRow(null);
@@ -1344,7 +1344,7 @@ function SubscriptionsTab() {
   });
 
   const cancelMutation = useMutation({
-    ...orpc.admin.subscription.cancel.mutationOptions(),
+    ...orpc.subscription.cancel.mutationOptions(),
     onSuccess: async () => {
       toast.success("Assinatura cancelada.");
       await invalidate();
@@ -1353,7 +1353,7 @@ function SubscriptionsTab() {
   });
 
   const renewMutation = useMutation({
-    ...orpc.admin.subscription.renew.mutationOptions(),
+    ...orpc.subscription.renew.mutationOptions(),
     onSuccess: async () => {
       toast.success("Assinatura renovada!");
       await invalidate();
@@ -1362,11 +1362,20 @@ function SubscriptionsTab() {
   });
 
   const paymentMutation = useMutation({
-    ...orpc.admin.subscription.recordPayment.mutationOptions(),
+    ...orpc.subscription.recordPayment.mutationOptions(),
     onSuccess: async () => {
       toast.success("Pagamento registrado!");
       setPaymentRow(null);
       setPaymentForm({ amount: "", status: "paid", notes: "" });
+      await invalidate();
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const suspendMutation = useMutation({
+    ...orpc.subscription.suspend.mutationOptions(),
+    onSuccess: async () => {
+      toast.success("Assinatura suspensa.");
       await invalidate();
     },
     onError: (e: Error) => toast.error(e.message),
@@ -1406,7 +1415,7 @@ function SubscriptionsTab() {
               <TableHead>Plano</TableHead>
               <TableHead>Status</TableHead>
               <TableHead>Período</TableHead>
-              <TableHead>Trial até</TableHead>
+              <TableHead>Último pagamento</TableHead>
               <TableHead className="w-10" />
             </TableRow>
           </TableHeader>
@@ -1448,14 +1457,19 @@ function SubscriptionsTab() {
                       </span>
                     </TableCell>
                     <TableCell>
-                      <Badge variant={st.variant}>{st.label}</Badge>
+                      <div className="flex items-center gap-1.5">
+                        <Badge variant={st.variant}>{st.label}</Badge>
+                        {s.isOverdue && (
+                          <Badge variant="destructive">Vencida</Badge>
+                        )}
+                      </div>
                     </TableCell>
                     <TableCell className="text-sm text-muted-foreground">
                       {fmtDate(s.currentPeriodStart)} –{" "}
                       {fmtDate(s.currentPeriodEnd)}
                     </TableCell>
                     <TableCell className="text-sm text-muted-foreground">
-                      {fmtDate(s.trialEndsAt)}
+                      {s.lastPaidAt ? fmtDate(s.lastPaidAt) : "—"}
                     </TableCell>
                     <TableCell>
                       <DropdownMenu>
@@ -1496,14 +1510,24 @@ function SubscriptionsTab() {
                             Ver histórico
                           </DropdownMenuItem>
                           <DropdownMenuSeparator />
-                          {s.status !== "active" && (
+                          {(s.status !== "active" || s.isOverdue) && (
                             <DropdownMenuItem
                               onClick={() =>
                                 renewMutation.mutate({ subscriptionId: s.id })
                               }
                             >
                               <RefreshCw className="mr-2 h-4 w-4" />
-                              Renovar
+                              Renovar (cortesia)
+                            </DropdownMenuItem>
+                          )}
+                          {(s.status === "active" || s.status === "trial") && (
+                            <DropdownMenuItem
+                              onClick={() =>
+                                suspendMutation.mutate({ subscriptionId: s.id })
+                              }
+                            >
+                              <Ban className="mr-2 h-4 w-4" />
+                              Suspender
                             </DropdownMenuItem>
                           )}
                           {s.status !== "cancelled" && (
@@ -1754,6 +1778,13 @@ function SubscriptionsTab() {
                 placeholder="PIX, boleto, etc."
               />
             </div>
+            {paymentForm.status === "paid" && (
+              <p className="text-xs text-muted-foreground">
+                Pagamento pago renova a assinatura por um ciclo do plano
+                (mensal ou anual), emendando no fim do período atual — ou a
+                partir de hoje, se estiver vencida.
+              </p>
+            )}
           </div>
           <DialogFooter>
             <Button

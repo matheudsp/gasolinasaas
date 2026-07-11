@@ -78,7 +78,7 @@ apps/server/src/
 ├── handlers/         # api.ts (OpenAPIHandler) · rpc.ts (RPCHandler)
 ├── middlewares/      # cors.ts · error.ts · session.ts
 ├── lib/              # auth.ts · context.ts · orpc.ts · tenant.ts · email.ts · execution-context.ts
-├── routers/          # station · fuel · tenant · admin · push (+ users, não registrado)
+├── routers/          # station · fuel · tenant · subscription · admin · push (+ users, não registrado)
 ├── db/schema/        # auth · tenant · station · push · subscription
 └── utils/tenant.ts   # strip do prefixo de tenant da URL
 ```
