@@ -9,10 +9,12 @@ import {
   ViewStyle,
 } from "react-native"
 import { useRouter, useFocusEffect, Link } from "expo-router"
+import { useQuery } from "@tanstack/react-query"
 
 import { Screen } from "@/components/Screen"
 import { Text } from "@/components/Text"
 import { StationCard } from "@/components/StationCard"
+import { orpc } from "@/lib/orpc"
 
 import { useNearbyStations } from "@/hooks/useNearbyStations"
 import { usePreferredFuel } from "@/hooks/usePreferredFuel"
@@ -47,6 +49,9 @@ export const HomeScreen: FC = function HomeScreen() {
     sortBy,
   )
 
+  const { data: unread } = useQuery(orpc.user.getUnreadNotificationCount.queryOptions())
+  const unreadCount = unread?.count ?? 0
+
   useFocusEffect(
     useCallback(() => {
       refreshFuel()
@@ -61,7 +66,36 @@ export const HomeScreen: FC = function HomeScreen() {
   return (
     <Screen preset="fixed" contentContainerStyle={$styles.flex1} safeAreaEdges={[]}>
       <View style={themed([$header, $topInsets])}>
-        <Text preset="heading" text={`Olá, ${data?.user?.name ?? "Usuário"}`} />
+        <View style={themed($headerTopRow)}>
+          <Text
+            preset="heading"
+            text={`Olá, ${data?.user?.name ?? "Usuário"}`}
+            style={$headingText}
+            numberOfLines={1}
+          />
+
+          <Pressable
+            onPress={() => router.push("/(app)/notifications")}
+            accessibilityRole="button"
+            accessibilityLabel={
+              unreadCount > 0 ? `Notificações, ${unreadCount} não lidas` : "Notificações"
+            }
+            hitSlop={8}
+            style={themed($bellButton)}
+          >
+            <Icon icon="bell" size={24} color={theme.colors.text} />
+            {unreadCount > 0 && (
+              <View style={themed($badge)}>
+                <Text
+                  size="xxs"
+                  weight="bold"
+                  style={themed($badgeText)}
+                  text={unreadCount > 99 ? "99+" : String(unreadCount)}
+                />
+              </View>
+            )}
+          </Pressable>
+        </View>
 
         <View style={themed($locationRow)}>
           {locationLoading ? (
@@ -130,6 +164,38 @@ export const HomeScreen: FC = function HomeScreen() {
 const $header: ThemedStyle<ViewStyle> = ({ spacing }) => ({
   paddingHorizontal: spacing.lg,
   paddingBottom: spacing.sm,
+})
+
+const $headerTopRow: ThemedStyle<ViewStyle> = () => ({
+  flexDirection: "row",
+  alignItems: "center",
+  justifyContent: "space-between",
+})
+
+const $headingText: TextStyle = {
+  flexShrink: 1,
+}
+
+const $bellButton: ThemedStyle<ViewStyle> = ({ spacing }) => ({
+  padding: spacing.xxs,
+})
+
+const $badge: ThemedStyle<ViewStyle> = ({ colors }) => ({
+  position: "absolute",
+  top: -2,
+  right: -4,
+  minWidth: 16,
+  height: 16,
+  borderRadius: 8,
+  paddingHorizontal: 3,
+  alignItems: "center",
+  justifyContent: "center",
+  backgroundColor: colors.error,
+})
+
+const $badgeText: ThemedStyle<TextStyle> = ({ colors }) => ({
+  color: colors.palette.neutral100,
+  lineHeight: 14,
 })
 
 const $locationRow: ThemedStyle<ViewStyle> = ({ spacing }) => ({
