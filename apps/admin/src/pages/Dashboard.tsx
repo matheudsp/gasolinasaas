@@ -16,14 +16,14 @@ import { Building2, Fuel, Phone } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 
 export default function Dashboard() {
-  const { user, membership } = useAuth();
+  const { user, activeTenant } = useAuth();
 
   const { data: stations = [], isLoading: stationsLoading } = useQuery(
-    orpc.station.search.queryOptions({ input: {}, enabled: !!membership }),
+    orpc.station.search.queryOptions({ input: {}, enabled: !!activeTenant }),
   );
 
   const { data: prices = [], isLoading: pricesLoading } = useQuery(
-    orpc.fuel.listPrices.queryOptions({ input: {}, enabled: !!membership }),
+    orpc.fuel.listPrices.queryOptions({ input: {}, enabled: !!activeTenant }),
   );
 
   const isLoading = stationsLoading || pricesLoading;
@@ -51,8 +51,7 @@ export default function Dashboard() {
             Olá, {user?.name}
           </h1>
           <p className="text-muted-foreground text-xs">
-            tenantId:
-            {membership?.tenant.name}
+            {activeTenant?.name}
           </p>
         </div>
       </div>

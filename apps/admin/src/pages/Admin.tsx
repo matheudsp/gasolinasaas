@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
@@ -9,6 +10,7 @@ import {
   DollarSign,
   FileText,
   History,
+  LayoutDashboard,
   MoreHorizontal,
   Pencil,
   Plus,
@@ -20,6 +22,7 @@ import {
   XCircle,
 } from "lucide-react";
 import { orpc } from "@/lib/orpc";
+import { useAuth } from "@/context/AuthContext";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -134,6 +137,8 @@ export default function AdminPage() {
 // ── TenantsTab ────────────────────────────────────────────────────────────────
 function TenantsTab() {
   const qc = useQueryClient();
+  const navigate = useNavigate();
+  const { selectTenant } = useAuth();
   const [createOpen, setCreateOpen] = useState(false);
   const [editRow, setEditRow] = useState<{ id: string; name: string } | null>(
     null,
@@ -249,6 +254,16 @@ function TenantsTab() {
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
+                        <DropdownMenuItem
+                          onClick={() => {
+                            selectTenant({ id: t.id, name: t.name });
+                            navigate("/dashboard");
+                          }}
+                        >
+                          <LayoutDashboard className="mr-2 h-4 w-4" />
+                          Gerenciar rede
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
                         <DropdownMenuItem
                           onClick={() => setEditRow({ id: t.id, name: t.name })}
                         >

@@ -70,11 +70,11 @@ const statusMap: Record<
 
 export default function PushNotificationsPage() {
   const qc = useQueryClient();
-  const { membership } = useAuth();
+  const { activeTenant } = useAuth();
 
-  // Aguarda o membership estar disponível antes de disparar as queries,
-  // assim o activeTenantId já está setado no cliente ORPC.
-  const enabled = !!membership?.tenantId;
+  // Aguarda o tenant ativo (membership do owner ou rede selecionada pelo
+  // admin) antes de disparar as queries, assim o x-tenant-id já vai no header.
+  const enabled = !!activeTenant;
 
   // Form state
   const [title, setTitle] = useState("");

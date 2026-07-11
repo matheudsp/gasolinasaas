@@ -62,20 +62,20 @@ export default function StationDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const { membership } = useAuth();
+  const { activeTenant } = useAuth();
 
 
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editValue, setEditValue] = useState("");
 
   const { data: stations = [], isLoading: stationsLoading } = useQuery(
-    orpc.station.search.queryOptions({ input: {}, enabled: !!membership }),
+    orpc.station.search.queryOptions({ input: {}, enabled: !!activeTenant }),
   );
 
   const { data: prices = [], isLoading: pricesLoading } = useQuery(
     orpc.fuel.listPrices.queryOptions({
       input: { stationId: id },
-      enabled: !!membership && !!id,
+      enabled: !!activeTenant && !!id,
     }),
   );
 

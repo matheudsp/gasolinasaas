@@ -1,14 +1,16 @@
 import { Outlet, Link, useNavigate, useLocation } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/context/AuthContext";
+import { orpc } from "@/lib/orpc";
 import {
   LayoutDashboard,
   Bell,
-  CreditCard,
   LogOut,
   User,
   Menu,
   X,
   TowerControl,
+  Building2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -19,20 +21,84 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useState } from "react";
 
-const navItems = [
-  { to: "/dashboard", label: "Painel", icon: LayoutDashboard },
-  { to: "/push-notifications", label: "Notificações", icon: Bell },
-  { to: "/minha-assinatura", label: "Minha Assinatura", icon: CreditCard },
-  { to: "/admin", label: "Admin", icon: TowerControl, adminOnly: true },
-];
+const NO_TENANT = "__none__";
+
+/**
+ * Seletor de rede do admin da plataforma: escolhe em qual tenant as
+ * páginas de gestão (Painel, Notificações) vão operar. Owners não veem
+ * isso — o tenant deles é fixo.
+ */
+function TenantSwitcher() {
+  const { activeTenant, selectTenant } = useAuth();
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  const { data: tenants = [] } = useQuery(
+    orpc.admin.tenant.list.queryOptions({ input: {} }),
+  );
+
+  return (
+    <Select
+      value={activeTenant?.id ?? NO_TENANT}
+      onValueChange={(value) => {
+        if (value === NO_TENANT) {
+          selectTenant(null);
+          navigate("/admin");
+          return;
+        }
+        const tenant = tenants.find((t) => t.id === value);
+        if (!tenant) return;
+        selectTenant({ id: tenant.id, name: tenant.name });
+        // Se estava no /admin, entra direto no painel da rede escolhida.
+        if (location.pathname === "/admin") navigate("/dashboard");
+      }}
+    >
+      <SelectTrigger className="h-8 w-44 gap-1.5">
+        <Building2 className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+        <SelectValue placeholder="Escolher rede" />
+      </SelectTrigger>
+      <SelectContent>
+        <SelectItem value={NO_TENANT}>
+          <span className="text-muted-foreground">Nenhuma rede</span>
+        </SelectItem>
+        {tenants.map((t) => (
+          <SelectItem key={t.id} value={t.id}>
+            {t.name}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
+}
 
 export function Layout() {
-  const { user, signOut, isAdmin } = useAuth();
+  const { user, signOut, isAdmin, activeTenant } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [mobileOpen, setMobileOpen] = useState(false);
+
+  // Páginas de gestão de rede só aparecem com um tenant ativo — sempre
+  // verdadeiro para owners, e para admins depois de escolher uma rede.
+  const navItems = [
+    ...(activeTenant
+      ? [
+          { to: "/dashboard", label: "Painel", icon: LayoutDashboard },
+          { to: "/push-notifications", label: "Notificações", icon: Bell },
+        ]
+      : []),
+    ...(isAdmin ? [{ to: "/admin", label: "Admin", icon: TowerControl }] : []),
+  ];
+
+  const home = isAdmin && !activeTenant ? "/admin" : "/dashboard";
 
   const initials =
     user?.name
@@ -45,19 +111,31 @@ export function Layout() {
   return (
     <div className="flex min-h-screen flex-col bg-background text-foreground">
       <header className="sticky top-0 z-50 flex h-16 items-center justify-between border-b border-border bg-background/95 px-4 backdrop-blur supports-[backdrop-filter]:bg-background/60 sm:px-6">
-        <Link
-          to="/dashboard"
-          className="flex items-center gap-2 font-bold tracking-tight text-lg transition-opacity hover:opacity-90"
-        >
-          <span className="hidden sm:inline">
-            Gasolina - Painel Administrativo
-          </span>
-        </Link>
+        <div className="flex items-center gap-3">
+          <Link
+            to={home}
+            className="flex items-center gap-2 font-bold tracking-tight text-lg transition-opacity hover:opacity-90"
+          >
+            <span className="hidden sm:inline">
+              Gasolina - Painel Administrativo
+            </span>
+          </Link>
+          {!isAdmin && activeTenant && (
+            <span className="hidden rounded-md border border-border px-2 py-0.5 text-xs font-medium text-muted-foreground lg:inline">
+              {activeTenant.name}
+            </span>
+          )}
+        </div>
 
         <nav className="flex items-center gap-2">
+          {isAdmin && (
+            <div className="hidden md:block">
+              <TenantSwitcher />
+            </div>
+          )}
+
           <div className="hidden md:flex md:items-center md:gap-1">
             {navItems.map((item) => {
-              if (item.adminOnly && !isAdmin) return null;
               const Icon = item.icon;
               const isActive = location.pathname === item.to;
               return (
@@ -134,8 +212,12 @@ export function Layout() {
       {mobileOpen && (
         <div className="border-b border-border bg-card text-card-foreground md:hidden transition-all">
           <nav className="flex flex-col p-3 gap-1">
+            {isAdmin && (
+              <div className="px-1 pb-2">
+                <TenantSwitcher />
+              </div>
+            )}
             {navItems.map((item) => {
-              if (item.adminOnly && !isAdmin) return null;
               const Icon = item.icon;
               const isActive = location.pathname === item.to;
               return (
