@@ -34,6 +34,7 @@ app.use("/api/auth/*", async (c, next) => executionCtxStorage.run(c.executionCtx
 // Better Auth handler
 app.on(["POST", "GET"], "/api/auth/*", (c) => auth.handler(c.req.raw));
 
+
 // CORS for API and RPC endpoints
 app.use("/rpc/*", apiCorsMiddleware);
 app.use("/api/*", apiCorsMiddleware);

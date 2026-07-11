@@ -70,6 +70,7 @@ export function renderEmailHtml({
         </p>`
       : "";
 
+      
   return `<!DOCTYPE html>
 <html lang="pt-BR">
   <body style="margin:0; padding:0; background-color:${BG}; font-family: Arial, Helvetica, sans-serif;">

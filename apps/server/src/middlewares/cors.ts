@@ -17,6 +17,8 @@ export const authCorsMiddleware: MiddlewareHandler = (c, next) => {
       "Cookie",
       // Clientes web mandam o tenant também nas rotas de auth, para
       // brandear os e-mails transacionais (ver lib/auth.ts).
+
+      
       "x-tenant-id",
       "x-tenant-slug",
     ],
