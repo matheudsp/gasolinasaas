@@ -6,7 +6,7 @@ import {
   type ReactNode,
 } from "react";
 import { authClient } from "@/lib/auth-client";
-import { client, setActiveTenant } from "@/lib/orpc";
+import { client, queryClient, setActiveTenant } from "@/lib/orpc";
 
 type Session = typeof authClient.$Infer.Session;
 type User = typeof authClient.$Infer.Session.user;
@@ -118,6 +118,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } else {
       localStorage.removeItem(ADMIN_TENANT_STORAGE_KEY);
     }
+    // As queryKeys não incluem o tenant (ele viaja no header x-tenant-id),
+    // então tudo que está em cache pertence à rede anterior — descarta para
+    // as telas montadas refazerem as buscas contra a rede recém-selecionada.
+    queryClient.removeQueries();
   };
 
   const signIn = async (
@@ -162,6 +166,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setAdminTenant(null);
     setActiveTenant(undefined);
     localStorage.removeItem(ADMIN_TENANT_STORAGE_KEY);
+    // Não deixa dados do tenant anterior vazarem para o próximo login.
+    queryClient.removeQueries();
   };
 
   return (

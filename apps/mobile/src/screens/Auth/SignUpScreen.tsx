@@ -77,7 +77,7 @@ export function SignUpScreen() {
           }}
         >
           <Text preset="heading" text="Criar conta" />
-          <Link href=".." asChild>
+          <Link href="/(auth)/sign-in" dismissTo asChild>
             <Button preset="ghost" accessibilityRole="button" accessibilityLabel="Fechar">
               <Icon icon="x" size={24} color={theme.colors.tint} />
             </Button>

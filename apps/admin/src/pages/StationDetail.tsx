@@ -9,8 +9,23 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Separator } from "@/components/ui/separator";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   Table,
   TableBody,
@@ -23,7 +38,9 @@ import {
   ArrowLeft,
   MapPin,
   Pencil,
+  Plus,
   Check,
+  Trash2,
   X,
   Fuel,
   Wifi,
@@ -64,9 +81,15 @@ export default function StationDetail() {
   const queryClient = useQueryClient();
   const { activeTenant } = useAuth();
 
-
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editValue, setEditValue] = useState("");
+  const [addOpen, setAddOpen] = useState(false);
+  const [addFuelId, setAddFuelId] = useState("");
+  const [addPrice, setAddPrice] = useState("");
+  const [removeTarget, setRemoveTarget] = useState<{
+    stationFuelId: string;
+    fuelName: string;
+  } | null>(null);
 
   const { data: stations = [], isLoading: stationsLoading } = useQuery(
     orpc.station.search.queryOptions({ input: {}, enabled: !!activeTenant }),
@@ -79,8 +102,55 @@ export default function StationDetail() {
     }),
   );
 
+  const { data: fuelCatalog = [] } = useQuery(
+    orpc.fuel.listCatalog.queryOptions({
+      input: {},
+      enabled: !!activeTenant,
+    }),
+  );
+
   const { mutate: updatePrice, isPending: isUpdating } = useMutation(
     orpc.fuel.updatePrice.mutationOptions(),
+  );
+
+  const invalidatePrices = () => {
+    queryClient.invalidateQueries({
+      queryKey: orpc.fuel.listPrices.queryOptions({
+        input: { stationId: id },
+      }).queryKey,
+    });
+    queryClient.invalidateQueries({
+      queryKey: orpc.fuel.listPrices.queryOptions({ input: {} }).queryKey,
+    });
+  };
+
+  const addFuelMutation = useMutation({
+    ...orpc.fuel.addToStation.mutationOptions(),
+    onSuccess: () => {
+      toast.success("Combustível adicionado!");
+      setAddOpen(false);
+      setAddFuelId("");
+      setAddPrice("");
+      invalidatePrices();
+    },
+    onError: (e: Error) =>
+      toast.error(`Erro ao adicionar combustível: ${e.message}`),
+  });
+
+  const removeFuelMutation = useMutation({
+    ...orpc.fuel.removeFromStation.mutationOptions(),
+    onSuccess: () => {
+      toast.success("Combustível removido.");
+      setRemoveTarget(null);
+      invalidatePrices();
+    },
+    onError: (e: Error) =>
+      toast.error(`Erro ao remover combustível: ${e.message}`),
+  });
+
+  // Só oferece no select o que o posto ainda não tem
+  const availableFuels = fuelCatalog.filter(
+    (f) => !prices.some((p) => p.fuelId === f.id),
   );
 
   const station = stations.find((s) => s.id === id);
@@ -179,9 +249,15 @@ export default function StationDetail() {
       <Separator />
 
       <div className="space-y-4">
-        <div className="flex items-center gap-2">
-          <Fuel className="h-5 w-5 text-muted-foreground" />
-          <h2 className="text-lg font-semibold">Fuel Prices</h2>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Fuel className="h-5 w-5 text-muted-foreground" />
+            <h2 className="text-lg font-semibold">Combustíveis e preços</h2>
+          </div>
+          <Button size="sm" onClick={() => setAddOpen(true)}>
+            <Plus className="mr-1.5 h-4 w-4" />
+            Adicionar combustível
+          </Button>
         </div>
 
         <Card className="overflow-hidden">
@@ -218,7 +294,8 @@ export default function StationDetail() {
                     colSpan={4}
                     className="py-10 text-center text-muted-foreground"
                   >
-                    No fuel types configured for this station.
+                    Nenhum combustível configurado para este posto. Use
+                    &quot;Adicionar combustível&quot; acima.
                   </TableCell>
                 </TableRow>
               ) : (
@@ -277,17 +354,32 @@ export default function StationDetail() {
                           </Button>
                         </div>
                       ) : (
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          className="h-8"
-                          onClick={() =>
-                            startEdit(price.stationFuelId, price.currentPrice)
-                          }
-                        >
-                          <Pencil className="mr-1.5 h-3.5 w-3.5" />
-                          Edit
-                        </Button>
+                        <div className="flex items-center gap-1">
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-8"
+                            onClick={() =>
+                              startEdit(price.stationFuelId, price.currentPrice)
+                            }
+                          >
+                            <Pencil className="mr-1.5 h-3.5 w-3.5" />
+                            Editar
+                          </Button>
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="h-8 w-8 text-destructive hover:text-destructive"
+                            onClick={() =>
+                              setRemoveTarget({
+                                stationFuelId: price.stationFuelId,
+                                fuelName: price.fuelName,
+                              })
+                            }
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
                       )}
                     </TableCell>
                   </TableRow>
@@ -297,6 +389,109 @@ export default function StationDetail() {
           </Table>
         </Card>
       </div>
+
+      {/* Adicionar combustível */}
+      <Dialog open={addOpen} onOpenChange={setAddOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Adicionar combustível</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-1.5">
+              <Label>Combustível *</Label>
+              <Select value={addFuelId} onValueChange={setAddFuelId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione um combustível" />
+                </SelectTrigger>
+                <SelectContent>
+                  {availableFuels.length === 0 ? (
+                    <div className="px-3 py-2 text-sm text-muted-foreground">
+                      Todos os combustíveis do catálogo já estão neste posto.
+                    </div>
+                  ) : (
+                    availableFuels.map((f) => (
+                      <SelectItem key={f.id} value={f.id}>
+                        {f.name}
+                      </SelectItem>
+                    ))
+                  )}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Preço (R$) *</Label>
+              <Input
+                className="font-mono"
+                value={addPrice}
+                onChange={(e) => setAddPrice(e.target.value)}
+                placeholder="5.999"
+              />
+              <p className="text-xs text-muted-foreground">
+                Use ponto como separador, até 3 casas decimais.
+              </p>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAddOpen(false)}>
+              Cancelar
+            </Button>
+            <Button
+              disabled={
+                !addFuelId ||
+                !PRICE_REGEX.test(addPrice) ||
+                addFuelMutation.isPending
+              }
+              onClick={() =>
+                id &&
+                addFuelMutation.mutate({
+                  stationId: id,
+                  fuelId: addFuelId,
+                  price: addPrice,
+                })
+              }
+            >
+              {addFuelMutation.isPending ? "Adicionando..." : "Adicionar"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Remover combustível */}
+      <Dialog
+        open={!!removeTarget}
+        onOpenChange={(open) => !open && setRemoveTarget(null)}
+      >
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Remover combustível</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            Remover{" "}
+            <span className="font-medium text-foreground">
+              {removeTarget?.fuelName}
+            </span>{" "}
+            deste posto? O histórico de preços é preservado e o combustível pode
+            ser adicionado novamente depois.
+          </p>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setRemoveTarget(null)}>
+              Cancelar
+            </Button>
+            <Button
+              variant="destructive"
+              disabled={removeFuelMutation.isPending}
+              onClick={() =>
+                removeTarget &&
+                removeFuelMutation.mutate({
+                  stationFuelId: removeTarget.stationFuelId,
+                })
+              }
+            >
+              {removeFuelMutation.isPending ? "Removendo..." : "Remover"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
