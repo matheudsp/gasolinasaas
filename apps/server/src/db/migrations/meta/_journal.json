@@ -50,6 +50,27 @@
       "when": 1783172083238,
       "tag": "0006_happy_lizard",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1783832897777,
+      "tag": "0007_long_korg",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1783865115337,
+      "tag": "0008_talented_silverclaw",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1783871817671,
+      "tag": "0009_small_firebird",
+      "breakpoints": true
     }
   ]
 }

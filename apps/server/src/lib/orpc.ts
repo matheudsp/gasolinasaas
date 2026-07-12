@@ -58,6 +58,28 @@ const requireOwnerAccess = o.middleware(({ context, next }) => {
   });
 });
 
+// Operador do tenant: owner OU operator (frentista). Padrão para o fluxo de
+// crédito de pontos no caixa — o owner também consegue operar.
+const requireOperatorAccess = o.middleware(({ context, next }) => {
+  if (!context.tenant) {
+    throw new ORPCError("BAD_REQUEST", { message: "Tenant is required" });
+  }
+
+  const role = context.tenantMembership?.role;
+  const isOperator = role === "owner" || role === "operator";
+
+  if (!isOperator && !isPlatformAdmin(context)) {
+    throw new ORPCError("FORBIDDEN");
+  }
+
+  return next({
+    context: {
+      db: context.db,
+      tenant: context.tenant,
+    },
+  });
+});
+
 const requireAdmin = o.middleware(({ context, next }) => {
   if (!context.session?.user) {
     throw new ORPCError("UNAUTHORIZED");
@@ -79,4 +101,6 @@ const requireAdmin = o.middleware(({ context, next }) => {
 export const protectedProcedure = publicProcedure.use(requireAuth);
 export const tenantProcedure = protectedProcedure.use(requireTenantAccess);
 export const tenantOwnerProcedure = protectedProcedure.use(requireOwnerAccess);
+export const tenantOperatorProcedure =
+  protectedProcedure.use(requireOperatorAccess);
 export const adminProcedure = protectedProcedure.use(requireAdmin);
