@@ -12,8 +12,6 @@ import SubscriptionDetail from "./pages/SubscriptionDetail";
 import MySubscription from "./pages/MySubscription";
 import PushNotifications from "./pages/PushNotifications";
 import Loyalty from "./pages/Loyalty";
-import Rewards from "./pages/Rewards";
-import Config from "./pages/Config";
 import ForgotPassword from "./pages/ForgotPassword";
 import ResetPassword from "./pages/ResetPassword";
 import OnPasswordReset from "./pages/OnPasswordReset";
@@ -40,8 +38,6 @@ export default function App() {
         <Route path="/stations/:id" element={<StationDetail />} />
         <Route path="/push-notifications" element={<PushNotifications />} />
         <Route path="/fidelidade" element={<Loyalty />} />
-        <Route path="/recompensas" element={<Rewards />} />
-        <Route path="/config" element={<Config />} />
         <Route path="/minha-assinatura" element={<MySubscription />} />
       </Route>
       <Route

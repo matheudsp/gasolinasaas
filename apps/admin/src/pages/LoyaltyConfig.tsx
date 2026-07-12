@@ -31,7 +31,7 @@ function fmtDate(d: Date | string | null | undefined) {
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 
-export default function ConfigPage() {
+export function LoyaltyConfig() {
   const qc = useQueryClient();
   const { activeTenant } = useAuth();
   const enabled = !!activeTenant;
@@ -103,14 +103,7 @@ export default function ConfigPage() {
   };
 
   return (
-    <div className="space-y-8">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">Configurações</h1>
-        <p className="text-muted-foreground text-sm">
-          Regras do programa de fidelidade e quem pode creditar pontos no caixa.
-        </p>
-      </div>
-
+    <div className="space-y-6">
       {/* ── Multiplicador ───────────────────────────────────────────────── */}
       <Card>
         <CardHeader>

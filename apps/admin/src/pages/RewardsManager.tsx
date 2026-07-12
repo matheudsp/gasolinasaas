@@ -76,7 +76,7 @@ async function uploadImage(rewardId: string, image: File) {
   }
 }
 
-export default function RewardsPage() {
+export function RewardsManager() {
   const qc = useQueryClient();
   const { activeTenant } = useAuth();
   const enabled = !!activeTenant;
@@ -187,14 +187,11 @@ export default function RewardsPage() {
   }
 
   return (
-    <div className="space-y-8">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Recompensas</h1>
-          <p className="text-muted-foreground text-sm">
-            O catálogo que os clientes resgatam com pontos.
-          </p>
-        </div>
+    <div className="space-y-6">
+      <div className="flex items-center justify-between gap-4">
+        <p className="text-muted-foreground text-sm">
+          O catálogo que os clientes resgatam com pontos.
+        </p>
         <Button onClick={openCreate} className="gap-2" disabled={!enabled}>
           <Plus className="h-4 w-4" />
           Nova recompensa
