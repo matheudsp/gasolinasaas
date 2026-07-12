@@ -110,6 +110,10 @@ export function MyAccountScreen() {
 
   const { notifEnabled, refresh: refreshNotif } = useNotificationSettings()
 
+  const { data: balanceData } = useQuery(orpc.loyalty.myBalance.queryOptions())
+  const { data: roleData } = useQuery(orpc.loyalty.myRole.queryOptions())
+  const isOperator = roleData?.role === "owner" || roleData?.role === "operator"
+
   useFocusEffect(
     useCallback(() => {
       refreshFuel()
@@ -190,6 +194,28 @@ export function MyAccountScreen() {
           label="Notificações"
           value={notifEnabled ? "Ativadas" : "Desativadas"}
         />
+      </View>
+
+      <View style={themed($divider)} />
+
+      <View style={themed($section)}>
+        <SectionHeader title="Fidelidade" icon="star-outline" />
+
+        <PreferenceRow
+          href="/(app)/loyalty"
+          icon="wallet-giftcard"
+          label="Meus pontos"
+          value={`${balanceData?.balance ?? 0} pontos`}
+        />
+
+        {isOperator && (
+          <PreferenceRow
+            href="/(app)/operator"
+            icon="qrcode-scan"
+            label="Modo operador"
+            value="Creditar pontos no caixa"
+          />
+        )}
       </View>
 
       <View style={themed($divider)} />

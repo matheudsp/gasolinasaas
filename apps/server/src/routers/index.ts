@@ -7,6 +7,7 @@ import { tenantRouter } from "./tenant";
 import { adminRouter } from "./admin";
 import { pushRouter } from "./push";
 import { userRouter } from "./users";
+import { loyaltyRouter } from "./loyalty";
 
 export const appRouter = {
   healthCheck: publicProcedure.handler(() => "OK"),
@@ -17,6 +18,7 @@ export const appRouter = {
   subscription: subscriptionRouter,
   push: pushRouter,
   user: userRouter,
+  loyalty: loyaltyRouter,
 };
 
 export type AppRouter = typeof appRouter;

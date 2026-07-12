@@ -16,6 +16,12 @@
 	// pnpm run secrets:setup
 	// or: wrangler secret put SECRET_NAME
 	// Don't add secrets to "vars" - they're visible in the dashboard!
+	"r2_buckets": [
+		{
+			"binding": "REWARD_IMAGES",
+			"bucket_name": "gasolina-reward-images"
+		}
+	],
 	"routes": [
 		{
 			"pattern": "api.gasolina.cloud",

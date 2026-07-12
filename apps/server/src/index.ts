@@ -5,17 +5,14 @@ import { rpcHandler } from "./handlers/rpc";
 import { auth } from "./lib/auth";
 import { createContext } from "./lib/context";
 import { executionCtxStorage } from "./lib/execution-context";
+import type { AppEnv } from "./lib/hono-env";
 import { apiCorsMiddleware, authCorsMiddleware } from "./middlewares/cors";
 import { errorHandler } from "./middlewares/error";
 import { sessionMiddleware } from "./middlewares/session";
+import { rewardImageRoutes } from "./routes/reward-image";
 import { stripTenantPrefixFromRequest } from "./utils/tenant";
 
-const app = new Hono<{
-  Variables: {
-    user: typeof auth.$Infer.Session.user | null;
-    session: typeof auth.$Infer.Session.session | null;
-  };
-}>();
+const app = new Hono<AppEnv>();
 
 // Global error handler
 app.onError(errorHandler);
@@ -38,6 +35,10 @@ app.on(["POST", "GET"], "/api/auth/*", (c) => auth.handler(c.req.raw));
 // CORS for API and RPC endpoints
 app.use("/rpc/*", apiCorsMiddleware);
 app.use("/api/*", apiCorsMiddleware);
+
+// Fotos de recompensa (R2): upload e serviço. Antes do catch-all oRPC para
+// terem precedência sobre os handlers RPC/API.
+app.route("/", rewardImageRoutes);
 
 // RPC and API handler
 app.use("/*", async (c, next) => {

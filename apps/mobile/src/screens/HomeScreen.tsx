@@ -27,6 +27,7 @@ import { $styles } from "@/theme/styles"
 import { useSafeAreaInsetsStyle } from "@/utils/useSafeAreaInsetsStyle"
 import { useAppTheme } from "@/theme/context"
 import { Icon } from "@/components/Icon"
+import { MaterialDesignIcons } from "@react-native-vector-icons/material-design-icons"
 
 export const HomeScreen: FC = function HomeScreen() {
   const { themed, theme } = useAppTheme()
@@ -74,27 +75,43 @@ export const HomeScreen: FC = function HomeScreen() {
             numberOfLines={1}
           />
 
-          <Pressable
-            onPress={() => router.push("/(app)/notifications")}
-            accessibilityRole="button"
-            accessibilityLabel={
-              unreadCount > 0 ? `Notificações, ${unreadCount} não lidas` : "Notificações"
-            }
-            hitSlop={8}
-            style={themed($bellButton)}
-          >
-            <Icon icon="bell" size={24} color={theme.colors.text} />
-            {unreadCount > 0 && (
-              <View style={themed($badge)}>
-                <Text
-                  size="xxs"
-                  weight="bold"
-                  style={themed($badgeText)}
-                  text={unreadCount > 99 ? "99+" : String(unreadCount)}
-                />
-              </View>
-            )}
-          </Pressable>
+          <View style={themed($headerActions)}>
+            <Pressable
+              onPress={() => router.push("/(app)/loyalty")}
+              accessibilityRole="button"
+              accessibilityLabel="Meus pontos"
+              hitSlop={8}
+              style={themed($iconButton)}
+            >
+              <MaterialDesignIcons
+                name="wallet-giftcard"
+                size={24}
+                color={theme.colors.text}
+              />
+            </Pressable>
+
+            <Pressable
+              onPress={() => router.push("/(app)/notifications")}
+              accessibilityRole="button"
+              accessibilityLabel={
+                unreadCount > 0 ? `Notificações, ${unreadCount} não lidas` : "Notificações"
+              }
+              hitSlop={8}
+              style={themed($iconButton)}
+            >
+              <Icon icon="bell" size={24} color={theme.colors.text} />
+              {unreadCount > 0 && (
+                <View style={themed($badge)}>
+                  <Text
+                    size="xxs"
+                    weight="bold"
+                    style={themed($badgeText)}
+                    text={unreadCount > 99 ? "99+" : String(unreadCount)}
+                  />
+                </View>
+              )}
+            </Pressable>
+          </View>
         </View>
 
         <View style={themed($locationRow)}>
@@ -176,7 +193,13 @@ const $headingText: TextStyle = {
   flexShrink: 1,
 }
 
-const $bellButton: ThemedStyle<ViewStyle> = ({ spacing }) => ({
+const $headerActions: ThemedStyle<ViewStyle> = ({ spacing }) => ({
+  flexDirection: "row",
+  alignItems: "center",
+  gap: spacing.xs,
+})
+
+const $iconButton: ThemedStyle<ViewStyle> = ({ spacing }) => ({
   padding: spacing.xxs,
 })
 

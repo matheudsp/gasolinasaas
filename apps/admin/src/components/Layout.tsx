@@ -12,6 +12,9 @@ import {
   X,
   TowerControl,
   Building2,
+  Star,
+  Settings,
+  Gift,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -94,6 +97,9 @@ export function Layout() {
       ? [
           { to: "/dashboard", label: "Painel", icon: LayoutDashboard },
           { to: "/push-notifications", label: "Notificações", icon: Bell },
+          { to: "/fidelidade", label: "Fidelidade", icon: Star },
+          { to: "/recompensas", label: "Recompensas", icon: Gift },
+          { to: "/config", label: "Configurações", icon: Settings },
         ]
       : []),
     // Owner acompanha a própria assinatura; admin gerencia todas em
