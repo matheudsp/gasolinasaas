@@ -9,10 +9,15 @@
     "baseUrl": "./",
     "ignoreDeprecations": "6.0",
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": [
+        "./src/*"
+      ]
     },
     "outDir": "./dist",
-    "types": ["./worker-configuration.d.ts", "node"],
+    "types": [
+      "./worker-configuration.d.ts",
+      "node"
+    ],
     "composite": true,
     "jsx": "react-jsx",
     "jsxImportSource": "hono/jsx"
