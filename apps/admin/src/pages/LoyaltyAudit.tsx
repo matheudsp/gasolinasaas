@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { Coins, Trophy, UserCheck, Users } from "lucide-react";
+import { Coins, History, Trophy, UserCheck, Users } from "lucide-react";
 import { orpc } from "@/lib/orpc";
 import { useAuth } from "@/context/AuthContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -14,6 +14,17 @@ import {
 import { Spinner } from "@/components/ui/spinner";
 
 const RANK_LIMIT = 20;
+
+function fmtDateTime(d: Date | string | null) {
+  if (!d) return "—";
+  return new Date(d).toLocaleString("pt-BR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
 
 function Stat({
   icon,
@@ -55,6 +66,13 @@ export function LoyaltyAudit() {
   const { data: operators = [], isLoading: loadingOperators } = useQuery(
     orpc.loyalty.topOperators.queryOptions({
       input: { limit: RANK_LIMIT },
+      enabled,
+    }),
+  );
+
+  const { data: redemptions = [], isLoading: loadingRedemptions } = useQuery(
+    orpc.loyalty.listRedemptions.queryOptions({
+      input: { limit: 50 },
       enabled,
     }),
   );
@@ -180,6 +198,74 @@ export function LoyaltyAudit() {
                 ))}
               </TableBody>
             </Table>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* ── Histórico de resgates ───────────────────────────────────────── */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <History className="h-4 w-4" />
+            Histórico de resgates
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {loadingRedemptions ? (
+            <div className="flex justify-center py-8">
+              <Spinner className="size-6" />
+            </div>
+          ) : redemptions.length === 0 ? (
+            <p className="py-8 text-center text-sm text-muted-foreground">
+              Nenhum resgate concluído ainda.
+            </p>
+          ) : (
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Data</TableHead>
+                    <TableHead>Cliente</TableHead>
+                    <TableHead>Recompensa</TableHead>
+                    <TableHead className="text-right">Pontos</TableHead>
+                    <TableHead>Operador</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {redemptions.map((rd) => (
+                    <TableRow key={rd.id}>
+                      <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
+                        {fmtDateTime(rd.fulfilledAt)}
+                      </TableCell>
+                      <TableCell>
+                        <div className="font-medium">{rd.customerName ?? "—"}</div>
+                        <div className="text-xs text-muted-foreground">
+                          {rd.customerEmail}
+                        </div>
+                      </TableCell>
+                      <TableCell className="font-medium">
+                        {rd.rewardName}
+                      </TableCell>
+                      <TableCell className="text-right font-semibold tabular-nums whitespace-nowrap">
+                        −{rd.costPoints.toLocaleString("pt-BR")}
+                      </TableCell>
+                      <TableCell>
+                        {rd.operatorName ? (
+                          <>
+                            <div className="text-sm">{rd.operatorName}</div>
+                            <div className="text-xs text-muted-foreground">
+                              {rd.operatorEmail}
+                            </div>
+                          </>
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
           )}
         </CardContent>
       </Card>

@@ -1,5 +1,6 @@
 import { ORPCError } from "@orpc/server";
 import { and, desc, eq, gt, sql } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 import { z } from "zod";
 
 import { user } from "../db/schema/auth";
@@ -369,6 +370,41 @@ export const loyaltyRouter = {
         .where(eq(loyaltyTransaction.tenantId, context.tenant.id))
         .groupBy(loyaltyTransaction.operatorUserId, user.name, user.email)
         .orderBy(desc(sql`sum(${loyaltyTransaction.points})`))
+        .limit(input.limit);
+    }),
+
+  /**
+   * Histórico de resgates concluídos — trilha de auditoria: quem resgatou,
+   * qual recompensa, quantos pontos e qual operador confirmou a entrega.
+   */
+  listRedemptions: tenantOwnerProcedure
+    .input(z.object({ limit: z.number().int().min(1).max(200).default(50) }))
+    .handler(async ({ context, input }) => {
+      const operator = alias(user, "operator");
+
+      return context.db
+        .select({
+          id: rewardRedemption.id,
+          rewardName: reward.name,
+          costPoints: rewardRedemption.costPoints,
+          customerName: user.name,
+          customerEmail: user.email,
+          operatorName: operator.name,
+          operatorEmail: operator.email,
+          fulfilledAt: rewardRedemption.fulfilledAt,
+          createdAt: rewardRedemption.createdAt,
+        })
+        .from(rewardRedemption)
+        .innerJoin(reward, eq(rewardRedemption.rewardId, reward.id))
+        .innerJoin(user, eq(rewardRedemption.userId, user.id))
+        .leftJoin(operator, eq(rewardRedemption.operatorUserId, operator.id))
+        .where(
+          and(
+            eq(rewardRedemption.tenantId, context.tenant.id),
+            eq(rewardRedemption.status, "fulfilled"),
+          ),
+        )
+        .orderBy(desc(rewardRedemption.fulfilledAt))
         .limit(input.limit);
     }),
 
