@@ -416,6 +416,41 @@ export const loyaltyRouter = {
         .limit(input.limit);
     }),
 
+  /**
+   * Transações de crédito feitas por um operador — o detalhe por trás do
+   * ranking. Cada linha é um crédito no caixa: cliente beneficiado, valor e
+   * pontos.
+   */
+  operatorTransactions: tenantOwnerProcedure
+    .input(
+      z.object({
+        operatorUserId: z.string().min(1),
+        limit: z.number().int().min(1).max(200).default(100),
+      }),
+    )
+    .handler(async ({ context, input }) => {
+      return context.db
+        .select({
+          id: loyaltyTransaction.id,
+          points: loyaltyTransaction.points,
+          amountCents: loyaltyTransaction.amountCents,
+          createdAt: loyaltyTransaction.createdAt,
+          customerName: user.name,
+          customerEmail: user.email,
+        })
+        .from(loyaltyTransaction)
+        .innerJoin(user, eq(loyaltyTransaction.userId, user.id))
+        .where(
+          and(
+            eq(loyaltyTransaction.tenantId, context.tenant.id),
+            eq(loyaltyTransaction.operatorUserId, input.operatorUserId),
+            isNotNull(loyaltyTransaction.amountCents),
+          ),
+        )
+        .orderBy(desc(loyaltyTransaction.createdAt))
+        .limit(input.limit);
+    }),
+
   // ── Recompensas: catálogo e resgate ─────────────────────────────────────────
 
   /** Catálogo de recompensas ativas (cliente). */
