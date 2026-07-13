@@ -12,7 +12,8 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Fuel, LockKeyhole } from "lucide-react";
+import { LockKeyhole } from "lucide-react";
+import { Logo } from "@/components/Logo";
 import { useToast } from "@/components/ui/use-toast";
 
 export default function Login() {
@@ -58,8 +59,8 @@ export default function Login() {
     <div className="flex min-h-screen items-center justify-center bg-background p-4">
       <Card className="w-full max-w-sm border-border shadow-sm">
         <CardHeader className="space-y-3 text-center pb-6">
-          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-primary/10">
-            <Fuel className="h-8 w-8 text-primary" />
+          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-[#7C3AED]/10">
+            <Logo className="h-9 w-auto" />
           </div>
           <div className="space-y-1">
             <CardTitle className="text-2xl font-bold tracking-tight">

@@ -15,6 +15,7 @@ import {
   Star,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Logo } from "@/components/Logo";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
   DropdownMenu,
@@ -130,6 +131,7 @@ export function Layout() {
             to={home}
             className="flex items-center gap-2 font-bold tracking-tight text-lg transition-opacity hover:opacity-90"
           >
+            <Logo className="h-7 w-auto" />
             <span className="hidden sm:inline">
               Gasolina - Painel Administrativo
             </span>

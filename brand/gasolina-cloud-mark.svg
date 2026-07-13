@@ -1,6 +1,5 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" role="img" aria-label="Gasolina Cloud">
-  <rect width="120" height="120" rx="27" fill="#7C3AED"/>
-  <g fill="#FFFFFF" transform="translate(6.9 14.8) scale(0.83)">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="10 8 108 96" width="128" role="img" aria-label="Gasolina Cloud">
+  <g fill="#7C3AED">
     <circle cx="42" cy="52" r="20"/>
     <circle cx="66" cy="40" r="24"/>
     <circle cx="90" cy="56" r="16"/>
