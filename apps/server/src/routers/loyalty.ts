@@ -1,5 +1,5 @@
 import { ORPCError } from "@orpc/server";
-import { and, desc, eq, gt, sql } from "drizzle-orm";
+import { and, desc, eq, gt, isNotNull, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { z } from "zod";
 
@@ -319,8 +319,10 @@ export const loyaltyRouter = {
   auditTotals: tenantOwnerProcedure.handler(async ({ context }) => {
     const [row] = await context.db
       .select({
-        totalPoints: sql<number>`coalesce(sum(case when ${loyaltyTransaction.points} > 0 then ${loyaltyTransaction.points} else 0 end), 0)::int`,
-        credits: sql<number>`count(*)::int`,
+        // Só o fluxo de crédito (caixa): amountCents preenchido — exclui
+        // débitos de resgate e ajustes manuais.
+        totalPoints: sql<number>`coalesce(sum(${loyaltyTransaction.points}) filter (where ${loyaltyTransaction.amountCents} is not null), 0)::int`,
+        credits: sql<number>`(count(*) filter (where ${loyaltyTransaction.amountCents} is not null))::int`,
         customers: sql<number>`count(distinct ${loyaltyTransaction.userId})::int`,
       })
       .from(loyaltyTransaction)
@@ -365,9 +367,15 @@ export const loyaltyRouter = {
           credits: sql<number>`count(*)::int`,
         })
         .from(loyaltyTransaction)
-        // innerJoin em operatorUserId já descarta linhas sem operador (resgates).
         .innerJoin(user, eq(loyaltyTransaction.operatorUserId, user.id))
-        .where(eq(loyaltyTransaction.tenantId, context.tenant.id))
+        // Só transações de CRÉDITO (caixa): amountCents preenchido. Resgates
+        // também gravam o operador (débito), mas não contam como crédito.
+        .where(
+          and(
+            eq(loyaltyTransaction.tenantId, context.tenant.id),
+            isNotNull(loyaltyTransaction.amountCents),
+          ),
+        )
         .groupBy(loyaltyTransaction.operatorUserId, user.name, user.email)
         .orderBy(desc(sql`sum(${loyaltyTransaction.points})`))
         .limit(input.limit);
