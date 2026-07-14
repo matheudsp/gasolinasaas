@@ -21,15 +21,21 @@ Banco: **Neon Postgres** (serverless driver). Migrations via `drizzle-kit`
 ## Multi-tenancy — o conceito central
 
 Um tenant é uma rede de postos (`tenant`). Usuários se ligam a tenants via
-`tenant_membership`, hoje com um único papel: `owner`. Toda tabela de negócio
-(`station`, `push_token`, `push_notification`, `subscription`) carrega `tenant_id`
-com `onDelete: "cascade"`.
+`tenant_membership`, com **dois papéis**: `owner` (dono da rede) e `operator`
+(frentista/caixa — só credita/valida fidelidade, sem acesso administrativo).
+Toda tabela de negócio (`station`, `push_token`, `push_notification`,
+`subscription`, `reward`, `loyalty_transaction`, ...) carrega `tenant_id` com
+`onDelete: "cascade"`.
+
+**Crucial:** os clientes finais do app mobile (motoristas) **NÃO** são membros do
+tenant — não têm `tenant_membership`. São só `user` autenticados, e o app manda o
+`x-tenant-slug` fixo. Por isso endpoints voltados ao cliente usam `protectedProcedure`
++ checagem manual de `context.tenant`, **nunca** `tenantProcedure`.
 
 Há **dois eixos de autorização independentes** — não confunda:
 - `user.role` (`admin` | `user`), do plugin admin do Better Auth: operador da
   plataforma Gasolina. Governa o `adminRouter` (CRUD de tenants, planos, usuários).
-- `tenant_membership.role` (`owner`): dono de uma rede específica. Governa os
-  dados daquele tenant.
+- `tenant_membership.role` (`owner` | `operator`): governa os dados daquele tenant.
 
 ### Como o tenant é resolvido
 
@@ -60,32 +66,41 @@ URL é `/{tenant}/api/*` ou `/{tenant}/rpc/*`, para que os handlers oRPC (montad
 não refaça a checagem dentro do handler.
 
 - `publicProcedure` — sem sessão.
-- `protectedProcedure` — exige sessão.
-- `tenantProcedure` — sessão + tenant resolvido + membership qualquer.
-- `tenantOwnerProcedure` — sessão + membership com `role === "owner"`. Injeta
-  `context.tenant` já tipado como não-nulo. **Padrão para tudo que escreve dados do tenant.**
+- `protectedProcedure` — exige sessão. Para endpoints de **cliente final** que dependem
+  do tenant, use este + `if (!context.tenant) throw` (o cliente não é membro).
+- `tenantProcedure` — sessão + tenant + membership qualquer. Definido mas **sem uso**.
+- `tenantOperatorProcedure` — sessão + membership `owner` OU `operator`. Injeta
+  `context.tenant` não-nulo. Padrão do **fluxo de caixa** (creditar pontos, validar resgate).
+- `tenantOwnerProcedure` — sessão + membership `owner`. Injeta `context.tenant` não-nulo.
+  **Padrão para escrever/administrar dados do tenant.**
 - `adminProcedure` — sessão + `user.role === "admin"` (operador da plataforma).
 
-Ao adicionar um endpoint, a pergunta é: *isso é dado de um tenant específico?* Se sim,
-`tenantOwnerProcedure` (ou `tenantProcedure` para leitura de membro comum). Nunca
-filtre por `tenantId` vindo do input do cliente — use `context.tenant.id`.
+`tenantOwnerProcedure` e `tenantOperatorProcedure` **também autorizam o admin da
+plataforma** (via `isPlatformAdmin`) — ele opera qualquer tenant sem membership.
+Nunca filtre por `tenantId` vindo do input do cliente — use `context.tenant.id`.
 
 ## Estrutura do server
 
 ```
 apps/server/src/
-├── index.ts          # composição do app Hono (89 linhas — mantenha assim)
+├── index.ts          # composição do app Hono (~95 linhas — mantenha enxuto)
 ├── handlers/         # api.ts (OpenAPIHandler) · rpc.ts (RPCHandler)
 ├── middlewares/      # cors.ts · error.ts · session.ts
-├── lib/              # auth.ts · context.ts · orpc.ts · tenant.ts · email.ts · execution-context.ts
-├── routers/          # station · fuel · tenant · subscription · admin · push (+ users, não registrado)
-├── db/schema/        # auth · tenant · station · push · subscription
+├── lib/              # auth · context · orpc · tenant · email · execution-context · hono-env
+├── routers/          # station · fuel · tenant · subscription · admin · push · users · loyalty
+├── routes/           # reward-image.ts — rotas Hono cruas (upload/serve de foto no R2)
+├── db/schema/        # auth · tenant · station · push · subscription · loyalty
 └── utils/tenant.ts   # strip do prefixo de tenant da URL
 ```
 
-Ordem dos middlewares em `index.ts`: error handler → logger → session (`/api/*`,
-`/rpc/*`) → CORS → Better Auth (`/api/auth/*`) → handlers RPC/API → rotas soltas
-(`/`, `/session`).
+**Todos os routers estão registrados** em `routers/index.ts` (`station`, `fuel`,
+`tenant`, `admin`, `subscription`, `push`, `user`, `loyalty`).
+
+Ordem em `index.ts`: error handler → logger → session (`/api/*`, `/rpc/*`) → Better
+Auth (`/api/auth/*`) → CORS → **rotas de imagem R2 (`app.route`, antes do catch-all
+pra ter precedência)** → handlers RPC/API → rotas soltas (`/`, `/session`). O app é
+tipado com `AppEnv` (`lib/hono-env.ts`): bindings do Worker (inclui
+`REWARD_IMAGES: R2Bucket`) + variáveis de sessão.
 
 O handler catch-all tenta **RPC primeiro, depois OpenAPI**; se nenhum casar, cai no
 `next()`. Ambos compartilham o mesmo `appRouter` — um router, dois transportes.
@@ -114,6 +129,85 @@ retorna vazia — o agregado sozinho não sabe quem recebeu o quê.
 `push_token` é único por `(tenantId, token)`, não por `token` global: projetos
 FCM/APNs distintos podem emitir o mesmo valor de token.
 
+## Programa de fidelidade (maior subsistema novo)
+
+Fidelidade white-label por tenant. Schema em `db/schema/loyalty.ts`, lógica em
+`routers/loyalty.ts` (`orpc.loyalty.*`). Tabelas:
+- `loyalty_transaction` — **ledger**; saldo do cliente = `SUM(points)`. Crédito
+  positivo, resgate negativo. **Nunca** há coluna de saldo mutável.
+- `loyalty_scan_code` — QR de identidade do cliente (uso único, ~90s), um por cliente.
+- `reward` / `reward_redemption` — catálogo e pedidos de resgate.
+- `tenant.pointsPerReal` — multiplicador (`numeric`, aceita frações).
+
+**Anti-fraude — a âncora de confiança é o operador (frentista), não a nota fiscal:**
+- **Crédito (caixa):** cliente mostra QR (`issueScanCode`); operador escaneia e digita
+  o valor abastecido (`credit`, `tenantOperatorProcedure`). O valor vem SEMPRE do
+  operador autenticado, nunca do app do cliente; o código é consumido atomicamente.
+  Transação de crédito tem `amountCents` preenchido.
+- **Resgate (débito na entrega):** cliente pede (`requestRedemption`) e recebe um
+  código — NÃO debita. Operador escaneia → `peekRedemption` (vê recompensa/custo) →
+  `confirmRedemption` (transação: consome o código, recheca saldo, baixa estoque,
+  insere transação negativa com `redemptionId`).
+- **Distinguir tipo de transação:** crédito = `amountCents IS NOT NULL`; resgate =
+  `redemptionId IS NOT NULL`. Rankings/auditoria filtram por isso — ex: "operadores
+  que mais creditaram" só conta `amountCents IS NOT NULL` (senão os resgates que o
+  operador confirma entram como débito e negativam a soma).
+
+`loyalty.myRole` (protected) retorna `owner|operator|null` — o mobile usa pra decidir
+se mostra a tab/tela de operador. Cliente comum → `null`.
+
+**Fotos de recompensa (R2):** `reward.imageUrl` guarda **caminho relativo**
+(`/images/rewards/{tenantId}/{rewardId}?v=...`), nunca URL absoluta — cada cliente
+prefixa com a própria base (`Config.API_URL` no mobile, `VITE_API_URL` no admin; URLs
+externas coladas ficam intactas). Upload/serve em `routes/reward-image.ts` + binding
+`REWARD_IMAGES`. **Não** derive a URL de `c.req.url` — no `wrangler dev` o host vem
+como o domínio de produção (por causa do `custom_domain` em `routes`).
+
+## Frontends (admin e mobile)
+
+**Admin** (`apps/admin`, React + Vite + shadcn):
+- `AuthContext` expõe `isAdmin`, `activeTenant`, `membership`. Owner tem tenant fixo;
+  admin da plataforma escolhe a rede num seletor (localStorage) — o `orpc.ts` manda
+  `x-tenant-id` no header.
+- Rotas em `App.tsx` (react-router): owner/admin sob `TenantProtectedRoute` + `Layout`;
+  admin-only sob `AdminProtectedRoute`. `Layout` renderiza o `PaymentReminderBanner`.
+- Fidelidade numa página só (`/fidelidade`) com abas Auditoria/Recompensas/Config
+  (`pages/LoyaltyAudit|RewardsManager|LoyaltyConfig`). Gestão de donos na aba "Donos"
+  do `/admin` (`pages/admin/OwnersTab`).
+
+**Mobile** (`apps/mobile`, Expo + expo-router):
+- Tabs em `src/app/(app)/(tabs)/`: Início · Meus pontos · Operador (só owner/operator,
+  via `hidden` + `loyalty.myRole`) · Minha Conta. Telas empilhadas em `(app)/` (station,
+  rewards, notifications, about). Políticas públicas em `src/app/policies/` (fora de
+  `(app)`, funcionam sem login).
+- Telas em `src/screens/`; arquivos de rota são finos (`export default () => <Screen/>`).
+- Marca da plataforma: `components/PoweredByGasolinaCloud` (nuvem-gota SVG, roxo #7C3AED).
+  Políticas (Termos/Regulamento/Privacidade) vêm de `.md` em `assets/policies/`.
+
+## Build & propagação de tipos — pega-ratões que já morderam
+
+- **Server é projeto TS `composite`** (emite em `dist/`). Mobile/admin importam
+  `AppRouterClient` do source do server, mas o project reference resolve para os `.d.ts`
+  em `dist/`. **Depois de mudar um router, rode `tsc -b --force` no server** — senão o
+  front vê tipos antigos (retornos viram `{}`). Em dev, reinicie o `wrangler dev` pro
+  endpoint responder.
+- **`seed.ts` tem erros de tipo pré-existentes** → `tsc -b` sai com exit 1, mas ainda
+  emite os `.d.ts`. Ignore-os; filtre o typecheck pelos arquivos que você mexeu.
+- **Tipos de rota do expo-router** (`.expo/types/`) são gitignored e regenerados quando
+  o Metro roda. Ao criar/mover rota, `npx expo start` (ou `-c`) rebuilda os tipos — sem
+  isso o typecheck acusa a rota nova como inexistente (falso-positivo que se cura sozinho).
+- **Imports de `.md` no mobile são RELATIVOS** (`../../../assets/...`), não o alias
+  `@assets` — o `babel-plugin-inline-import` faz resolução própria e não conhece os
+  aliases do Metro/tsconfig. Editar um `.md` às vezes exige `expo start -c`.
+- **Deps nativas** (expo-camera, react-native-svg/qrcode) exigem **rebuild do dev client**
+  — `expo start` não basta. `ios/`/`android/` são gitignored (CNG): EAS/prebuild aplica os
+  plugins de `app.config.ts`. Instale com `npx expo install` **dentro de `apps/mobile`**.
+- **Config do mobile:** `config.prod.ts` lê `EXPO_PUBLIC_*` do `.env`; `config.dev.ts` tem
+  localhost hardcoded. Build **local** (`--local`) lê o `.env`; build na **nuvem** não
+  (gitignored) — nesse caso as vars vão no `eas.json`/`eas env`.
+- **`pnpm check` (Biome/Ultracite)** pode dar erro "nested root configuration" (há
+  `biome.json` no worktree e na raiz). Rode a formatação por app ou ignore o conflito.
+
 ## Convenções
 
 - IDs são `text` gerados na aplicação, não `serial`.
@@ -125,11 +219,14 @@ FCM/APNs distintos podem emitir o mesmo valor de token.
 
 ## Pontas soltas conhecidas
 
-- `routers/users.ts` exporta `userRouter` mas **não está registrado em
-  `routers/index.ts`** — os endpoints de notificação do usuário estão inacessíveis.
-- `tenantProcedure` está definido mas nenhum router o usa hoje (todos vão direto a
-  `protectedProcedure` ou `tenantOwnerProcedure`).
-- `tenantRole` só tem `owner`; não existe papel de membro comum ainda.
+- `tenantProcedure` está definido mas nenhum router o usa (clientes finais não são
+  membros → `protectedProcedure` + checagem manual de `context.tenant`).
+- Migrations de fidelidade: `0007` (papel operator + tabelas base + `pointsPerReal`),
+  `0008` (`pointsPerReal` → `numeric`), `0009` (reward/reward_redemption). O **bucket R2
+  `gasolina-reward-images` precisa existir** (`wrangler r2 bucket create`) antes de deploy.
+- Criar tenant (`admin.tenant.create`) **não atribui dono** — use
+  `admin.tenant.assignOwnerByEmail` (aba "Donos" no painel).
+- `seed.ts` está quebrado (erros de tipo); não bloqueia o build, mas `seed:liso` não roda.
 
 ---
 
