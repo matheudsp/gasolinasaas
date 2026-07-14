@@ -71,6 +71,13 @@
       "when": 1783871817671,
       "tag": "0009_small_firebird",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1784067898172,
+      "tag": "0010_gray_darkstar",
+      "breakpoints": true
     }
   ]
 }

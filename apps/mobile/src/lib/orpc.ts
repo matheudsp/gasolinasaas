@@ -11,7 +11,7 @@ const TENANT_SLUG = Config.TENANT_SLUG;
 
 if (!TENANT_SLUG) {
   throw new Error(
-    "EXPO_PUBLIC_TENANT_SLUG não está definido. Adicione ao .env do app."
+    "Tenant não resolvido: o applicationId deste binário não está em tenants/registry.ts e não há EXPO_PUBLIC_TENANT_SLUG de fallback."
   );
 }
 

@@ -8,6 +8,7 @@ import { ThemeProvider } from "@/theme/context"
 import { customFontsToLoad } from "@/theme/typography"
 import { authClient } from "@/lib/auth"
 import { QueryClientProvider } from "@tanstack/react-query"
+import { TenantBrandingLoader } from "@/lib/branding"
 import { queryClient } from "@/lib/orpc"
 import { usePushNotifications } from "@/hooks/usePushNotifications"
 
@@ -46,6 +47,7 @@ export default function Root() {
       <QueryClientProvider client={queryClient}>
         <ThemeProvider>
           <KeyboardProvider>
+            <TenantBrandingLoader />
             {session && <PushNotificationRegistrar />}
             <Slot />
           </KeyboardProvider>

@@ -1,4 +1,5 @@
 import {
+  type AnyPgColumn,
   boolean,
   index,
   integer,
@@ -38,8 +39,11 @@ export const loyaltyScanCode = pgTable(
 
 /**
  * Ledger de pontos de fidelidade. O saldo do cliente é SUM(points); nunca
- * mantemos um saldo mutável solto. Crédito por abastecimento é positivo;
- * resgates futuros entram como valores negativos.
+ * mantemos um saldo mutável solto. Três tipos de linha:
+ * - crédito (caixa): points > 0, amountCents preenchido;
+ * - resgate: points < 0, redemptionId preenchido;
+ * - expiração: points < 0, expiredTransactionId preenchido (materializada
+ *   pelo expire pass em lib/loyalty-points.ts — mantém SUM(points) correto).
  */
 export const loyaltyTransaction = pgTable(
   "loyalty_transaction",
@@ -63,9 +67,23 @@ export const loyaltyTransaction = pgTable(
     redemptionId: text("redemption_id").references(() => rewardRedemption.id, {
       onDelete: "set null",
     }),
+    // Validade deste crédito (createdAt + tenant.pointsValidityDays no momento
+    // do crédito). Null = não expira. Sempre null em débitos.
+    expiresAt: timestamp("expires_at"),
+    // Preenchido quando a transação é a EXPIRAÇÃO (débito automático) do
+    // saldo restante de um crédito vencido — aponta para o crédito de origem.
+    // O unique abaixo garante no máximo uma expiração por crédito, o que torna
+    // o expire pass idempotente mesmo sob concorrência.
+    expiredTransactionId: text("expired_transaction_id").references(
+      (): AnyPgColumn => loyaltyTransaction.id,
+      { onDelete: "cascade" }
+    ),
     createdAt: timestamp("created_at").notNull(),
   },
-  (t) => [index("loyalty_transaction_user_idx").on(t.tenantId, t.userId)]
+  (t) => [
+    index("loyalty_transaction_user_idx").on(t.tenantId, t.userId),
+    unique("loyalty_expiration_per_credit").on(t.expiredTransactionId),
+  ]
 );
 
 /**

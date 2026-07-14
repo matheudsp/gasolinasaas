@@ -11,6 +11,7 @@ import {
   rewardRedemption,
 } from "../db/schema/loyalty";
 import { tenant, tenantMembership } from "../db/schema/tenant";
+import { settleExpiredPoints } from "../lib/loyalty-points";
 import {
   protectedProcedure,
   tenantOperatorProcedure,
@@ -59,25 +60,23 @@ export const loyaltyRouter = {
     return { code, expiresAt };
   }),
 
-  /** Saldo de pontos do cliente no tenant atual. */
+  /**
+   * Saldo de pontos do cliente no tenant atual. Roda o expire pass antes
+   * (materializa créditos vencidos) e devolve também o que está perto de
+   * vencer, para o app avisar o cliente.
+   */
   myBalance: protectedProcedure.handler(async ({ context }) => {
     if (!context.tenant) {
       throw new ORPCError("BAD_REQUEST", { message: "Tenant é obrigatório" });
     }
 
-    const [row] = await context.db
-      .select({
-        balance: sql<number>`coalesce(sum(${loyaltyTransaction.points}), 0)::int`,
-      })
-      .from(loyaltyTransaction)
-      .where(
-        and(
-          eq(loyaltyTransaction.tenantId, context.tenant.id),
-          eq(loyaltyTransaction.userId, context.session.user.id),
-        ),
-      );
+    const snapshot = await settleExpiredPoints(
+      context.db,
+      context.tenant.id,
+      context.session.user.id,
+    );
 
-    return { balance: row?.balance ?? 0 };
+    return { balance: snapshot.balance, expiringSoon: snapshot.expiringSoon };
   }),
 
   /** Extrato de pontos do cliente. */
@@ -93,6 +92,11 @@ export const loyaltyRouter = {
           id: loyaltyTransaction.id,
           points: loyaltyTransaction.points,
           amountCents: loyaltyTransaction.amountCents,
+          expiresAt: loyaltyTransaction.expiresAt,
+          // Rótulo da linha no extrato do app: crédito, resgate ou expiração.
+          type: sql<
+            "credit" | "expiration" | "redemption"
+          >`case when ${loyaltyTransaction.expiredTransactionId} is not null then 'expiration' when ${loyaltyTransaction.points} >= 0 then 'credit' else 'redemption' end`,
           createdAt: loyaltyTransaction.createdAt,
         })
         .from(loyaltyTransaction)
@@ -177,6 +181,13 @@ export const loyaltyRouter = {
       const multiplier = Number(context.tenant.pointsPerReal);
       const points = Math.floor((input.amountCents * multiplier) / 100);
 
+      // Validade estampada no momento do crédito: mudar a config depois não
+      // altera pontos já ganhos.
+      const validityDays = context.tenant.pointsValidityDays;
+      const expiresAt = validityDays
+        ? new Date(now.getTime() + validityDays * 86_400_000)
+        : null;
+
       await context.db.insert(loyaltyTransaction).values({
         id: crypto.randomUUID(),
         tenantId: context.tenant.id,
@@ -184,6 +195,7 @@ export const loyaltyRouter = {
         operatorUserId: context.session.user.id,
         points,
         amountCents: input.amountCents,
+        expiresAt,
         createdAt: now,
       });
 
@@ -293,24 +305,43 @@ export const loyaltyRouter = {
 
   // ── Configuração do programa (owner) ────────────────────────────────────────
 
-  /** Configuração de fidelidade do tenant (pontos por real gasto). */
+  /** Configuração de fidelidade do tenant (multiplicador e validade). */
   getConfig: tenantOwnerProcedure.handler(({ context }) => {
-    return { pointsPerReal: Number(context.tenant.pointsPerReal) };
+    return {
+      pointsPerReal: Number(context.tenant.pointsPerReal),
+      pointsValidityDays: context.tenant.pointsValidityDays ?? null,
+    };
   }),
 
-  /** Atualiza o multiplicador de pontos por real (aceita frações, ex.: 2,5). */
+  /**
+   * Atualiza o multiplicador de pontos por real (aceita frações, ex.: 2,5) e
+   * a validade dos pontos em dias (null = nunca expiram). A validade só vale
+   * para créditos futuros — pontos já ganhos mantêm a validade de origem.
+   */
   updateConfig: tenantOwnerProcedure
-    .input(z.object({ pointsPerReal: z.number().min(0).max(1000) }))
+    .input(
+      z.object({
+        pointsPerReal: z.number().min(0).max(1000),
+        pointsValidityDays: z.number().int().min(1).max(3650).nullable(),
+      }),
+    )
     .handler(async ({ context, input }) => {
       // Arredonda para 2 casas — a coluna é numeric(6,2).
       const value = Math.round(input.pointsPerReal * 100) / 100;
 
       await context.db
         .update(tenant)
-        .set({ pointsPerReal: value.toString(), updatedAt: new Date() })
+        .set({
+          pointsPerReal: value.toString(),
+          pointsValidityDays: input.pointsValidityDays,
+          updatedAt: new Date(),
+        })
         .where(eq(tenant.id, context.tenant.id));
 
-      return { pointsPerReal: value };
+      return {
+        pointsPerReal: value,
+        pointsValidityDays: input.pointsValidityDays,
+      };
     }),
 
   // ── Auditoria (owner) ───────────────────────────────────────────────────────
@@ -505,19 +536,14 @@ export const loyaltyRouter = {
         throw new ORPCError("BAD_REQUEST", { message: "Recompensa esgotada" });
       }
 
-      const [bal] = await context.db
-        .select({
-          balance: sql<number>`coalesce(sum(${loyaltyTransaction.points}), 0)::int`,
-        })
-        .from(loyaltyTransaction)
-        .where(
-          and(
-            eq(loyaltyTransaction.tenantId, context.tenant.id),
-            eq(loyaltyTransaction.userId, context.session.user.id),
-          ),
-        );
+      // Expire pass antes da checagem: pontos vencidos não pagam resgate.
+      const snapshot = await settleExpiredPoints(
+        context.db,
+        context.tenant.id,
+        context.session.user.id,
+      );
 
-      if ((bal?.balance ?? 0) < rw.costPoints) {
+      if (snapshot.balance < rw.costPoints) {
         throw new ORPCError("BAD_REQUEST", { message: "Saldo insuficiente" });
       }
 
@@ -629,20 +655,11 @@ export const loyaltyRouter = {
           });
         }
 
-        // Recheca o saldo AGORA (pode ter mudado desde o pedido).
-        const [bal] = await tx
-          .select({
-            balance: sql<number>`coalesce(sum(${loyaltyTransaction.points}), 0)::int`,
-          })
-          .from(loyaltyTransaction)
-          .where(
-            and(
-              eq(loyaltyTransaction.tenantId, tenantId),
-              eq(loyaltyTransaction.userId, rd.userId),
-            ),
-          );
+        // Recheca o saldo AGORA (pode ter mudado desde o pedido), já com o
+        // expire pass dentro da transação: pontos vencidos não pagam resgate.
+        const snapshot = await settleExpiredPoints(tx, tenantId, rd.userId, now);
 
-        if ((bal?.balance ?? 0) < rd.costPoints) {
+        if (snapshot.balance < rd.costPoints) {
           throw new ORPCError("BAD_REQUEST", { message: "Saldo insuficiente" });
         }
 

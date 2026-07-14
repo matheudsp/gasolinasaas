@@ -10,6 +10,7 @@ import { apiCorsMiddleware, authCorsMiddleware } from "./middlewares/cors";
 import { errorHandler } from "./middlewares/error";
 import { sessionMiddleware } from "./middlewares/session";
 import { rewardImageRoutes } from "./routes/reward-image";
+import { tenantLogoRoutes } from "./routes/tenant-logo";
 import { stripTenantPrefixFromRequest } from "./utils/tenant";
 
 const app = new Hono<AppEnv>();
@@ -39,6 +40,10 @@ app.use("/api/*", apiCorsMiddleware);
 // Fotos de recompensa (R2): upload e serviço. Antes do catch-all oRPC para
 // terem precedência sobre os handlers RPC/API.
 app.route("/", rewardImageRoutes);
+
+// Logo white-label do tenant (R2): upload e serviço. Mesma razão de vir
+// antes do catch-all.
+app.route("/", tenantLogoRoutes);
 
 // RPC and API handler
 app.use("/*", async (c, next) => {

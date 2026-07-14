@@ -37,15 +37,21 @@ export function LoyaltyConfig() {
   const enabled = !!activeTenant;
 
   const [points, setPoints] = useState("");
+  const [validityDays, setValidityDays] = useState("");
   const [email, setEmail] = useState("");
 
-  // Config (pontos por real)
+  // Config (pontos por real + validade dos pontos)
   const { data: config } = useQuery(
     orpc.loyalty.getConfig.queryOptions({ enabled }),
   );
 
   useEffect(() => {
-    if (config) setPoints(String(config.pointsPerReal));
+    if (config) {
+      setPoints(String(config.pointsPerReal));
+      setValidityDays(
+        config.pointsValidityDays ? String(config.pointsValidityDays) : "",
+      );
+    }
   }, [config]);
 
   const { data: operators = [], isLoading } = useQuery(
@@ -83,14 +89,36 @@ export function LoyaltyConfig() {
   const parsedPoints = Number(points.replace(",", "."));
   const pointsValid =
     Number.isFinite(parsedPoints) && parsedPoints >= 0 && parsedPoints <= 1000;
-  const pointsDirty = config ? parsedPoints !== config.pointsPerReal : false;
+
+  // Validade: vazio = pontos nunca expiram (null no server).
+  const trimmedValidity = validityDays.trim();
+  const parsedValidity = trimmedValidity === "" ? null : Number(trimmedValidity);
+  const validityValid =
+    parsedValidity === null ||
+    (Number.isInteger(parsedValidity) &&
+      parsedValidity >= 1 &&
+      parsedValidity <= 3650);
+
+  const configDirty = config
+    ? parsedPoints !== config.pointsPerReal ||
+      parsedValidity !== (config.pointsValidityDays ?? null)
+    : false;
 
   const handleSaveConfig = () => {
     if (!pointsValid) {
       toast.warning("Informe um número entre 0 e 1000 (ex.: 2,5).");
       return;
     }
-    updateConfig.mutate({ pointsPerReal: parsedPoints });
+    if (!validityValid) {
+      toast.warning(
+        "Validade deve ser um número inteiro de dias entre 1 e 3650 — ou vazio para nunca expirar.",
+      );
+      return;
+    }
+    updateConfig.mutate({
+      pointsPerReal: parsedPoints,
+      pointsValidityDays: parsedValidity,
+    });
   };
 
   const handleGrant = () => {
@@ -104,12 +132,12 @@ export function LoyaltyConfig() {
 
   return (
     <div className="space-y-6">
-      {/* ── Multiplicador ───────────────────────────────────────────────── */}
+      {/* ── Programa de pontos ──────────────────────────────────────────── */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base">
             <Coins className="h-4 w-4" />
-            Pontos por real
+            Programa de pontos
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -117,39 +145,65 @@ export function LoyaltyConfig() {
             <Label htmlFor="points-per-real">
               Pontos que o cliente ganha por real gasto
             </Label>
-            <div className="flex items-center gap-2">
-              <Input
-                id="points-per-real"
-                type="number"
-                min={0}
-                max={1000}
-                step="0.5"
-                inputMode="decimal"
-                className="w-32"
-                value={points}
-                onChange={(e) => setPoints(e.target.value)}
-                disabled={updateConfig.isPending || !enabled}
-              />
-              <Button
-                onClick={handleSaveConfig}
-                disabled={
-                  updateConfig.isPending || !pointsValid || !pointsDirty
-                }
-                className="gap-2"
-              >
-                {updateConfig.isPending ? (
-                  <Spinner className="size-4" />
-                ) : (
-                  <Save className="h-4 w-4" />
-                )}
-                Salvar
-              </Button>
-            </div>
+            <Input
+              id="points-per-real"
+              type="number"
+              min={0}
+              max={1000}
+              step="0.5"
+              inputMode="decimal"
+              className="w-32"
+              value={points}
+              onChange={(e) => setPoints(e.target.value)}
+              disabled={updateConfig.isPending || !enabled}
+            />
             <p className="text-xs text-muted-foreground">
               Aceita frações. Ex.: <strong>2,5</strong> → um abastecimento de R$
               100,00 gera 250 pontos.
             </p>
           </div>
+
+          <div className="space-y-1.5">
+            <Label htmlFor="points-validity">
+              Validade dos pontos (dias)
+            </Label>
+            <Input
+              id="points-validity"
+              type="number"
+              min={1}
+              max={3650}
+              step={1}
+              inputMode="numeric"
+              placeholder="Nunca expiram"
+              className="w-32"
+              value={validityDays}
+              onChange={(e) => setValidityDays(e.target.value)}
+              disabled={updateConfig.isPending || !enabled}
+            />
+            <p className="text-xs text-muted-foreground">
+              Deixe vazio para os pontos nunca expirarem. Cada crédito vale
+              esse prazo a partir da data em que foi ganho — a mudança vale
+              apenas para pontos ganhos daqui em diante.
+            </p>
+          </div>
+
+          <Button
+            onClick={handleSaveConfig}
+            disabled={
+              updateConfig.isPending ||
+              !pointsValid ||
+              !validityValid ||
+              !configDirty
+            }
+            className="gap-2"
+          >
+            {updateConfig.isPending ? (
+              <Spinner className="size-4" />
+            ) : (
+              <Save className="h-4 w-4" />
+            )}
+            Salvar
+          </Button>
         </CardContent>
       </Card>
 

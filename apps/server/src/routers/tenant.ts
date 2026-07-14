@@ -1,11 +1,45 @@
+import { ORPCError } from "@orpc/server";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
 
 import { user } from "../db/schema/auth";
 import { tenant, tenantMembership } from "../db/schema/tenant";
-import { protectedProcedure, tenantOwnerProcedure } from "../lib/orpc";
+import {
+  protectedProcedure,
+  publicProcedure,
+  tenantOwnerProcedure,
+} from "../lib/orpc";
+
+// Hex #RGB ou #RRGGBB — evita gravar lixo que quebraria o tema do app.
+const hexColorSchema = z
+  .string()
+  .regex(/^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/, "Cor inválida (use #RRGGBB)");
 
 export const tenantRouter = {
+  /**
+   * Branding white-label do tenant (logo e cores do tema). Público — as telas
+   * de boas-vindas/login precisam dele antes de o usuário autenticar. O tenant
+   * é resolvido pelo header `x-tenant-slug` que o app manda em toda requisição.
+   */
+  branding: publicProcedure.handler(({ context }) => {
+    if (!context.tenant) {
+      throw new ORPCError("NOT_FOUND", {
+        message: "Tenant não encontrado",
+      });
+    }
+
+    return {
+      name: context.tenant.name,
+      slug: context.tenant.slug,
+      // Caminho relativo — o cliente prefixa com a própria base de API.
+      logoUrl: context.tenant.logoUrl,
+      colors: {
+        primary: context.tenant.brandPrimaryColor,
+        background: context.tenant.brandBackgroundColor,
+      },
+    };
+  }),
+
   /**
    * Descobre o tenant do usuário autenticado.
    */
@@ -36,6 +70,9 @@ export const tenantRouter = {
     .input(
       z.object({
         name: z.string().min(1).optional(),
+        // null limpa a cor (volta ao tema padrão do app).
+        brandPrimaryColor: hexColorSchema.nullable().optional(),
+        brandBackgroundColor: hexColorSchema.nullable().optional(),
       }),
     )
     .handler(async ({ context, input }) => {

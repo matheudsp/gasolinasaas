@@ -1,11 +1,8 @@
 {
-  "name": "Martinez",
   "slug": "martinezapp",
-  "scheme": "martinezapp",
   "version": "1.0.0",
   "orientation": "portrait",
   "userInterfaceStyle": "automatic",
-  "icon": "./assets/images/app-icon-all.png",
   "updates": {
     "fallbackToCacheTimeout": 0
   },
@@ -13,43 +10,24 @@
     "**/*"
   ],
   "android": {
-    "icon": "./assets/images/app-icon-android-legacy.png",
-    "package": "com.mdsp.martinez",
-    "adaptiveIcon": {
-      "foregroundImage": "./assets/images/app-icon-android-adaptive-foreground.png",
-      "backgroundImage": "./assets/images/app-icon-android-adaptive-background.png"
-    },
     "allowBackup": false,
     "permissions": [
       "ACCESS_COARSE_LOCATION",
       "ACCESS_FINE_LOCATION"
-    ],
-    "googleServicesFile": "./google-services.json"
+    ]
   },
   "ios": {
-    "icon": "./assets/images/app-icon-ios.png",
     "supportsTablet": true,
-    "bundleIdentifier": "com.mdsp.martinez",
     "infoPlist": {
       "NSLocationWhenInUseUsageDescription": "Usamos sua localização para mostrar os postos mais próximos de você."
     }
   },
   "web": {
-    "favicon": "./assets/images/app-icon-web-favicon.png",
     "bundler": "metro"
   },
   "plugins": [
     "expo-localization",
     "expo-font",
-    [
-      "expo-splash-screen",
-      {
-        "image": "./assets/images/logo.png",
-        "imageWidth": 300,
-        "resizeMode": "contain",
-        "backgroundColor": "#161A24"
-      }
-    ],
     [
       "react-native-edge-to-edge",
       {
@@ -61,14 +39,6 @@
     ],
     "expo-build-properties",
     "expo-router",
-    [
-      "expo-notifications",
-      {
-        "icon": "./assets/images/app-icon-android-legacy.png",
-        "color": "#161A24",
-        "sounds": []
-      }
-    ],
     [
       "expo-location",
       {

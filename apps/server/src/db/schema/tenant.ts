@@ -1,5 +1,6 @@
 import {
   boolean,
+  integer,
   numeric,
   pgEnum,
   pgTable,
@@ -23,6 +24,18 @@ export const tenant = pgTable("tenant", {
   pointsPerReal: numeric("points_per_real", { precision: 6, scale: 2 })
     .notNull()
     .default("1"),
+  // Validade dos pontos em dias (modelo por crédito: cada crédito expira
+  // N dias após ser ganho; resgates consomem os mais antigos primeiro).
+  // Null = pontos nunca expiram. Vale apenas para créditos posteriores à
+  // configuração — créditos antigos mantêm o expiresAt com que nasceram.
+  pointsValidityDays: integer("points_validity_days"),
+  // Branding white-label exposto ao app mobile via `tenant.branding`.
+  // logoUrl guarda caminho RELATIVO (/images/tenant-logos/{id}?v=...), nunca
+  // URL absoluta — cada cliente prefixa com a própria base de API.
+  logoUrl: text("logo_url"),
+  // Cores do tema em hex (#RRGGBB). Nulas = app usa o tema padrão do build.
+  brandPrimaryColor: text("brand_primary_color"),
+  brandBackgroundColor: text("brand_background_color"),
   createdAt: timestamp("created_at").notNull(),
   updatedAt: timestamp("updated_at").notNull(),
 });

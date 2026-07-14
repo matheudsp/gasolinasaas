@@ -46,8 +46,9 @@ Há **dois eixos de autorização independentes** — não confunda:
 4. primeiro segmento do path (`/rede/rpc/...` → `rede`)
 
 Quem usa o quê hoje: o **admin** manda `x-tenant-id` (tenant ativo selecionado na
-UI, `apps/admin/src/lib/orpc.ts`); o **mobile** manda `x-tenant-slug` fixo via
-`EXPO_PUBLIC_TENANT_SLUG` — é isso que torna o app white-label por rede.
+UI, `apps/admin/src/lib/orpc.ts`); o **mobile** manda `x-tenant-slug` fixo,
+resolvido em runtime pelo `applicationId` nativo via `tenants/registry.ts`
+(fallback: `EXPO_PUBLIC_TENANT_SLUG`) — é isso que torna o app white-label por rede.
 
 Resolvido o tenant, `lib/context.ts:createContext` injeta `{ db, session, tenant,
 tenantMembership }` no contexto oRPC. **Se o tenant não existe ou o usuário não é
@@ -135,6 +136,16 @@ Fidelidade white-label por tenant. Schema em `db/schema/loyalty.ts`, lógica em
 `routers/loyalty.ts` (`orpc.loyalty.*`). Tabelas:
 - `loyalty_transaction` — **ledger**; saldo do cliente = `SUM(points)`. Crédito
   positivo, resgate negativo. **Nunca** há coluna de saldo mutável.
+- **Expiração de pontos (validade por crédito, FIFO):** `tenant.pointsValidityDays`
+  (null = nunca expiram) estampa `expiresAt` no crédito. Resgates consomem os lotes
+  válidos mais antigos. Créditos vencidos viram transação negativa
+  (`expiredTransactionId` → crédito de origem, unique = idempotente) via **expire
+  pass preguiçoso** em `lib/loyalty-points.ts` (roda em `myBalance`,
+  `requestRedemption`, `confirmRedemption` — não há cron; cliente dormente pode
+  ter expiração pendente até a próxima leitura de saldo, então rankings podem
+  superestimar levemente até lá). Isso preserva o invariante `SUM(points)`.
+  Tipo da linha no extrato: crédito = `amountCents`, resgate = `redemptionId`,
+  expiração = `expiredTransactionId`.
 - `loyalty_scan_code` — QR de identidade do cliente (uso único, ~90s), um por cliente.
 - `reward` / `reward_redemption` — catálogo e pedidos de resgate.
 - `tenant.pointsPerReal` — multiplicador (`numeric`, aceita frações).
@@ -176,6 +187,16 @@ como o domínio de produção (por causa do `custom_domain` em `routes`).
   do `/admin` (`pages/admin/OwnersTab`).
 
 **Mobile** (`apps/mobile`, Expo + expo-router):
+- **White-label por build:** `tenants/registry.ts` é a fonte única de identidade
+  (nome, scheme, bundle id, cores) e `tenants/<slug>/` guarda ícones, splash e
+  `google-services.json`. O `app.config.ts` compõe tudo a partir de `TENANT=<slug>`
+  (default `grupo-martinez`; perfil `production:<slug>` no `eas.json`). Em runtime o
+  slug vem do `applicationId` nativo (expo-application) → mapa do registry — **nunca
+  asse o slug no bundle JS**, senão um update OTA compartilhado sobrescreve a
+  identidade dos outros tenants.
+- **EAS Update:** `runtimeVersion: { policy: "fingerprint" }` + channels
+  `production`/`preview`. Enquanto o lado nativo for idêntico entre tenants, um único
+  `eas update --channel production` atualiza os apps de todas as redes.
 - Tabs em `src/app/(app)/(tabs)/`: Início · Meus pontos · Operador (só owner/operator,
   via `hidden` + `loyalty.myRole`) · Minha Conta. Telas empilhadas em `(app)/` (station,
   rewards, notifications, about). Políticas públicas em `src/app/policies/` (fora de

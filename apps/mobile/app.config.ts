@@ -8,6 +8,25 @@ import { ExpoConfig, ConfigContext } from "@expo/config"
  */
 import "tsx/cjs"
 
+import { tenants } from "./tenants/registry"
+
+/**
+ * Tenant deste build: `TENANT=<slug> eas build ...` (perfis em eas.json).
+ * Cada tenant gera um binário próprio (nome, ícones, bundle id), todos a
+ * partir deste mesmo codebase. Sem TENANT (ex.: `expo start`), cai no
+ * grupo-martinez.
+ */
+const tenantSlug = process.env.TENANT ?? "grupo-martinez"
+const tenant = tenants[tenantSlug]
+
+if (!tenant) {
+  throw new Error(
+    `Tenant desconhecido: "${tenantSlug}". Registre-o em tenants/registry.ts e crie tenants/${tenantSlug}/ com os assets (veja o comentário do registry).`
+  )
+}
+
+const tenantAssets = `./tenants/${tenant.slug}`
+
 /**
  * @param config ExpoConfig coming from the static config app.json if it exists
  *
@@ -19,8 +38,22 @@ module.exports = ({ config }: ConfigContext): Partial<ExpoConfig> => {
 
   return {
     ...config,
+    name: tenant.name,
+    scheme: tenant.scheme,
+    icon: `${tenantAssets}/app-icon-all.png`,
+    updates: {
+      ...config.updates,
+      url: "https://u.expo.dev/03973ce3-5940-445b-835e-b8ec12cad043",
+    },
+    // fingerprint: enquanto o lado nativo for idêntico, todos os binários
+    // (de todos os tenants) aceitam o mesmo update OTA.
+    runtimeVersion: {
+      policy: "fingerprint",
+    },
     ios: {
       ...config.ios,
+      icon: `${tenantAssets}/app-icon-ios.png`,
+      bundleIdentifier: tenant.ios.bundleIdentifier,
       // This privacyManifests is to get you started.
       // See Expo's guide on apple privacy manifests here:
       // https://docs.expo.dev/guides/apple-privacy/
@@ -36,6 +69,20 @@ module.exports = ({ config }: ConfigContext): Partial<ExpoConfig> => {
         ],
       },
     },
+    android: {
+      ...config.android,
+      icon: `${tenantAssets}/app-icon-android-legacy.png`,
+      package: tenant.android.package,
+      adaptiveIcon: {
+        foregroundImage: `${tenantAssets}/app-icon-android-adaptive-foreground.png`,
+        backgroundImage: `${tenantAssets}/app-icon-android-adaptive-background.png`,
+      },
+      googleServicesFile: `${tenantAssets}/google-services.json`,
+    },
+    web: {
+      ...config.web,
+      favicon: `${tenantAssets}/app-icon-web-favicon.png`,
+    },
     plugins: [
       "@react-native-vector-icons/material-icons",
       "@react-native-vector-icons/material-design-icons",
@@ -44,6 +91,23 @@ module.exports = ({ config }: ConfigContext): Partial<ExpoConfig> => {
         {
           cameraPermission:
             "Precisamos da câmera para escanear o QR de fidelidade do cliente no caixa.",
+        },
+      ],
+      [
+        "expo-splash-screen",
+        {
+          image: `${tenantAssets}/splash-logo.png`,
+          imageWidth: 300,
+          resizeMode: "contain",
+          backgroundColor: tenant.colors.splashBackground,
+        },
+      ],
+      [
+        "expo-notifications",
+        {
+          icon: `${tenantAssets}/app-icon-android-legacy.png`,
+          color: tenant.colors.notification,
+          sounds: [],
         },
       ],
       ...existingPlugins,

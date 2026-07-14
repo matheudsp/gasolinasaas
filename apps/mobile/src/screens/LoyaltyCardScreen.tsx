@@ -53,6 +53,12 @@ export const LoyaltyCardScreen: FC<LoyaltyCardScreenProps> = function LoyaltyCar
   const code = codeQuery.data?.code
   const transactions = txQuery.data ?? []
 
+  // Lotes de pontos que vencem nos próximos 30 dias (o server manda ordenado
+  // do vencimento mais próximo pro mais distante).
+  const expiringSoon = balanceQuery.data?.expiringSoon ?? []
+  const expiringPoints = expiringSoon.reduce((sum, lot) => sum + lot.points, 0)
+  const nearestExpiry = expiringSoon.at(0)
+
   return (
     <Screen preset="fixed" safeAreaEdges={["bottom"]}>
       <Header
@@ -76,6 +82,29 @@ export const LoyaltyCardScreen: FC<LoyaltyCardScreenProps> = function LoyaltyCar
           <Text size="xxs" weight="bold" style={themed($balanceLabel)} text="SALDO DE PONTOS" />
           <Text style={themed($balanceValue)} text={`${balanceQuery.data?.balance ?? 0}`} />
         </View>
+
+        {nearestExpiry && (
+          <View style={themed($expiryWarning)}>
+            <MaterialDesignIcons
+              name="clock-alert-outline"
+              size={20}
+              color={theme.colors.error}
+            />
+            <View style={$txInfo}>
+              <Text
+                size="xs"
+                weight="bold"
+                style={themed($expiryWarningText)}
+                text={`${expiringPoints} ${expiringPoints === 1 ? "ponto perto" : "pontos perto"} de expirar`}
+              />
+              <Text
+                size="xxs"
+                style={themed($expiryWarningText)}
+                text={`${nearestExpiry.points} ${nearestExpiry.points === 1 ? "vence" : "vencem"} ${formatRelativeDays(nearestExpiry.expiresAt)}. Resgate antes de perder!`}
+              />
+            </View>
+          </View>
+        )}
 
         <Pressable
           onPress={() => router.push("/(app)/rewards")}
@@ -127,12 +156,19 @@ export const LoyaltyCardScreen: FC<LoyaltyCardScreenProps> = function LoyaltyCar
             transactions.map((t) => (
               <View key={t.id} style={themed($txRow)}>
                 <View style={$txInfo}>
-                  <Text weight="bold" text={t.points >= 0 ? "Pontos ganhos" : "Resgate"} />
+                  <Text weight="bold" text={txLabel(t.type)} />
                   {t.amountCents != null && (
                     <Text
                       size="xxs"
                       style={themed($dim)}
                       text={`Abastecimento de ${formatBRL(t.amountCents)}`}
+                    />
+                  )}
+                  {t.type === "credit" && t.expiresAt != null && (
+                    <Text
+                      size="xxs"
+                      style={themed($dim)}
+                      text={`Válidos até ${formatDate(t.expiresAt)}`}
                     />
                   )}
                   <Text size="xxs" style={themed($dim)} text={formatDate(t.createdAt)} />
@@ -152,6 +188,29 @@ export const LoyaltyCardScreen: FC<LoyaltyCardScreenProps> = function LoyaltyCar
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
+
+function txLabel(type: "credit" | "expiration" | "redemption"): string {
+  switch (type) {
+    case "credit":
+      return "Pontos ganhos"
+    case "expiration":
+      return "Pontos expirados"
+    default:
+      return "Resgate"
+  }
+}
+
+/** "hoje", "amanhã" ou "em N dias" — pro aviso de expiração. */
+function formatRelativeDays(d: Date | string): string {
+  const days = Math.ceil((new Date(d).getTime() - Date.now()) / 86_400_000)
+  if (days <= 0) {
+    return "hoje"
+  }
+  if (days === 1) {
+    return "amanhã"
+  }
+  return `em ${days} dias`
+}
 
 function formatBRL(cents: number): string {
   return `R$ ${(cents / 100).toFixed(2).replace(".", ",")}`
@@ -190,6 +249,20 @@ const $balanceValue: ThemedStyle<TextStyle> = ({ colors }) => ({
   fontSize: 48,
   lineHeight: 56,
   fontVariant: ["tabular-nums"],
+})
+
+const $expiryWarning: ThemedStyle<ViewStyle> = ({ colors, spacing }) => ({
+  flexDirection: "row",
+  alignItems: "center",
+  gap: spacing.sm,
+  backgroundColor: colors.errorBackground,
+  borderRadius: 12,
+  paddingHorizontal: spacing.md,
+  paddingVertical: spacing.sm,
+})
+
+const $expiryWarningText: ThemedStyle<TextStyle> = ({ colors }) => ({
+  color: colors.error,
 })
 
 const $rewardsButton: ThemedStyle<ViewStyle> = ({ colors, spacing }) => ({
