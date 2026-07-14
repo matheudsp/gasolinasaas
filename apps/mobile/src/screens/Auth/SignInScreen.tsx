@@ -1,12 +1,25 @@
 import { useRef, useState } from "react"
-import { ActivityIndicator, Pressable, TextInput, View, ViewStyle, TextStyle } from "react-native"
+import {
+  ActivityIndicator,
+  Image,
+  ImageStyle,
+  Pressable,
+  TextInput,
+  View,
+  ViewStyle,
+  TextStyle,
+} from "react-native"
 import { useRouter } from "expo-router"
 import { MaterialDesignIcons } from "@react-native-vector-icons/material-design-icons"
 
 import { Button } from "@/components/Button"
+import { PoliciesLink } from "@/components/PoliciesLink"
+import { PoweredByGasolinaCloud } from "@/components/PoweredByGasolinaCloud"
 import { Screen } from "@/components/Screen"
 import { Text } from "@/components/Text"
 import { TextField } from "@/components/TextField"
+
+const appLogo = require("@assets/images/logo.png")
 import { authClient } from "@/lib/auth"
 import { useAppTheme } from "@/theme/context"
 import type { ThemedStyle } from "@/theme/types"
@@ -80,13 +93,7 @@ export function SignInScreen() {
     >
       {/* Branding */}
       <View style={themed($header)}>
-        <View style={themed($logoContainer)}>
-          <MaterialDesignIcons
-            name="gas-station"
-            size={36}
-            color={theme.colors.palette.neutral100}
-          />
-        </View>
+        <Image source={appLogo} style={themed($appLogo)} resizeMode="contain" />
         <Text preset="heading" text="Martinez" style={themed($appName)} />
         <Text text="Muito mais que combustível" style={themed($tagline)} />
       </View>
@@ -219,6 +226,9 @@ export function SignInScreen() {
           <Text text="Cadastre-se" style={themed($footerLink)} />
         </Pressable>
       </View>
+
+      <PoliciesLink style={themed($poweredBy)} />
+      <PoweredByGasolinaCloud style={themed($poweredByCompact)} />
     </Screen>
   )
 }
@@ -235,16 +245,9 @@ const $header: ThemedStyle<ViewStyle> = ({ spacing }) => ({
   marginBottom: spacing.xxl,
 })
 
-// Fundo e ícone LITERAIS (não colors.tint/colors.text) — a badge da marca
-// deve ficar sempre navy+branco, independente do tema do app, mesmo motivo
-// da placa de preço do StationCard.
-const $logoContainer: ThemedStyle<ViewStyle> = ({ colors, spacing }) => ({
-  width: 72,
-  height: 72,
-  borderRadius: 4,
-  backgroundColor: colors.palette.primary500,
-  alignItems: "center",
-  justifyContent: "center",
+const $appLogo: ThemedStyle<ImageStyle> = ({ spacing }) => ({
+  width: 84,
+  height: 84,
   marginBottom: spacing.md,
 })
 
@@ -331,4 +334,12 @@ const $footerLink: ThemedStyle<TextStyle> = ({ colors }) => ({
   color: colors.tint,
   fontSize: 14,
   fontWeight: "600",
+})
+
+const $poweredBy: ThemedStyle<ViewStyle> = ({ spacing }) => ({
+  marginTop: spacing.lg,
+})
+
+const $poweredByCompact: ThemedStyle<ViewStyle> = ({ spacing }) => ({
+  marginTop: spacing.sm,
 })

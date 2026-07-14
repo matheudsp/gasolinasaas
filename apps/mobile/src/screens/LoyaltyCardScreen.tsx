@@ -24,7 +24,14 @@ import type { ThemedStyle } from "@/theme/types"
 // disso para o QR na tela nunca estar expirado quando o frentista escanear.
 const CODE_REFRESH_MS = 60_000
 
-export const LoyaltyCardScreen: FC = function LoyaltyCardScreen() {
+interface LoyaltyCardScreenProps {
+  /** false quando renderizada como tab — sem botão de voltar. */
+  showBack?: boolean
+}
+
+export const LoyaltyCardScreen: FC<LoyaltyCardScreenProps> = function LoyaltyCardScreen({
+  showBack = true,
+}) {
   const router = useRouter()
   const { themed, theme } = useAppTheme()
 
@@ -48,7 +55,11 @@ export const LoyaltyCardScreen: FC = function LoyaltyCardScreen() {
 
   return (
     <Screen preset="fixed" safeAreaEdges={["bottom"]}>
-      <Header title="Meus pontos" leftIcon="back" onLeftPress={() => router.back()} />
+      <Header
+        title="Meus pontos"
+        leftIcon={showBack ? "back" : undefined}
+        onLeftPress={showBack ? () => router.back() : undefined}
+      />
 
       <ScrollView
         contentContainerStyle={themed($content)}

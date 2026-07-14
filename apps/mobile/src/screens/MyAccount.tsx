@@ -202,7 +202,7 @@ export function MyAccountScreen() {
         <SectionHeader title="Fidelidade" icon="star-outline" />
 
         <PreferenceRow
-          href="/(app)/loyalty"
+          href="/(app)/(tabs)/loyalty"
           icon="wallet-giftcard"
           label="Meus pontos"
           value={`${balanceData?.balance ?? 0} pontos`}
@@ -210,7 +210,7 @@ export function MyAccountScreen() {
 
         {isOperator && (
           <PreferenceRow
-            href="/(app)/operator"
+            href="/(app)/(tabs)/operator"
             icon="qrcode-scan"
             label="Modo operador"
             value="Creditar pontos no caixa"
@@ -222,6 +222,20 @@ export function MyAccountScreen() {
 
       <View style={themed($section)}>
         <SectionHeader title="Conta" icon="account-circle-outline" />
+
+        <PreferenceRow
+          href="/(app)/about"
+          icon="information-outline"
+          label="Sobre o app"
+          value="Powered by Gasolina Cloud"
+        />
+
+        <PreferenceRow
+          href="/policies"
+          icon="file-document-outline"
+          label="Termos e políticas"
+          value="Termos de Uso, Regulamento e Privacidade"
+        />
 
         <Button
           text={isSigningOut ? "Saindo..." : "Sair da conta"}

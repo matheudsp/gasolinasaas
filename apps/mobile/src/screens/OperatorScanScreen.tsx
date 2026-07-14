@@ -18,7 +18,14 @@ import type { ThemedStyle } from "@/theme/types"
 type Mode = "credit" | "redeem"
 type Stage = "scan" | "amount" | "confirm" | "done"
 
-export const OperatorScanScreen: FC = function OperatorScanScreen() {
+interface OperatorScanScreenProps {
+  /** false quando renderizada como tab — sem botão de voltar. */
+  showBack?: boolean
+}
+
+export const OperatorScanScreen: FC<OperatorScanScreenProps> = function OperatorScanScreen({
+  showBack = true,
+}) {
   const router = useRouter()
   const { themed, theme } = useAppTheme()
   const insets = useSafeAreaInsets()
@@ -98,7 +105,11 @@ export const OperatorScanScreen: FC = function OperatorScanScreen() {
 
   return (
     <Screen preset="fixed" safeAreaEdges={[]} contentContainerStyle={$flex1}>
-      <Header title="Caixa" leftIcon="back" onLeftPress={() => router.back()} />
+      <Header
+        title="Caixa"
+        leftIcon={showBack ? "back" : undefined}
+        onLeftPress={showBack ? () => router.back() : undefined}
+      />
 
       {stage === "scan" && (
         <View style={themed($modeRow)}>

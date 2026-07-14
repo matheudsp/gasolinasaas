@@ -77,7 +77,7 @@ export const HomeScreen: FC = function HomeScreen() {
 
           <View style={themed($headerActions)}>
             <Pressable
-              onPress={() => router.push("/(app)/loyalty")}
+              onPress={() => router.push("/(app)/(tabs)/loyalty")}
               accessibilityRole="button"
               accessibilityLabel="Meus pontos"
               hitSlop={8}

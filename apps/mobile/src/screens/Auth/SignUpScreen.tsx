@@ -10,6 +10,8 @@ import {
 import { Link, useRouter } from "expo-router"
 
 import { Button } from "@/components/Button"
+import { PoliciesLink } from "@/components/PoliciesLink"
+import { PoweredByGasolinaCloud } from "@/components/PoweredByGasolinaCloud"
 import { Screen } from "@/components/Screen"
 import { Text } from "@/components/Text"
 import { TextField } from "@/components/TextField"
@@ -184,6 +186,9 @@ export function SignUpScreen() {
           <Text text="Entrar" style={themed($footerLink)} />
         </TouchableOpacity>
       </View>
+
+      <PoliciesLink style={themed($poweredBy)} />
+      <PoweredByGasolinaCloud style={themed($poweredByCompact)} />
     </Screen>
   )
 }
@@ -252,4 +257,12 @@ const $footerLink: ThemedStyle<TextStyle> = ({ colors }) => ({
   color: colors.tint,
   fontSize: 14,
   fontWeight: "600",
+})
+
+const $poweredBy: ThemedStyle<ViewStyle> = ({ spacing }) => ({
+  marginTop: spacing.lg,
+})
+
+const $poweredByCompact: ThemedStyle<ViewStyle> = ({ spacing }) => ({
+  marginTop: spacing.sm,
 })

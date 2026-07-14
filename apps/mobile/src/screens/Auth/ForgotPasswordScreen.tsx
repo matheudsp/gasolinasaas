@@ -4,6 +4,8 @@ import { Link, useRouter } from "expo-router"
 import { MaterialDesignIcons } from "@react-native-vector-icons/material-design-icons"
 
 import { Button } from "@/components/Button"
+import { PoliciesLink } from "@/components/PoliciesLink"
+import { PoweredByGasolinaCloud } from "@/components/PoweredByGasolinaCloud"
 import { Screen } from "@/components/Screen"
 import { Text } from "@/components/Text"
 import { TextField } from "@/components/TextField"
@@ -153,6 +155,9 @@ export function ForgotPasswordScreen() {
           />
         </>
       )}
+
+      <PoliciesLink style={themed($poweredBy)} />
+      <PoweredByGasolinaCloud style={themed($poweredByCompact)} />
     </Screen>
   )
 }
@@ -242,4 +247,12 @@ const $retryLinkText: ThemedStyle<TextStyle> = ({ colors }) => ({
   color: colors.tint,
   fontSize: 14,
   fontWeight: "600",
+})
+
+const $poweredBy: ThemedStyle<ViewStyle> = ({ spacing }) => ({
+  marginTop: spacing.xl,
+})
+
+const $poweredByCompact: ThemedStyle<ViewStyle> = ({ spacing }) => ({
+  marginTop: spacing.sm,
 })
