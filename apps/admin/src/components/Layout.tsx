@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Logo } from "@/components/Logo";
+import { PaymentReminderBanner } from "@/components/PaymentReminderBanner";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
   DropdownMenu,
@@ -257,6 +258,7 @@ export function Layout() {
 
       <main className="flex-1">
         <div className="container mx-auto p-4 sm:p-6 lg:p-8">
+          <PaymentReminderBanner />
           <Outlet />
         </div>
       </main>

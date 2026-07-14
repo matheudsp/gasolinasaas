@@ -154,6 +154,65 @@ export const adminRouter = {
         if (!deleted) throw new ORPCError("NOT_FOUND");
         return { success: true };
       }),
+
+    /**
+     * Donos de todas as redes — as contas que administram cada tenant.
+     * Uma linha por (tenant, owner); tenants sem dono não aparecem aqui
+     * (a UI cruza com tenant.list para detectá-los).
+     */
+    listOwners: adminProcedure.handler(async ({ context }) => {
+      return context.db
+        .select({
+          tenantId: tenant.id,
+          tenantName: tenant.name,
+          tenantSlug: tenant.slug,
+          tenantActive: tenant.isActive,
+          userId: user.id,
+          name: user.name,
+          email: user.email,
+          banned: user.banned,
+          createdAt: tenantMembership.createdAt,
+        })
+        .from(tenantMembership)
+        .innerJoin(tenant, eq(tenantMembership.tenantId, tenant.id))
+        .innerJoin(user, eq(tenantMembership.userId, user.id))
+        .where(eq(tenantMembership.role, "owner"))
+        .orderBy(tenant.name);
+    }),
+
+    /** Atribui um usuário (por e-mail) como dono de uma rede. */
+    assignOwnerByEmail: adminProcedure
+      .input(z.object({ tenantId: z.string(), email: z.string().email() }))
+      .handler(async ({ context, input }) => {
+        const [target] = await context.db
+          .select({ id: user.id })
+          .from(user)
+          .where(eq(user.email, input.email));
+
+        if (!target) {
+          throw new ORPCError("NOT_FOUND", {
+            message: "Nenhum usuário com esse e-mail. Crie a conta primeiro.",
+          });
+        }
+
+        const now = new Date();
+        await context.db
+          .insert(tenantMembership)
+          .values({
+            id: crypto.randomUUID(),
+            tenantId: input.tenantId,
+            userId: target.id,
+            role: "owner",
+            createdAt: now,
+            updatedAt: now,
+          })
+          .onConflictDoUpdate({
+            target: [tenantMembership.tenantId, tenantMembership.userId],
+            set: { role: "owner", updatedAt: now },
+          });
+
+        return { success: true };
+      }),
   },
 
   user: {

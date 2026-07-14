@@ -15,6 +15,7 @@ import {
   Pencil,
   Plus,
   RefreshCw,
+  ShieldCheck,
   Trash2,
   UserMinus,
   UserPlus,
@@ -22,6 +23,7 @@ import {
   XCircle,
 } from "lucide-react";
 import { orpc } from "@/lib/orpc";
+import { OwnersTab } from "@/pages/admin/OwnersTab";
 import { useAuth } from "@/context/AuthContext";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -99,10 +101,14 @@ export default function AdminPage() {
       </div>
 
       <Tabs defaultValue="tenants">
-        <TabsList className="grid w-full max-w-lg grid-cols-4">
+        <TabsList className="grid w-full max-w-2xl grid-cols-5">
           <TabsTrigger value="tenants" className="gap-1.5">
             <Building2 className="h-3.5 w-3.5" />
             Domínios
+          </TabsTrigger>
+          <TabsTrigger value="owners" className="gap-1.5">
+            <ShieldCheck className="h-3.5 w-3.5" />
+            Donos
           </TabsTrigger>
           <TabsTrigger value="users" className="gap-1.5">
             <Users className="h-3.5 w-3.5" />
@@ -119,6 +125,9 @@ export default function AdminPage() {
         </TabsList>
         <TabsContent value="tenants" className="mt-4">
           <TenantsTab />
+        </TabsContent>
+        <TabsContent value="owners" className="mt-4">
+          <OwnersTab />
         </TabsContent>
         <TabsContent value="users" className="mt-4">
           <UsersTab />
