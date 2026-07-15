@@ -1,5 +1,6 @@
 import { createORPCClient } from "@orpc/client";
 import { RPCLink } from "@orpc/client/fetch";
+import { BatchLinkPlugin } from "@orpc/client/plugins";
 import { createTanstackQueryUtils } from "@orpc/tanstack-query";
 import { QueryCache, QueryClient } from "@tanstack/react-query";
 import { authClient } from "@/lib/auth";
@@ -33,6 +34,14 @@ export const queryClient = new QueryClient({
 
 export const link = new RPCLink({
   url: `${Config.API_URL}/rpc`,
+  // Chamadas disparadas no mesmo tick (ex.: as queries do boot) viram UM
+  // request HTTP — o server desempacota via BatchHandlerPlugin. Cada request
+  // do Worker conta na cota da Cloudflare.
+  plugins: [
+    new BatchLinkPlugin({
+      groups: [{ condition: () => true, context: {} }],
+    }),
+  ],
   headers() {
     const headers: Record<string, string> = {
       "x-tenant-slug": TENANT_SLUG,
