@@ -9,12 +9,15 @@ const palette = {
   neutral800: "#161A24",
   neutral900: "#000000",
 
-  primary100: "#D7DBE5",
-  primary200: "#ABB4C8",
-  primary300: "#7A88A7",
-  primary400: "#4E618A",
-  primary500: "#22396D",
-  primary600: "#1B2C55",
+  // Escala primary NEUTRA de propósito: é o fallback white-label quando o
+  // tenant não configurou cor no /admin (derivada de #2D313A com as mesmas
+  // proporções que theme/tenantBranding.ts usa para a cor do tenant).
+  primary100: "#D9DADC",
+  primary200: "#AFB1B4",
+  primary300: "#818389",
+  primary400: "#575A61",
+  primary500: "#2D313A",
+  primary600: "#23262D",
 
   secondary100: "#DBDEE6",
   secondary200: "#BAC1D0",
@@ -33,7 +36,7 @@ const palette = {
 
   overlay20: "rgba(22, 26, 36, 0.2)",
   overlay50: "rgba(22, 26, 36, 0.5)",
-} as const
+}
 
 export const colors = {
   /**
@@ -82,4 +85,4 @@ export const colors = {
    * Error Background.
    */
   errorBackground: palette.angry100,
-} as const
+}

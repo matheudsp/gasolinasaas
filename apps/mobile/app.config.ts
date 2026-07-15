@@ -28,6 +28,16 @@ if (!tenant) {
 const tenantAssets = `./tenants/${tenant.slug}`
 
 /**
+ * Cores nativas assadas no binário — neutras e IGUAIS para todos os tenants,
+ * de propósito: o que é nativo não muda via OTA, e manter tudo idêntico
+ * preserva o fingerprint compartilhado entre os builds. A identidade visual
+ * por tenant (logo e cores do tema) vem do server em runtime, configurada
+ * no painel /admin.
+ */
+const SPLASH_BACKGROUND = "#FFFFFF"
+const NOTIFICATION_ICON_COLOR = "#F7f7f7"
+
+/**
  * @param config ExpoConfig coming from the static config app.json if it exists
  *
  * You can read more about Expo's Configuration Resolution Rules here:
@@ -99,14 +109,14 @@ module.exports = ({ config }: ConfigContext): Partial<ExpoConfig> => {
           image: `${tenantAssets}/splash-logo.png`,
           imageWidth: 300,
           resizeMode: "contain",
-          backgroundColor: tenant.colors.splashBackground,
+          backgroundColor: SPLASH_BACKGROUND,
         },
       ],
       [
         "expo-notifications",
         {
           icon: `${tenantAssets}/app-icon-android-legacy.png`,
-          color: tenant.colors.notification,
+          color: NOTIFICATION_ICON_COLOR,
           sounds: [],
         },
       ],

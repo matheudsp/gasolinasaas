@@ -1,0 +1,1 @@
+ALTER TABLE "tenant" DROP COLUMN "brand_background_color";

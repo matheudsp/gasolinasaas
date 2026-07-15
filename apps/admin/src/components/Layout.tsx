@@ -13,6 +13,7 @@ import {
   TowerControl,
   Building2,
   Star,
+  Palette,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Logo } from "@/components/Logo";
@@ -98,6 +99,7 @@ export function Layout() {
           { to: "/dashboard", label: "Painel", icon: LayoutDashboard },
           { to: "/push-notifications", label: "Notificações", icon: Bell },
           { to: "/fidelidade", label: "Fidelidade", icon: Star },
+          { to: "/marca", label: "Marca do app", icon: Palette },
         ]
       : []),
     // Owner acompanha a própria assinatura; admin gerencia todas em

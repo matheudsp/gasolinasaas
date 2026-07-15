@@ -5,31 +5,21 @@ import { useQuery } from "@tanstack/react-query"
 
 import Config from "@/config"
 import { orpc } from "@/lib/orpc"
+import { BRANDING_STORAGE_KEY, type TenantBranding } from "@/theme/tenantBranding"
 import { load, save } from "@/utils/storage"
 
 /**
  * Branding white-label do tenant, vindo do server (`tenant.branding`).
  *
- * O logo NÃO pode ser um require estático compartilhado: como o bundle JS é
+ * O logo e as cores NÃO podem ser estáticos no bundle: como o bundle JS é
  * o mesmo para todos os tenants (EAS Update com fingerprint), um update OTA
- * mostraria o logo de um tenant nos apps dos outros. Aqui o logo vem do
- * server (R2) por tenant, com cache local (MMKV) para abrir offline e
- * fallback para o asset embarcado no binário.
+ * mostraria a identidade de um tenant nos apps dos outros. Aqui tudo vem do
+ * server por tenant, com cache local (MMKV) para abrir offline e fallback
+ * para o asset/tema embarcados no binário. As cores são aplicadas ao tema
+ * pelo ThemeProvider, que lê o mesmo cache (theme/tenantBranding.ts).
  */
 
 const fallbackLogo: ImageSourcePropType = require("@assets/images/logo.png")
-
-const BRANDING_STORAGE_KEY = "tenant.branding.v1"
-
-type TenantBranding = {
-  name: string
-  slug: string
-  logoUrl: string | null
-  colors: {
-    primary: string | null
-    background: string | null
-  }
-}
 
 /** Caminhos vêm relativos do server; cada cliente prefixa a própria base de API. */
 function resolveImageUrl(url: string | null): string | null {
@@ -61,7 +51,7 @@ export function useTenantBranding() {
     /** Pronto pra passar direto num <Image source={...}>. */
     logoSource: (logoUri ? { uri: logoUri } : fallbackLogo) as ImageSourcePropType,
     /** Cores do tema do tenant (nulas = tema padrão do build). */
-    colors: branding?.colors ?? { primary: null, background: null },
+    colors: branding?.colors ?? { primary: null },
   }
 }
 

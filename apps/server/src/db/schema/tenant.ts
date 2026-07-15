@@ -33,9 +33,10 @@ export const tenant = pgTable("tenant", {
   // logoUrl guarda caminho RELATIVO (/images/tenant-logos/{id}?v=...), nunca
   // URL absoluta — cada cliente prefixa com a própria base de API.
   logoUrl: text("logo_url"),
-  // Cores do tema em hex (#RRGGBB). Nulas = app usa o tema padrão do build.
+  // Cor principal do tema em hex (#RRGGBB) — botões e destaques do app.
+  // Nula = tema padrão do build. Fundos NÃO são configuráveis: são
+  // padronizados pelos temas claro/escuro do app.
   brandPrimaryColor: text("brand_primary_color"),
-  brandBackgroundColor: text("brand_background_color"),
   createdAt: timestamp("created_at").notNull(),
   updatedAt: timestamp("updated_at").notNull(),
 });

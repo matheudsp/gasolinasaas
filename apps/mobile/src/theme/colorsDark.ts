@@ -9,12 +9,13 @@ const palette = {
   neutral200: "#161A24",
   neutral100: "#000000",
 
-  primary600: "#D7DBE5",
-  primary500: "#ABB4C8",
-  primary400: "#7A88A7",
-  primary300: "#4E618A",
-  primary200: "#22396D",
-  primary100: "#1B2C55",
+  // Escala neutra do fallback white-label (colors.ts), invertida para o dark.
+  primary600: "#D9DADC",
+  primary500: "#AFB1B4",
+  primary400: "#818389",
+  primary300: "#575A61",
+  primary200: "#2D313A",
+  primary100: "#23262D",
 
   secondary500: "#DBDEE6",
   secondary400: "#BAC1D0",
@@ -33,7 +34,7 @@ const palette = {
 
   overlay20: "rgba(22, 26, 36, 0.2)",
   overlay50: "rgba(22, 26, 36, 0.5)",
-} as const
+}
 
 export const colors = {
   palette,
@@ -47,4 +48,4 @@ export const colors = {
   separator: palette.neutral300,
   error: palette.angry500,
   errorBackground: palette.angry100,
-} as const
+}

@@ -29,12 +29,6 @@ export type TenantAppConfig = {
   android: {
     package: string
   }
-  colors: {
-    /** Fundo da splash screen */
-    splashBackground: string
-    /** Cor do ícone de notificação (Android) */
-    notification: string
-  }
 }
 
 export const tenants: Record<string, TenantAppConfig> = {
@@ -47,10 +41,6 @@ export const tenants: Record<string, TenantAppConfig> = {
     },
     android: {
       package: "com.mdsp.martinez",
-    },
-    colors: {
-      splashBackground: "#161A24",
-      notification: "#161A24",
     },
   },
 }

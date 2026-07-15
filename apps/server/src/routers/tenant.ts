@@ -35,7 +35,6 @@ export const tenantRouter = {
       logoUrl: context.tenant.logoUrl,
       colors: {
         primary: context.tenant.brandPrimaryColor,
-        background: context.tenant.brandBackgroundColor,
       },
     };
   }),
@@ -72,7 +71,6 @@ export const tenantRouter = {
         name: z.string().min(1).optional(),
         // null limpa a cor (volta ao tema padrão do app).
         brandPrimaryColor: hexColorSchema.nullable().optional(),
-        brandBackgroundColor: hexColorSchema.nullable().optional(),
       }),
     )
     .handler(async ({ context, input }) => {

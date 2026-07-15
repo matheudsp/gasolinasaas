@@ -19,13 +19,14 @@ import { Screen } from "@/components/Screen"
 import { Text } from "@/components/Text"
 import { TextField } from "@/components/TextField"
 
-const appLogo = require("@assets/images/logo.png")
 import { authClient } from "@/lib/auth"
+import { useTenantBranding } from "@/lib/branding"
 import { useAppTheme } from "@/theme/context"
 import type { ThemedStyle } from "@/theme/types"
 
 export function SignInScreen() {
   const { themed, theme } = useAppTheme()
+  const { name: appName, logoSource } = useTenantBranding()
   const router = useRouter()
   const passwordRef = useRef<TextInput>(null)
 
@@ -93,8 +94,8 @@ export function SignInScreen() {
     >
       {/* Branding */}
       <View style={themed($header)}>
-        <Image source={appLogo} style={themed($appLogo)} resizeMode="contain" />
-        <Text preset="heading" text="Martinez" style={themed($appName)} />
+        <Image source={logoSource} style={themed($appLogo)} resizeMode="contain" />
+        <Text preset="heading" text={appName} style={themed($appName)} />
         <Text text="Muito mais que combustível" style={themed($tagline)} />
       </View>
 

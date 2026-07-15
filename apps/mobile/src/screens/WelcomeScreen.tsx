@@ -5,22 +5,23 @@ import { Screen } from "@/components/Screen"
 import { Text } from "@/components/Text"
 
 import type { ThemedStyle } from "@/theme/types"
+import { useTenantBranding } from "@/lib/branding"
 import { useAppTheme } from "@/theme/context"
 import { $styles } from "@/theme/styles"
 import { useSafeAreaInsetsStyle } from "@/utils/useSafeAreaInsetsStyle"
 
-const welcomeLogo = require("@assets/images/logo.png")
 const welcomeFace = require("@assets/images/welcome-face.png")
 
 export const WelcomeScreen: FC = function WelcomeScreen() {
   const { themed, theme } = useAppTheme()
+  const { logoSource } = useTenantBranding()
 
   const $bottomContainerInsets = useSafeAreaInsetsStyle(["bottom"])
 
   return (
     <Screen preset="fixed" contentContainerStyle={$styles.flex1}>
       <View style={themed($topContainer)}>
-        <Image style={themed($welcomeLogo)} source={welcomeLogo} resizeMode="contain" />
+        <Image style={themed($welcomeLogo)} source={logoSource} resizeMode="contain" />
         <Text
           testID="welcome-heading"
           style={themed($welcomeHeading)}

@@ -17,6 +17,11 @@ import { useMMKVString } from "react-native-mmkv"
 import { storage } from "@/utils/storage"
 
 import { setImperativeTheming } from "./context.utils"
+import {
+  applyTenantBrandingColors,
+  BRANDING_STORAGE_KEY,
+  parseTenantBranding,
+} from "./tenantBranding"
 import { darkTheme, lightTheme } from "./theme"
 import type {
   AllowedStylesT,
@@ -91,14 +96,15 @@ export const ThemeProvider: FC<PropsWithChildren<ThemeProviderProps>> = ({
   }
 }, [themeContext])
 
+  // Branding do tenant cacheado pelo useTenantBranding (lib/branding.ts).
+  // Ler direto do MMKV mantém o tema fora do query client (e reativo: quando
+  // o hook salva um branding novo, o tema re-renderiza sozinho).
+  const [brandingRaw] = useMMKVString(BRANDING_STORAGE_KEY, storage)
+
   const theme: Theme = useMemo(() => {
-    switch (themeContext) {
-      case "dark":
-        return darkTheme
-      default:
-        return lightTheme
-    }
-  }, [themeContext])
+    const base = themeContext === "dark" ? darkTheme : lightTheme
+    return applyTenantBrandingColors(base, parseTenantBranding(brandingRaw))
+  }, [themeContext, brandingRaw])
 
   useEffect(() => {
     setImperativeTheming(theme)

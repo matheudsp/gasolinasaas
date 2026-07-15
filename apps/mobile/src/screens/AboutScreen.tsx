@@ -11,17 +11,15 @@ import {
   PoweredByGasolinaCloud,
   useGasolinaCloudColor,
 } from "@/components/PoweredByGasolinaCloud"
+import { useTenantBranding } from "@/lib/branding"
 import { useAppTheme } from "@/theme/context"
 import type { ThemedStyle } from "@/theme/types"
-
-const appLogo = require("@assets/images/logo.png")
 
 export const AboutScreen: FC = function AboutScreen() {
   const router = useRouter()
   const { themed } = useAppTheme()
   const brandColor = useGasolinaCloudColor()
-
-  const appName = Constants.expoConfig?.name ?? "App"
+  const { name: appName, logoSource } = useTenantBranding()
   const version = Constants.expoConfig?.version ?? "1.0.0"
 
   return (
@@ -30,7 +28,7 @@ export const AboutScreen: FC = function AboutScreen() {
 
       {/* ── Identidade do app (marca do tenant) ─────────────────────────── */}
       <View style={themed($appSection)}>
-        <Image source={appLogo} style={themed($appLogo)} resizeMode="contain" />
+        <Image source={logoSource} style={themed($appLogo)} resizeMode="contain" />
         <Text preset="heading" text={appName} style={$centered} />
         <Text size="xs" style={themed($dim)} text={`Versão ${version}`} />
       </View>
