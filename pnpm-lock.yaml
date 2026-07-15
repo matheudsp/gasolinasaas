@@ -40,7 +40,7 @@ importers:
         version: 1.14.6
       '@orpc/tanstack-query':
         specifier: ^1.14.6
-        version: 1.14.6(@orpc/client@1.14.6)(@tanstack/query-core@5.101.1)
+        version: 1.14.6(@orpc/client@1.14.6)(@tanstack/query-core@5.101.2)
       '@radix-ui/react-avatar':
         specifier: ^1.1.11
         version: 1.2.0(@types/react-dom@19.2.3(@types/react@19.2.17))(@types/react@19.2.17)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
@@ -176,16 +176,22 @@ importers:
         version: 56.0.15(@expo/log-box@56.0.13)(expo@56.0.12)(react-dom@19.2.3(react@19.2.3))(react-native@0.85.3(@babel/core@7.29.7)(@react-native/jest-preset@0.85.3(@babel/core@7.29.7)(react@19.2.3))(@react-native/metro-config@0.85.3(@babel/core@7.29.7))(@types/react@19.2.17)(react@19.2.3))(react@19.2.3)
       '@orpc/tanstack-query':
         specifier: ^1.14.6
-        version: 1.14.6(@orpc/client@1.14.6)(@tanstack/query-core@5.101.1)
+        version: 1.14.6(@orpc/client@1.14.6)(@tanstack/query-core@5.101.2)
       '@react-native-vector-icons/material-design-icons':
         specifier: ^13.1.2
         version: 13.1.2(@expo/config-plugins@56.0.9(typescript@6.0.3))(@react-native/assets-registry@0.85.3)(expo-font@56.0.7)(react-native@0.85.3(@babel/core@7.29.7)(@react-native/jest-preset@0.85.3(@babel/core@7.29.7)(react@19.2.3))(@react-native/metro-config@0.85.3(@babel/core@7.29.7))(@types/react@19.2.17)(react@19.2.3))(react@19.2.3)
       '@react-native-vector-icons/material-icons':
         specifier: ^13.1.2
         version: 13.1.2(@expo/config-plugins@56.0.9(typescript@6.0.3))(@react-native/assets-registry@0.85.3)(expo-font@56.0.7)(react-native@0.85.3(@babel/core@7.29.7)(@react-native/jest-preset@0.85.3(@babel/core@7.29.7)(react@19.2.3))(@react-native/metro-config@0.85.3(@babel/core@7.29.7))(@types/react@19.2.17)(react@19.2.3))(react@19.2.3)
+      '@tanstack/query-sync-storage-persister':
+        specifier: ^5.101.2
+        version: 5.101.2
       '@tanstack/react-query':
-        specifier: ^5.100.10
-        version: 5.101.1(react@19.2.3)
+        specifier: ^5.101.2
+        version: 5.101.2(react@19.2.3)
+      '@tanstack/react-query-persist-client':
+        specifier: ^5.101.2
+        version: 5.101.2(@tanstack/react-query@5.101.2(react@19.2.3))(react@19.2.3)
       date-fns:
         specifier: ^4.1.0
         version: 4.4.0
@@ -4152,8 +4158,28 @@ packages:
   '@tanstack/query-core@5.101.1':
     resolution: {integrity: sha512-Y6Y92dkXtNqx67m2pMSxUsA3zOCwv862JexZRP8/EPwvKXMPu9m8rv43spiXWzOUIggQ3SQApttALStzhA8B4g==}
 
+  '@tanstack/query-core@5.101.2':
+    resolution: {integrity: sha512-hH5MLoJhF7KaIGd7q3xTXGXvslI+GYlM1Z/35aSHHWaCJWB7XvTSHYuV3eM7tw+aE0mT/xMro4M4Q9rCGHT0lw==}
+
+  '@tanstack/query-persist-client-core@5.101.2':
+    resolution: {integrity: sha512-rgMsbvBVpSPDUsprC9FYxojdG0Q1LH6yq1i3DXz2aps4VEqv2l4Msj3YDqIifU3xkl/DrYe9YWntZAJLrM6xTg==}
+
+  '@tanstack/query-sync-storage-persister@5.101.2':
+    resolution: {integrity: sha512-hRyLEJvkUWtfCUA3Lf5vD1CrXbHHK4pZNM/iNd7JM5GgC4CWzGIHkVkeg8zC2LV11KceKObKgjNuMSg3b6NOjA==}
+
+  '@tanstack/react-query-persist-client@5.101.2':
+    resolution: {integrity: sha512-19UpaRtf0lvB2QAJ2MoixxtGf3osMOd508g99EsttUj4+3eLs+ulnNgYjB7AkQMHrRlcbVXqpVNqWkB4a7g8Zw==}
+    peerDependencies:
+      '@tanstack/react-query': ^5.101.2
+      react: ^18 || ^19
+
   '@tanstack/react-query@5.101.1':
     resolution: {integrity: sha512-ZnONUuQKJe1bJMStXUL1s5uKN9FcfC28j5cK+iDZcdSHtUv1wtin1cGc/Oewhf2Oc4eKY7lggtpvT/AbMmhHew==}
+    peerDependencies:
+      react: ^18 || ^19
+
+  '@tanstack/react-query@5.101.2':
+    resolution: {integrity: sha512-seDkr6kzGzX1okaaTtZPtgA688CDPlXUz1C6xSg0ESqn04Vuc8tlrYms1s3de+znBqhPVxFRfpAfUf+6XvfPWg==}
     peerDependencies:
       react: ^18 || ^19
 
@@ -13188,11 +13214,11 @@ snapshots:
     transitivePeerDependencies:
       - '@opentelemetry/api'
 
-  '@orpc/tanstack-query@1.14.6(@orpc/client@1.14.6)(@tanstack/query-core@5.101.1)':
+  '@orpc/tanstack-query@1.14.6(@orpc/client@1.14.6)(@tanstack/query-core@5.101.2)':
     dependencies:
       '@orpc/client': 1.14.6
       '@orpc/shared': 1.14.6
-      '@tanstack/query-core': 5.101.1
+      '@tanstack/query-core': 5.101.2
     transitivePeerDependencies:
       - '@opentelemetry/api'
 
@@ -14510,7 +14536,9 @@ snapshots:
       metro-runtime: 0.84.4
     transitivePeerDependencies:
       - '@babel/core'
+      - bufferutil
       - supports-color
+      - utf-8-validate
 
   '@react-native/normalize-colors@0.74.89': {}
 
@@ -14807,9 +14835,31 @@ snapshots:
 
   '@tanstack/query-core@5.101.1': {}
 
+  '@tanstack/query-core@5.101.2': {}
+
+  '@tanstack/query-persist-client-core@5.101.2':
+    dependencies:
+      '@tanstack/query-core': 5.101.2
+
+  '@tanstack/query-sync-storage-persister@5.101.2':
+    dependencies:
+      '@tanstack/query-core': 5.101.2
+      '@tanstack/query-persist-client-core': 5.101.2
+
+  '@tanstack/react-query-persist-client@5.101.2(@tanstack/react-query@5.101.2(react@19.2.3))(react@19.2.3)':
+    dependencies:
+      '@tanstack/query-persist-client-core': 5.101.2
+      '@tanstack/react-query': 5.101.2(react@19.2.3)
+      react: 19.2.3
+
   '@tanstack/react-query@5.101.1(react@19.2.3)':
     dependencies:
       '@tanstack/query-core': 5.101.1
+      react: 19.2.3
+
+  '@tanstack/react-query@5.101.2(react@19.2.3)':
+    dependencies:
+      '@tanstack/query-core': 5.101.2
       react: 19.2.3
 
   '@tanstack/react-router@1.170.16(react-dom@19.2.3(react@19.2.3))(react@19.2.3)':

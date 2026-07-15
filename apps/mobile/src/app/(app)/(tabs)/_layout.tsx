@@ -11,7 +11,11 @@ export default function TabsLayout() {
 
   // A tab "Operador" só existe para owner/operator do tenant. Enquanto o
   // papel carrega, fica oculta — aparece assim que a query resolve.
-  const { data: roleData } = useQuery(orpc.loyalty.myRole.queryOptions());
+  // staleTime longo: papel quase nunca muda e o cache persiste entre
+  // aberturas — evita 1 request por boot.
+  const { data: roleData } = useQuery(
+    orpc.loyalty.myRole.queryOptions({ staleTime: 1000 * 60 * 60 }),
+  );
   const isOperator = roleData?.role === "owner" || roleData?.role === "operator";
 
   return (

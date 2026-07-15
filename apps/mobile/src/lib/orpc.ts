@@ -19,6 +19,9 @@ export const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       staleTime: 1000 * 60,
+      // Precisa ser >= maxAge da persistência (queryPersistence.ts): só
+      // queries ainda vivas no cache são gravadas/hidratadas do MMKV.
+      gcTime: 1000 * 60 * 60 * 24,
     },
   },
   queryCache: new QueryCache({

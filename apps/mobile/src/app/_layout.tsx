@@ -7,9 +7,14 @@ import { initialWindowMetrics, SafeAreaProvider } from "react-native-safe-area-c
 import { ThemeProvider } from "@/theme/context"
 import { customFontsToLoad } from "@/theme/typography"
 import { authClient } from "@/lib/auth"
-import { QueryClientProvider } from "@tanstack/react-query"
+import { PersistQueryClientProvider } from "@tanstack/react-query-persist-client"
 import { TenantBrandingLoader } from "@/lib/branding"
 import { queryClient } from "@/lib/orpc"
+import {
+  QUERY_CACHE_MAX_AGE,
+  queryCacheBuster,
+  queryCachePersister,
+} from "@/lib/queryPersistence"
 import { usePushNotifications } from "@/hooks/usePushNotifications"
 
 SplashScreen.preventAutoHideAsync()
@@ -44,7 +49,14 @@ export default function Root() {
   // A proteção de rotas é declarativa, via <Redirect> nos layouts de grupo.
   return (
     <SafeAreaProvider initialMetrics={initialWindowMetrics}>
-      <QueryClientProvider client={queryClient}>
+      <PersistQueryClientProvider
+        client={queryClient}
+        persistOptions={{
+          persister: queryCachePersister,
+          maxAge: QUERY_CACHE_MAX_AGE,
+          buster: queryCacheBuster,
+        }}
+      >
         <ThemeProvider>
           <KeyboardProvider>
             <TenantBrandingLoader />
@@ -52,7 +64,7 @@ export default function Root() {
             <Slot />
           </KeyboardProvider>
         </ThemeProvider>
-      </QueryClientProvider>
+      </PersistQueryClientProvider>
     </SafeAreaProvider>
   )
 }

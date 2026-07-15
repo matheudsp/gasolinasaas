@@ -59,7 +59,11 @@ export function useNearbyStations(
     }),
   )
 
-  const fuelsQuery = useQuery(orpc.fuel.listAvailable.queryOptions({ input: {} }))
+  // Catálogo de combustíveis quase não muda; com o cache persistido entre
+  // aberturas, o staleTime longo evita 1 request por boot.
+  const fuelsQuery = useQuery(
+    orpc.fuel.listAvailable.queryOptions({ input: {}, staleTime: 1000 * 60 * 60 }),
+  )
 
   return {
     stations: stationsQuery.data ?? [],
