@@ -94,12 +94,12 @@ export const SelectNetworkScreen: FC = function SelectNetworkScreen() {
         autoCorrect={false}
         containerStyle={themed($search)}
         LeftAccessory={({ style }) => (
-          <MaterialDesignIcons
-            name="magnify"
-            size={20}
-            color={theme.colors.textDim}
-            style={style as object}
-          />
+          // O TextField passa aqui um style de CONTAINER (height 40 + center).
+          // Precisa envolver o ícone num View: aplicado direto no glifo, o
+          // justify/align não centralizam e o ícone encosta no topo.
+          <View style={style as ViewStyle}>
+            <MaterialDesignIcons name="magnify" size={20} color={theme.colors.textDim} />
+          </View>
         )}
       />
 

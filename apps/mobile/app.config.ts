@@ -11,17 +11,6 @@ import "tsx/cjs"
 import { tenantAlternateIcons } from "./tenants/registry"
 
 /**
- * App guarda-chuva "Gasolina" — UM binário para todas as redes.
- *
- * A identidade por tenant (nome, logo, cores) vem do server em runtime
- * (tenant.branding), escolhida pelo usuário na tela de seleção de rede.
- * A única coisa por-tenant que resta no nativo são os ícones alternativos
- * do launcher (expo-dynamic-app-icon), embutidos no build a partir do
- * tenants/registry.ts.
- */
-const appAssets = "./assets/app-icons/gasolina"
-
-/**
  * Cores nativas assadas no binário — neutras, iguais para todos.
  * O que é nativo não muda via OTA.
  */
@@ -41,7 +30,7 @@ module.exports = ({ config }: ConfigContext): Partial<ExpoConfig> => {
     ...config,
     name: "Gasolina",
     scheme: "gasolina",
-    icon: `${appAssets}/app-icon-all.png`,
+    icon: `./assets/icons/app-icon-all.png`,
     updates: {
       ...config.updates,
       url: "https://u.expo.dev/03973ce3-5940-445b-835e-b8ec12cad043",
@@ -51,7 +40,7 @@ module.exports = ({ config }: ConfigContext): Partial<ExpoConfig> => {
     },
     ios: {
       ...config.ios,
-      icon: `${appAssets}/app-icon-ios.png`,
+      icon: `./assets/icons/app-icon-ios.png`,
       bundleIdentifier: "cloud.gasolina.app",
       // This privacyManifests is to get you started.
       // See Expo's guide on apple privacy manifests here:
@@ -70,20 +59,16 @@ module.exports = ({ config }: ConfigContext): Partial<ExpoConfig> => {
     },
     android: {
       ...config.android,
-      icon: `${appAssets}/app-icon-android-legacy.png`,
+      icon: `./assets/icons/app-icon-android-legacy.png`,
       package: "cloud.gasolina.app",
       adaptiveIcon: {
-        foregroundImage: `${appAssets}/app-icon-android-adaptive-foreground.png`,
-        backgroundImage: `${appAssets}/app-icon-android-adaptive-background.png`,
+        foregroundImage: `./assets/icons/app-icon-android-adaptive-foreground.png`,
+        backgroundImage: `./assets/icons/app-icon-android-adaptive-background.png`,
       },
       // ATENÇÃO: precisa ser o google-services.json do app Firebase do
       // package cloud.gasolina.app — o arquivo atual é placeholder copiado
       // do martinez e NÃO vai funcionar num build Android de produção.
       googleServicesFile: "./google-services.json",
-    },
-    web: {
-      ...config.web,
-      favicon: `${appAssets}/app-icon-web-favicon.png`,
     },
     plugins: [
       "@react-native-vector-icons/material-icons",
@@ -98,7 +83,7 @@ module.exports = ({ config }: ConfigContext): Partial<ExpoConfig> => {
       [
         "expo-splash-screen",
         {
-          image: `${appAssets}/splash-logo.png`,
+          image: `./assets/icons/logo2.png`,
           imageWidth: 300,
           resizeMode: "contain",
           backgroundColor: SPLASH_BACKGROUND,
@@ -107,7 +92,7 @@ module.exports = ({ config }: ConfigContext): Partial<ExpoConfig> => {
       [
         "expo-notifications",
         {
-          icon: `${appAssets}/app-icon-android-legacy.png`,
+          icon: `./assets/icons/app-icon-android-legacy.png`,
           color: NOTIFICATION_ICON_COLOR,
           sounds: [],
         },

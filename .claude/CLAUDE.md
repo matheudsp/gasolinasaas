@@ -1,9 +1,13 @@
 # Gasolina — Project Context
 
-SaaS multi-tenant que vende apps mobile white-label para postos e redes de postos.
-Cada rede (tenant) tem seu app, seus postos, seus preços de combustível e envia push
-notifications para os próprios clientes. **Uma única infraestrutura de servidor serve
-todos os tenants** — o isolamento é feito em software, não por deploy separado.
+SaaS multi-tenant para postos e redes de postos. **Um único app mobile "guarda-chuva"
+("Gasolina", bundle `cloud.gasolina.app`) serve todas as redes**: o usuário escolhe a
+rede (tenant) em runtime e o app inteiro rebrandeia — nome, logo, cores do tema e até
+o ícone nativo do launcher. Cada rede tem seus postos, preços de combustível, programa
+de fidelidade e envia push para os próprios clientes. **Uma única infraestrutura de
+servidor serve todos os tenants** — o isolamento é feito em software, não por deploy
+separado. (O modelo antigo de um build white-label por tenant foi removido; binários
+`com.mdsp.martinez` antigos auto-selecionam a rede "martinez" via `applicationId`.)
 
 ## Monorepo
 
@@ -28,9 +32,12 @@ Toda tabela de negócio (`station`, `push_token`, `push_notification`,
 `onDelete: "cascade"`.
 
 **Crucial:** os clientes finais do app mobile (motoristas) **NÃO** são membros do
-tenant — não têm `tenant_membership`. São só `user` autenticados, e o app manda o
-`x-tenant-slug` fixo. Por isso endpoints voltados ao cliente usam `protectedProcedure`
-+ checagem manual de `context.tenant`, **nunca** `tenantProcedure`.
+tenant — não têm `tenant_membership`. São só `user` autenticados (conta global da
+plataforma), e o app manda o `x-tenant-slug` da rede ativa escolhida em runtime. Por
+isso endpoints voltados ao cliente usam `protectedProcedure` + checagem manual de
+`context.tenant`, **nunca** `tenantProcedure`. Dados por-usuário que são por-rede
+(notificações, contador de não lidas) DEVEM filtrar pelo tenant ativo — a mesma conta
+transita entre redes.
 
 Há **dois eixos de autorização independentes** — não confunda:
 - `user.role` (`admin` | `user`), do plugin admin do Better Auth: operador da
@@ -46,9 +53,12 @@ Há **dois eixos de autorização independentes** — não confunda:
 4. primeiro segmento do path (`/rede/rpc/...` → `rede`)
 
 Quem usa o quê hoje: o **admin** manda `x-tenant-id` (tenant ativo selecionado na
-UI, `apps/admin/src/lib/orpc.ts`); o **mobile** manda `x-tenant-slug` fixo,
-resolvido em runtime pelo `applicationId` nativo via `tenants/registry.ts`
-(fallback: `EXPO_PUBLIC_TENANT_SLUG`) — é isso que torna o app white-label por rede.
+UI, `apps/admin/src/lib/orpc.ts`); o **mobile** manda `x-tenant-slug` da rede ativa,
+lida **POR REQUEST** do MMKV (`src/lib/activeTenant.ts`, chave `tenant.active.slug`)
+— nos dois clients (`lib/orpc.ts` via `headers()` e `lib/auth.ts` via
+`fetchOptions.onRequest`). Sem rede escolhida o header simplesmente não vai (o
+`tenant.listPublic` da tela de seleção depende disso). Nunca fixe o slug em
+constante de módulo — trocar de rede muda o header da requisição seguinte.
 
 Resolvido o tenant, `lib/context.ts:createContext` injeta `{ db, session, tenant,
 tenantMembership }` no contexto oRPC. **Se o tenant não existe ou o usuário não é
@@ -89,7 +99,7 @@ apps/server/src/
 ├── middlewares/      # cors.ts · error.ts · session.ts
 ├── lib/              # auth · context · orpc · tenant · email · execution-context · hono-env
 ├── routers/          # station · fuel · tenant · subscription · admin · push · users · loyalty
-├── routes/           # reward-image.ts — rotas Hono cruas (upload/serve de foto no R2)
+├── routes/           # reward-image.ts · tenant-logo.ts — rotas Hono cruas (upload/serve no R2)
 ├── db/schema/        # auth · tenant · station · push · subscription · loyalty
 └── utils/tenant.ts   # strip do prefixo de tenant da URL
 ```
@@ -105,6 +115,19 @@ tipado com `AppEnv` (`lib/hono-env.ts`): bindings do Worker (inclui
 
 O handler catch-all tenta **RPC primeiro, depois OpenAPI**; se nenhum casar, cai no
 `next()`. Ambos compartilham o mesmo `appRouter` — um router, dois transportes.
+
+### Economia de requests (plano da Cloudflare é limitado por requests/dia)
+
+- **Batching de RPCs:** `BatchHandlerPlugin` no `RPCHandler` + `BatchLinkPlugin` nos
+  clients (mobile e admin) — chamadas no mesmo tick viram UM `POST /rpc/.../__batch__`
+  (207 Multi-Status, erros individualizados por chamada). **O CORS precisa liberar o
+  header `x-orpc-batch`** (`middlewares/cors.ts` tem `allowHeaders` como LISTA FIXA —
+  header novo de client web tem que ser adicionado lá, senão o preflight passa e o
+  browser mata o POST com `ERR_FAILED`).
+- **Cache persistido no mobile:** `PersistQueryClientProvider` + persister MMKV
+  (`lib/queryPersistence.ts`), `gcTime` 24h, buster = `versão:slugDaRedeAtiva` (trocar
+  de rede invalida o cache no restore). `staleTime` longos nas queries estáveis
+  (branding/myRole/fuel.listAvailable = 1h).
 
 ## Cloudflare Workers — restrições que já mordem
 
@@ -127,8 +150,12 @@ Quem dispara os pushes precisa inserir uma linha em `push_notification_recipient
 usuário-alvo no momento do envio. Sem isso, a listagem de notificações do usuário
 retorna vazia — o agregado sozinho não sabe quem recebeu o quê.
 
-`push_token` é único por `(tenantId, token)`, não por `token` global: projetos
-FCM/APNs distintos podem emitir o mesmo valor de token.
+`push_token` é único por `(tenantId, token)`, não por `token` global. No modelo
+guarda-chuva, **trocar de rede desregistra o token da rede anterior**
+(`push.unregisterToken`, chamado pelo `switchTenant` do mobile) — o usuário recebe
+push só da rede ativa. `user.listNotifications` e `getUnreadNotificationCount`
+**filtram pelo tenant ativo** (join com `push_notification.tenant_id`) — sem isso a
+mesma conta veria notificações misturadas de todas as redes.
 
 ## Programa de fidelidade (maior subsistema novo)
 
@@ -174,6 +201,33 @@ externas coladas ficam intactas). Upload/serve em `routes/reward-image.ts` + bin
 `REWARD_IMAGES`. **Não** derive a URL de `c.req.url` — no `wrangler dev` o host vem
 como o domínio de produção (por causa do `custom_domain` em `routes`).
 
+## Branding white-label em runtime
+
+A identidade visual do tenant vive no banco e chega ao app em runtime — nada de
+marca no bundle JS (bundle é compartilhado via OTA entre todas as redes):
+
+- **Server:** `tenant.branding` (público — as telas de auth precisam antes do login)
+  retorna `{ name, slug, logoUrl, colors: { primary } }` do tenant do header.
+  `tenant.listPublic` (público, sem header) lista redes ativas pra tela de seleção.
+  `tenant.updateSettings` aceita `brandPrimaryColor` (hex validado, `null` limpa).
+  Logo: upload/serve em `routes/tenant-logo.ts` (mesmo bucket `REWARD_IMAGES`,
+  prefixo `tenant-logos/`), caminho relativo com `?v=` pra cache-busting.
+- **Só logo + cor principal são configuráveis.** Fundos são padronizados pelos temas
+  claro/escuro do app (decisão explícita); a coluna `brand_background_color` foi
+  REMOVIDA (migration 0011). Cores nativas (splash, ícone de notificação) são fixas
+  e neutras no `app.config.ts` — nada por-tenant no lado nativo além dos ícones
+  alternativos do launcher.
+- **Mobile:** `src/lib/branding.ts` (`useTenantBranding`) busca e cacheia no MMKV
+  (`tenant.branding.v1`) — abre offline com a última identidade; fallback pros assets
+  do binário. O **ThemeProvider** lê o MESMO cache via `useMMKVString` (não via query
+  client — testável sem provider) e aplica `theme/tenantBranding.ts`:
+  `buildPrimaryScale` deriva a escala `primary100–600` INTEIRA da cor única, com as
+  mesmas proporções da paleta padrão (100 = base+82% branco … 600 = base+22% preto),
+  invertida no dark. A paleta primary padrão é NEUTRA (derivada de `#2D313A`) — o
+  azul-marinho `#22396D` virou cor configurada do Martinez.
+- **Admin:** página `/marca` (`pages/AppBranding.tsx`) — upload de logo + cor
+  principal, para owner ou admin da plataforma.
+
 ## Frontends (admin e mobile)
 
 **Admin** (`apps/admin`, React + Vite + shadcn):
@@ -184,23 +238,38 @@ como o domínio de produção (por causa do `custom_domain` em `routes`).
   admin-only sob `AdminProtectedRoute`. `Layout` renderiza o `PaymentReminderBanner`.
 - Fidelidade numa página só (`/fidelidade`) com abas Auditoria/Recompensas/Config
   (`pages/LoyaltyAudit|RewardsManager|LoyaltyConfig`). Gestão de donos na aba "Donos"
-  do `/admin` (`pages/admin/OwnersTab`).
+  do `/admin` (`pages/admin/OwnersTab`). Branding do app em `/marca` (`AppBranding`).
 
-**Mobile** (`apps/mobile`, Expo + expo-router):
-- **White-label por build:** `tenants/registry.ts` é a fonte única de identidade
-  (nome, scheme, bundle id, cores) e `tenants/<slug>/` guarda ícones, splash e
-  `google-services.json`. O `app.config.ts` compõe tudo a partir de `TENANT=<slug>`
-  (default `grupo-martinez`; perfil `production:<slug>` no `eas.json`). Em runtime o
-  slug vem do `applicationId` nativo (expo-application) → mapa do registry — **nunca
-  asse o slug no bundle JS**, senão um update OTA compartilhado sobrescreve a
-  identidade dos outros tenants.
+**Mobile** (`apps/mobile`, Expo + expo-router) — **app guarda-chuva único**:
+- **Identidade nativa única** no `app.config.ts`: nome "Gasolina", scheme `gasolina`,
+  bundle/package `cloud.gasolina.app`, assets em `assets/app-icons/gasolina/`,
+  `google-services.json` único na raiz do app. Sem `TENANT` env, sem perfis EAS por
+  tenant. `tenants/registry.ts` virou SÓ o mapa de ícones alternativos do launcher
+  (`tenantAlternateIcons`, consumido pelo plugin `@bsky.app/expo-dynamic-app-icon` no
+  build e por `src/lib/appIcon.ts` em runtime) — ícone de tenant novo = PNGs em
+  `tenants/<slug>/` + registrar + novo build nativo; sem ícone, usa o padrão Gasolina.
+- **Rede ativa em runtime:** `src/lib/activeTenant.ts` (MMKV `tenant.active.slug`,
+  getter síncrono pros headers + hook reativo pros gates). Migração one-shot no
+  import: binário `com.mdsp.martinez` → seed "martinez"; em dev,
+  `EXPO_PUBLIC_TENANT_SLUG` no `.env` pré-seleciona a rede (e PULA o seletor —
+  remova do `.env` pra ver o fluxo frio).
+- **Fluxo de rotas:** sem rede → onboarding `/welcome` (uma vez, flag MMKV em
+  `lib/onboarding.ts`; pager animado dirigido por estado) → `/select-network`
+  (`SelectNetworkScreen`: `tenant.listPublic`, busca, identidade Gasolina Cloud) →
+  sign-in já com a marca da rede (botão "‹ Trocar de rede" no topo). Gates
+  declarativos por `<Redirect>` nos layouts de `(auth)` e `(app)`; `(onboarding)` não
+  tem redirect (acessível sempre). `policies/` segue público.
+- **Troca de rede:** `src/lib/switchTenant.ts` — ordem importa: unregister do push
+  (header ainda da rede antiga) → persiste slug novo → limpa `tenant.branding.v1` →
+  `queryClient.clear()` + cache persistido → `clearPreferredFuel()` → re-registro de
+  push via `key={activeSlug}` no root layout → `setAppIconForTenant` POR ÚLTIMO
+  (Android FECHA o app na troca de ícone; o buster por slug garante estado limpo ao
+  reabrir). Ícone dinâmico só funciona em build nativo (não Expo Go/web).
 - **EAS Update:** `runtimeVersion: { policy: "fingerprint" }` + channels
-  `production`/`preview`. Enquanto o lado nativo for idêntico entre tenants, um único
-  `eas update --channel production` atualiza os apps de todas as redes.
+  `production`/`preview` — um binário, um canal, todas as redes.
 - Tabs em `src/app/(app)/(tabs)/`: Início · Meus pontos · Operador (só owner/operator,
   via `hidden` + `loyalty.myRole`) · Minha Conta. Telas empilhadas em `(app)/` (station,
-  rewards, notifications, about). Políticas públicas em `src/app/policies/` (fora de
-  `(app)`, funcionam sem login).
+  rewards, notifications, about).
 - Telas em `src/screens/`; arquivos de rota são finos (`export default () => <Screen/>`).
 - Marca da plataforma: `components/PoweredByGasolinaCloud` (nuvem-gota SVG, roxo #7C3AED).
   Políticas (Termos/Regulamento/Privacidade) vêm de `.md` em `assets/policies/`.
@@ -226,6 +295,23 @@ como o domínio de produção (por causa do `custom_domain` em `routes`).
 - **Config do mobile:** `config.prod.ts` lê `EXPO_PUBLIC_*` do `.env`; `config.dev.ts` tem
   localhost hardcoded. Build **local** (`--local`) lê o `.env`; build na **nuvem** não
   (gitignored) — nesse caso as vars vão no `eas.json`/`eas env`.
+- **TanStack Query: versões EXATAS alinhadas** (`5.101.2` em react-query +
+  query-sync-storage-persister + react-query-persist-client). O node_modules é
+  hoisted (`node-linker`); um `pnpm add` que re-resolva o react-query pra outro patch
+  descasa os tipos e TODOS os hooks do oRPC passam a retornar `{}` ("No overload
+  matches"). Sintoma = dezenas de erros de tipo espalhados; cura = pinar as três na
+  mesma versão.
+- **Reanimated no WEB tem pegadinhas sérias:** `withSequence`/callbacks encadeados de
+  `withTiming` não avançam de etapa (use UM `withTiming` varrendo a timeline inteira
+  + timer JS pra efeitos colaterais); `scrollTo` programático em ScrollView com
+  `pagingEnabled` é revertido pelo scroll-snap (pager por estado com
+  `translateX` + `withTiming`, como no onboarding); animações `entering`
+  (FadeIn*) podem travar em opacity 0 sob automação de screenshots — glitch web-only.
+  E cuidado com `flex: 1` em slides de pager: o shorthand embute `flexBasis: 0` +
+  `flexShrink: 1` e os slides ENCOLHEM pra caber (sem overflow, nada rola).
+- **`TextField` LeftAccessory/RightAccessory:** o `style` passado é de CONTAINER
+  (height 40 + center) — envolva o ícone num `<View style={style}>`; aplicado direto
+  no glifo, o ícone desalinha pro topo.
 - **`pnpm check` (Biome/Ultracite)** pode dar erro "nested root configuration" (há
   `biome.json` no worktree e na raiz). Rode a formatação por app ou ignore o conflito.
 
@@ -240,14 +326,33 @@ como o domínio de produção (por causa do `custom_domain` em `routes`).
 
 ## Pontas soltas conhecidas
 
+- **Pendências de produção do app guarda-chuva (manuais):** o `google-services.json`
+  na raiz do mobile é PLACEHOLDER copiado do martinez (não funciona em build Android
+  de produção — precisa do app Firebase do package `cloud.gasolina.app`); os assets
+  em `assets/app-icons/gasolina/` também são placeholders do martinez; o app novo
+  ainda não foi cadastrado nas lojas; o ícone dinâmico nunca foi validado em build
+  nativo (não dá pra testar no Expo Go/web).
+- `registerToken` roda em TODO boot logado — falta torná-lo condicional (só quando o
+  token muda; guardar o último enviado no MMKV). Última otimização de requests pendente.
+- Tagline do sign-in ("Muito mais que combustível") ainda é hardcoded no bundle —
+  deveria vir do branding do tenant.
+- O botão "Trocar de rede" da Minha Conta está COMENTADO (decisão de produto) — quem
+  já logou troca de rede saindo da conta e usando o botão do sign-in; o mecanismo
+  `switchTenant` segue ativo no seletor.
+- `tenant.getMyMembership` usa `.limit(1)` — multi-membership retorna arbitrário.
 - `tenantProcedure` está definido mas nenhum router o usa (clientes finais não são
   membros → `protectedProcedure` + checagem manual de `context.tenant`).
-- Migrations de fidelidade: `0007` (papel operator + tabelas base + `pointsPerReal`),
-  `0008` (`pointsPerReal` → `numeric`), `0009` (reward/reward_redemption). O **bucket R2
-  `gasolina-reward-images` precisa existir** (`wrangler r2 bucket create`) antes de deploy.
+- Migrations: `0007`–`0009` (fidelidade + rewards), `0010` (expiração de pontos +
+  colunas de branding), `0011` (remove `brand_background_color`). O **bucket R2
+  `gasolina-reward-images` precisa existir** (`wrangler r2 bucket create`) antes de
+  deploy — ele também guarda os logos (`tenant-logos/`).
 - Criar tenant (`admin.tenant.create`) **não atribui dono** — use
   `admin.tenant.assignOwnerByEmail` (aba "Donos" no painel).
-- `seed.ts` está quebrado (erros de tipo); não bloqueia o build, mas `seed:liso` não roda.
+- `seed.ts` está quebrado (erros de tipo); não bloqueia o build, mas `seed:liso` não
+  roda. Há ~38 erros de tipo pré-existentes no mobile (testes, Toggle, etc.) — filtre
+  o typecheck pelos arquivos que você mexeu.
+- Tenants no banco de dev: `martinez` ("Grupo Martinez") e `nordeste` ("Rede Nordeste
+  Combustíveis"). O slug antigo `grupo-martinez` foi renomeado pra `martinez`.
 
 ---
 

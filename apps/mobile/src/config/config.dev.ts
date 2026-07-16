@@ -15,6 +15,6 @@ const API_HOST = Platform.select({
 
 export default {
   API_URL: `http://${API_HOST}:15000`,
-  // API_URL: `http://localhost:15000`,
+  // API_URL: `https://api.gasolina.cloud`,
   FRONTEND_URL: `http://localhost:15001`,
 }

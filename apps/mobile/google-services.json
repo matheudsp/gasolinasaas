@@ -7,6 +7,35 @@
   "client": [
     {
       "client_info": {
+        "mobilesdk_app_id": "1:484457928446:android:79be68372265513e9f37af",
+        "android_client_info": {
+          "package_name": "cloud.gasolina.app"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "484457928446-3pccmg2q7g6vril97rfj8f74m4mb4aqa.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBZP_aK4eZY8ZiKHqb0mCTzAlA32OEf_6g"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "484457928446-3pccmg2q7g6vril97rfj8f74m4mb4aqa.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
         "mobilesdk_app_id": "1:484457928446:android:73e12cef96de2abf9f37af",
         "android_client_info": {
           "package_name": "com.mdsp.martinez"

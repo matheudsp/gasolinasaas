@@ -110,7 +110,6 @@ export function SignInScreen() {
       <View style={themed($header)}>
         <Image source={logoSource} style={themed($appLogo)} resizeMode="contain" />
         <Text preset="heading" text={appName} style={themed($appName)} />
-        <Text text="Muito mais que combustível" style={themed($tagline)} />
       </View>
 
       {/* Form */}

@@ -20,7 +20,7 @@ import { load, save } from "@/utils/storage"
  * pelo ThemeProvider, que lê o mesmo cache (theme/tenantBranding.ts).
  */
 
-const fallbackLogo: ImageSourcePropType = require("@assets/images/logo.png")
+const fallbackLogo: ImageSourcePropType = require("@assets/images/logo2.png")
 
 /** Caminhos vêm relativos do server; cada cliente prefixa a própria base de API. */
 export function resolveImageUrl(url: string | null): string | null {
