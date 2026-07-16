@@ -1,9 +1,11 @@
 import { FC, useMemo, useState } from "react"
 import {
   ActivityIndicator,
+  Alert,
   FlatList,
   Image,
   type ImageStyle,
+  Platform,
   Pressable,
   type TextStyle,
   View,
@@ -23,6 +25,7 @@ import {
 import { Screen } from "@/components/Screen"
 import { Text } from "@/components/Text"
 import { TextField } from "@/components/TextField"
+import { willChangeAppIcon } from "@/lib/appIcon"
 import { resolveImageUrl } from "@/lib/branding"
 import { orpc } from "@/lib/orpc"
 import { switchTenant } from "@/lib/switchTenant"
@@ -62,8 +65,7 @@ export const SelectNetworkScreen: FC = function SelectNetworkScreen() {
     return networks.filter((n) => normalize(n.name).includes(term))
   }, [networks, search])
 
-  async function handleSelect(slug: string) {
-    if (switchingSlug) return
+  async function performSwitch(slug: string) {
     setSwitchingSlug(slug)
     try {
       await switchTenant(slug)
@@ -72,6 +74,26 @@ export const SelectNetworkScreen: FC = function SelectNetworkScreen() {
     } finally {
       setSwitchingSlug(null)
     }
+  }
+
+  function handleSelect(item: { slug: string; name: string }) {
+    if (switchingSlug) return
+
+    // No Android, aplicar o ícone da rede FECHA o app (activity-alias) e o
+    // atalho antigo da tela inicial morre — avisa antes pra não parecer crash.
+    if (Platform.OS === "android" && willChangeAppIcon(item.slug)) {
+      Alert.alert(
+        `Entrar na ${item.name}`,
+        "Para aplicar o ícone da rede, o app vai fechar. Abra de novo pelo novo ícone — se o atalho da tela inicial não funcionar, procure o app na gaveta de aplicativos.",
+        [
+          { text: "Cancelar", style: "cancel" },
+          { text: "Continuar", onPress: () => performSwitch(item.slug) },
+        ],
+      )
+      return
+    }
+
+    performSwitch(item.slug)
   }
 
   return (
@@ -140,7 +162,7 @@ export const SelectNetworkScreen: FC = function SelectNetworkScreen() {
                 accessibilityRole="button"
                 accessibilityLabel={`Entrar na rede ${item.name}`}
                 disabled={!!switchingSlug}
-                onPress={() => handleSelect(item.slug)}
+                onPress={() => handleSelect(item)}
                 style={({ pressed }) => [
                   themed($networkItem),
                   pressed && { opacity: 0.7 },

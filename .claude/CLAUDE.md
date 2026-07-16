@@ -262,9 +262,17 @@ marca no bundle JS (bundle é compartilhado via OTA entre todas as redes):
 - **Troca de rede:** `src/lib/switchTenant.ts` — ordem importa: unregister do push
   (header ainda da rede antiga) → persiste slug novo → limpa `tenant.branding.v1` →
   `queryClient.clear()` + cache persistido → `clearPreferredFuel()` → re-registro de
-  push via `key={activeSlug}` no root layout → `setAppIconForTenant` POR ÚLTIMO
-  (Android FECHA o app na troca de ícone; o buster por slug garante estado limpo ao
-  reabrir). Ícone dinâmico só funciona em build nativo (não Expo Go/web).
+  push via `key={activeSlug}` no root layout → `setAppIconForTenant` POR ÚLTIMO.
+- **Ícone dinâmico no Android — MUITO cuidado:** o módulo (@bsky.app fork) joga o
+  app pro background e MATA o processo de propósito, e **NÃO relança**; qualquer
+  chamada mata o app mesmo sem mudança real de ícone, por isso `lib/appIcon.ts`
+  guarda o ícone aplicado no MMKV (`appIcon.applied.v1`) e só chama o módulo quando
+  o alvo difere (`willChangeAppIcon`). **Atalhos fixados na tela inicial apontam pro
+  activity-alias antigo (desabilitado) e MORREM** — o app reaparece na gaveta com o
+  ícone novo (às vezes só após refresh do launcher). O seletor AVISA antes da troca
+  real no Android. Recovery em dev: `adb shell am start -n
+  cloud.gasolina.app/cloud.gasolina.app.MainActivity<slug>` ou reinstalar. Só
+  funciona em build nativo (não Expo Go/web).
 - **EAS Update:** `runtimeVersion: { policy: "fingerprint" }` + channels
   `production`/`preview` — um binário, um canal, todas as redes.
 - Tabs em `src/app/(app)/(tabs)/`: Início · Meus pontos · Operador (só owner/operator,

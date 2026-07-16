@@ -30,7 +30,7 @@ module.exports = ({ config }: ConfigContext): Partial<ExpoConfig> => {
     ...config,
     name: "Gasolina",
     scheme: "gasolina",
-    icon: `./assets/icons/app-icon-all.png`,
+    icon: `./assets/app-icon/app-icon-all.png`,
     updates: {
       ...config.updates,
       url: "https://u.expo.dev/03973ce3-5940-445b-835e-b8ec12cad043",
@@ -40,7 +40,7 @@ module.exports = ({ config }: ConfigContext): Partial<ExpoConfig> => {
     },
     ios: {
       ...config.ios,
-      icon: `./assets/icons/app-icon-ios.png`,
+      icon: `./assets/app-icon/app-icon-all.png`,
       bundleIdentifier: "cloud.gasolina.app",
       // This privacyManifests is to get you started.
       // See Expo's guide on apple privacy manifests here:
@@ -59,11 +59,11 @@ module.exports = ({ config }: ConfigContext): Partial<ExpoConfig> => {
     },
     android: {
       ...config.android,
-      icon: `./assets/icons/app-icon-android-legacy.png`,
+      icon: `./assets/app-icon/app-icon-all.png`,
       package: "cloud.gasolina.app",
       adaptiveIcon: {
-        foregroundImage: `./assets/icons/app-icon-android-adaptive-foreground.png`,
-        backgroundImage: `./assets/icons/app-icon-android-adaptive-background.png`,
+        foregroundImage: `./assets/app-icon/android-adaptive-foreground.png`,
+        backgroundImage: `./assets/app-icon/android-adaptive-background.png`,
       },
       // ATENÇÃO: precisa ser o google-services.json do app Firebase do
       // package cloud.gasolina.app — o arquivo atual é placeholder copiado
@@ -83,7 +83,7 @@ module.exports = ({ config }: ConfigContext): Partial<ExpoConfig> => {
       [
         "expo-splash-screen",
         {
-          image: `./assets/icons/logo2.png`,
+          image: `./assets/images/logo2.png`,
           imageWidth: 300,
           resizeMode: "contain",
           backgroundColor: SPLASH_BACKGROUND,
@@ -92,13 +92,11 @@ module.exports = ({ config }: ConfigContext): Partial<ExpoConfig> => {
       [
         "expo-notifications",
         {
-          icon: `./assets/icons/app-icon-android-legacy.png`,
+          icon: `./assets/app-icon/app-icon-all.png`,
           color: NOTIFICATION_ICON_COLOR,
           sounds: [],
         },
       ],
-      // Ícones alternativos do launcher, um por tenant registrado —
-      // trocados em runtime pelo src/lib/appIcon.ts na seleção de rede.
       [
         "@bsky.app/expo-dynamic-app-icon",
         Object.fromEntries(
