@@ -20,12 +20,19 @@ export const userRouter = {
       }),
     )
     .handler(async ({ context, input }) => {
-      const whereClause = input.cursor
-        ? and(
-            eq(pushNotificationRecipient.userId, context.session.user.id),
-            lt(pushNotification.createdAt, new Date(input.cursor)),
-          )
-        : eq(pushNotificationRecipient.userId, context.session.user.id);
+      // Com o app guarda-chuva a mesma conta recebe push de várias redes —
+      // sem o filtro de tenant a lista misturaria notificações de todas.
+      if (!context.tenant) {
+        throw new ORPCError("BAD_REQUEST", { message: "Tenant is required" });
+      }
+
+      const whereClause = and(
+        eq(pushNotificationRecipient.userId, context.session.user.id),
+        eq(pushNotification.tenantId, context.tenant.id),
+        ...(input.cursor
+          ? [lt(pushNotification.createdAt, new Date(input.cursor))]
+          : []),
+      );
 
       const rows = await context.db
         .select({
@@ -101,12 +108,22 @@ export const userRouter = {
    * Contagem de notificações não lidas — para badge/indicador no app.
    */
   getUnreadNotificationCount: protectedProcedure.handler(async ({ context }) => {
+    // Mesma razão do listNotifications: o badge é da rede ativa, não global.
+    if (!context.tenant) {
+      throw new ORPCError("BAD_REQUEST", { message: "Tenant is required" });
+    }
+
     const rows = await context.db
       .select({ id: pushNotificationRecipient.id })
       .from(pushNotificationRecipient)
+      .innerJoin(
+        pushNotification,
+        eq(pushNotificationRecipient.notificationId, pushNotification.id),
+      )
       .where(
         and(
           eq(pushNotificationRecipient.userId, context.session.user.id),
+          eq(pushNotification.tenantId, context.tenant.id),
           isNull(pushNotificationRecipient.readAt),
         ),
       );

@@ -32,6 +32,7 @@
     "build:android:prod": "eas build --profile production --platform android --local"
   },
   "dependencies": {
+    "@bsky.app/expo-dynamic-app-icon": "^1.8.5",
     "@expo-google-fonts/space-grotesk": "^0.4.0",
     "@expo/metro-runtime": "~56.0.15",
     "@orpc/tanstack-query": "^1.14.6",

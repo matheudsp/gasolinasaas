@@ -8,7 +8,7 @@ import {
   TextStyle,
   ActivityIndicator,
 } from "react-native"
-import { useFocusEffect, Link, type Href } from "expo-router"
+import { useFocusEffect, useRouter, Link, type Href } from "expo-router"
 import { useMutation, useQuery } from "@tanstack/react-query"
 import { useMMKVString } from "react-native-mmkv"
 import {
@@ -21,6 +21,7 @@ import { Screen } from "@/components/Screen"
 import { Text } from "@/components/Text"
 import { Icon } from "@/components/Icon"
 import { authClient } from "@/lib/auth"
+import { useTenantBranding } from "@/lib/branding"
 import { orpc } from "@/lib/orpc"
 import { useAppTheme } from "@/theme/context"
 import type { ThemedStyle, ThemeContextModeT } from "@/theme/types"
@@ -120,6 +121,22 @@ export function MyAccountScreen() {
       refreshNotif()
     }, [refreshFuel, refreshNotif]),
   )
+
+  const router = useRouter()
+  const { name: networkName } = useTenantBranding()
+
+  // A troca em si (unregister de push, limpeza de caches, ícone) acontece na
+  // tela de seleção via switchTenant — aqui só confirma e navega.
+  function handleSwitchNetwork() {
+    Alert.alert(
+      "Trocar de rede",
+      `Você deixará de receber notificações de ${networkName} e o app pode reiniciar para aplicar o ícone da nova rede.`,
+      [
+        { text: "Cancelar", style: "cancel" },
+        { text: "Trocar de rede", onPress: () => router.push("/select-network") },
+      ],
+    )
+  }
 
   const [isSigningOut, setIsSigningOut] = useState(false)
 
@@ -235,6 +252,20 @@ export function MyAccountScreen() {
           icon="file-document-outline"
           label="Termos e políticas"
           value="Termos de Uso, Regulamento e Privacidade"
+        />
+
+        <Button
+          text="Trocar de rede"
+          preset="default"
+          onPress={handleSwitchNetwork}
+          LeftAccessory={({ style }) => (
+            <MaterialDesignIcons
+              name="swap-horizontal"
+              size={18}
+              color={theme.colors.text}
+              style={style}
+            />
+          )}
         />
 
         <Button

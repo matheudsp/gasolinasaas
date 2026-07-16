@@ -39,6 +39,9 @@ export const apiCorsMiddleware: MiddlewareHandler = (c, next) => {
       "Authorization",
       "x-tenant-id",
       "x-tenant-slug",
+      // Requests em lote do oRPC (BatchLinkPlugin) — sem isso o preflight
+      // passa mas o browser mata o POST /__batch__ com ERR_FAILED.
+      "x-orpc-batch",
     ],
     credentials: true,
   });

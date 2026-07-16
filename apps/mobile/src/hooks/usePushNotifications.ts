@@ -54,6 +54,26 @@ function getEasProjectId(): string | null {
 }
 
 /**
+ * Obtém o Expo push token atual sem pedir permissão (null se não concedida,
+ * ambiente sem módulos nativos ou sem projectId). Usado pelo switchTenant
+ * pra desregistrar o token na rede anterior antes da troca.
+ */
+export async function getExpoPushToken(): Promise<string | null> {
+  if (!_isDevice) return null;
+  const projectId = getEasProjectId();
+  if (!projectId) return null;
+
+  try {
+    const { status } = await Notifications.getPermissionsAsync();
+    if (status !== "granted") return null;
+    const tokenData = await Notifications.getExpoPushTokenAsync({ projectId });
+    return tokenData.data;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Solicita permissão, obtém o token e o registra no servidor.
  * Degrada silenciosamente em ambientes sem módulos nativos (Expo Go).
  */

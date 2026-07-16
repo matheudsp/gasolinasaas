@@ -1,6 +1,7 @@
 import { mmkvStorageAdapter } from "@/utils/storage";
 import { expoClient} from "@better-auth/expo/client";
 import { createAuthClient } from "better-auth/react";
+import { getActiveTenantSlug } from "@/lib/activeTenant";
 import Config from "@/config";
 
 
@@ -13,14 +14,19 @@ export const authClient = createAuthClient({
   fetchOptions: {
     // Identifica a rede (tenant) também nas rotas de auth — sem isso os
     // e-mails transacionais do Better Auth (reset de senha, verificação)
-    // saem sem o branding da rede, porque o servidor resolve o tenant a
-    // partir deste header. O cliente oRPC (lib/orpc.ts) já faz o mesmo.
-    headers: Config.TENANT_SLUG ? { "x-tenant-slug": Config.TENANT_SLUG } : {},
+    // saem sem o branding da rede. Lido POR REQUEST (onRequest, não objeto
+    // estático): no app guarda-chuva a rede é escolhida/trocada em runtime.
+    onRequest(context) {
+      const tenantSlug = getActiveTenantSlug();
+      if (tenantSlug) {
+        context.headers.set("x-tenant-slug", tenantSlug);
+      }
+    },
   },
   plugins: [
     expoClient({
-      scheme: "martinezapp",
-      storagePrefix: "martinez-auth",
+      scheme: "gasolina",
+      storagePrefix: "gasolina-auth",
       storage: mmkvStorageAdapter,
     }),
   ],

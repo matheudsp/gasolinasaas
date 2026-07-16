@@ -35,12 +35,6 @@
     },
     "production": {
       "channel": "production"
-    },
-    "production:grupo-martinez": {
-      "extends": "production",
-      "env": {
-        "TENANT": "grupo-martinez"
-      }
     }
   },
   "submit": {

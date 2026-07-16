@@ -50,10 +50,9 @@ export const auth = betterAuth<BetterAuthOptions>({
     },
   }),
   trustedOrigins: [
-    // CORS_ORIGIN pode listar múltiplas origins separadas por vírgula
-    // (mesmo formato dos middlewares de CORS).
+
     ...(env.CORS_ORIGIN?.split(",").map((o) => o.trim()) ?? []),
-    "martinezapp://",
+    "gasolina://",
     "exp://",
     
     ...(env.NODE_ENV === "development" ? ["http://10.0.2.2:8081",

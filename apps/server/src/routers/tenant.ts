@@ -17,6 +17,23 @@ const hexColorSchema = z
 
 export const tenantRouter = {
   /**
+   * Lista pública das redes ativas — alimenta a tela de escolha de rede do
+   * app guarda-chuva, ANTES de qualquer tenant estar resolvido (não depende
+   * de header). Expõe só o mínimo pra montar a lista: slug, nome e logo.
+   */
+  listPublic: publicProcedure.handler(async ({ context }) => {
+    return await context.db
+      .select({
+        slug: tenant.slug,
+        name: tenant.name,
+        logoUrl: tenant.logoUrl,
+      })
+      .from(tenant)
+      .where(eq(tenant.isActive, true))
+      .orderBy(tenant.name);
+  }),
+
+  /**
    * Branding white-label do tenant (logo e cores do tema). Público — as telas
    * de boas-vindas/login precisam dele antes de o usuário autenticar. O tenant
    * é resolvido pelo header `x-tenant-slug` que o app manda em toda requisição.

@@ -1,58 +1,28 @@
 /**
- * Registry de tenants white-label — fonte única de identidade por rede.
+ * Ícones alternativos por tenant — a única coisa por-tenant que ainda vive
+ * no lado NATIVO do app guarda-chuva.
  *
- * Consumido em dois mundos:
- * - `app.config.ts` (Node, build-time): compõe nome, bundle ids, ícones e
- *   splash do binário a partir do tenant em `process.env.TENANT`.
- * - bundle JS (runtime): resolve o slug do tenant a partir do
- *   `applicationId` nativo (expo-application), que é imutável por OTA.
+ * O app é um só ("Gasolina", cloud.gasolina.app); identidade visual (nome,
+ * logo, cores) vem do server em runtime via tenant.branding. O ícone do
+ * launcher, porém, precisa estar EMBUTIDO no binário (expo-dynamic-app-icon:
+ * iOS alternate icons / Android activity-alias), então:
  *
- * Por isso este arquivo deve conter apenas dados puros (strings) — nada de
- * imports de React Native nem de `require()` de imagens.
+ * - Adicionar o ícone de um tenant novo = colocar os PNGs em
+ *   tenants/<slug>/, registrar aqui e gerar um NOVO build nativo.
+ * - Tenant sem ícone registrado usa o ícone padrão Gasolina — o app
+ *   funciona normalmente, só não personaliza o launcher.
  *
- * Assets de cada tenant vivem em `tenants/<slug>/` com nomes fixos:
- * app-icon-all.png · app-icon-ios.png · app-icon-android-legacy.png ·
- * app-icon-android-adaptive-{foreground,background}.png ·
- * app-icon-web-favicon.png · splash-logo.png · google-services.json
+ * Consumido em dois mundos (por isso só strings puras, sem imports RN):
+ * - app.config.ts (Node, build-time): gera o config plugin dos ícones.
+ * - bundle JS (runtime): src/lib/appIcon.ts decide se o slug tem ícone.
+ *
+ * Os caminhos são relativos à raiz de apps/mobile.
  */
-
-export type TenantAppConfig = {
-  /** Slug do tenant no server (header `x-tenant-slug`) e nome do diretório de assets */
-  slug: string
-  /** Nome do app nas lojas e no launcher */
-  name: string
-  /** Scheme de deep link (ex.: martinezapp://) */
-  scheme: string
-  ios: {
-    bundleIdentifier: string
-  }
-  android: {
-    package: string
-  }
-}
-
-export const tenants: Record<string, TenantAppConfig> = {
-  "grupo-martinez": {
-    slug: "grupo-martinez",
-    name: "Martinez",
-    scheme: "martinezapp",
-    ios: {
-      bundleIdentifier: "com.mdsp.martinez",
-    },
-    android: {
-      package: "com.mdsp.martinez",
-    },
+export const tenantAlternateIcons: Record<string, { ios: string; android: string }> = {
+  martinez: {
+    ios: "./tenants/martinez/app-icon-ios.png",
+    android: "./tenants/martinez/app-icon-android-legacy.png",
   },
 }
 
-/**
- * Mapa applicationId nativo → slug do tenant. Como o bundle id é gravado no
- * binário e não muda via OTA, é seguro compartilhar um único update JS entre
- * todos os tenants — cada app descobre quem é em runtime por este mapa.
- */
-export const bundleIdToTenantSlug: Record<string, string> = Object.fromEntries(
-  Object.values(tenants).flatMap((tenant) => [
-    [tenant.ios.bundleIdentifier, tenant.slug],
-    [tenant.android.package, tenant.slug],
-  ])
-)
+export const EMBEDDED_ICON_SLUGS = Object.keys(tenantAlternateIcons)

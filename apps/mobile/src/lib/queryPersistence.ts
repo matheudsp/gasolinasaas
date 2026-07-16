@@ -15,20 +15,27 @@ import { storage } from "@/utils/storage"
  * O MMKV é síncrono, então a restauração acontece antes do primeiro render —
  * sem flicker de loading pra dados já conhecidos.
  */
+export const QUERY_CACHE_STORAGE_KEY = "tanstack.query.cache.v1"
+
 export const queryCachePersister = createSyncStoragePersister({
   storage: {
     getItem: (key: string) => storage.getString(key) ?? null,
     setItem: (key: string, value: string) => storage.set(key, value),
     removeItem: (key: string) => storage.delete(key),
   },
-  key: "tanstack.query.cache.v1",
+  key: QUERY_CACHE_STORAGE_KEY,
 })
 
 /** Quanto tempo o cache persistido vale entre aberturas. */
 export const QUERY_CACHE_MAX_AGE = 1000 * 60 * 60 * 24 // 24h
 
 /**
- * Trocar de versão do app descarta o cache persistido — evita hidratar
- * shapes antigos depois de um update OTA que mudou o contrato de um router.
+ * O buster amarra o cache persistido à versão do app E à rede ativa:
+ * - update OTA que muda contrato de router descarta shapes antigos;
+ * - trocar de rede descarta o cache da anterior mesmo se a limpeza do
+ *   switchTenant for interrompida (ex.: Android fecha o app na troca de
+ *   ícone) — o restore com buster diferente joga tudo fora.
  */
-export const queryCacheBuster = `v${Constants.expoConfig?.version ?? "0"}`
+export function getQueryCacheBuster(tenantSlug: string | null | undefined) {
+  return `v${Constants.expoConfig?.version ?? "0"}:${tenantSlug ?? "none"}`
+}

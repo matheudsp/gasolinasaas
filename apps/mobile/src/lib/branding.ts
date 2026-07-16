@@ -4,6 +4,7 @@ import Constants from "expo-constants"
 import { useQuery } from "@tanstack/react-query"
 
 import Config from "@/config"
+import { useActiveTenantSlug } from "@/lib/activeTenant"
 import { orpc } from "@/lib/orpc"
 import { BRANDING_STORAGE_KEY, type TenantBranding } from "@/theme/tenantBranding"
 import { load, save } from "@/utils/storage"
@@ -22,14 +23,19 @@ import { load, save } from "@/utils/storage"
 const fallbackLogo: ImageSourcePropType = require("@assets/images/logo.png")
 
 /** Caminhos vêm relativos do server; cada cliente prefixa a própria base de API. */
-function resolveImageUrl(url: string | null): string | null {
+export function resolveImageUrl(url: string | null): string | null {
   if (!url) return null
   return url.startsWith("http") ? url : `${Config.API_URL}${url}`
 }
 
 export function useTenantBranding() {
+  const [activeSlug] = useActiveTenantSlug()
+
   const query = useQuery({
     ...orpc.tenant.branding.queryOptions(),
+    // Sem rede escolhida não há o que buscar — sem header o server
+    // responderia NOT_FOUND em loop.
+    enabled: !!activeSlug,
     staleTime: 1000 * 60 * 60,
     // Cache local: o app abre com o último branding conhecido mesmo offline.
     placeholderData: () => load<TenantBranding>(BRANDING_STORAGE_KEY) ?? undefined,

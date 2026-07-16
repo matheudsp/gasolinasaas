@@ -10,6 +10,7 @@ import {
   TextStyle,
 } from "react-native"
 import { useRouter } from "expo-router"
+import * as Linking from "expo-linking"
 import { MaterialDesignIcons } from "@react-native-vector-icons/material-design-icons"
 
 import { Button } from "@/components/Button"
@@ -74,7 +75,9 @@ export function SignInScreen() {
     try {
       const { error: googleError } = await authClient.signIn.social({
         provider: "google",
-        callbackURL: "martinezapp://",
+        // Resolve o scheme do app dinamicamente: gasolina:// em build,
+        // exp://... em dev — sem scheme hardcoded de tenant.
+        callbackURL: Linking.createURL("/"),
       })
       if (googleError) {
         setError(googleError.message ?? "Erro ao entrar com Google.")
@@ -92,6 +95,17 @@ export function SignInScreen() {
       contentContainerStyle={themed($screen)}
       keyboardShouldPersistTaps="handled"
     >
+      {/* Escolheu a rede errada? Volta pro seletor antes de logar. */}
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="Trocar de rede"
+        onPress={() => router.replace("/select-network")}
+        style={themed($changeNetwork)}
+      >
+        <MaterialDesignIcons name="chevron-left" size={18} color={theme.colors.textDim} />
+        <Text size="xs" text="Trocar de rede" style={themed($changeNetworkText)} />
+      </Pressable>
+
       {/* Branding */}
       <View style={themed($header)}>
         <Image source={logoSource} style={themed($appLogo)} resizeMode="contain" />
@@ -239,6 +253,19 @@ const $screen: ThemedStyle<ViewStyle> = ({ spacing }) => ({
   paddingHorizontal: spacing.lg,
   paddingVertical: spacing.xxl,
   justifyContent: "center",
+})
+
+const $changeNetwork: ThemedStyle<ViewStyle> = ({ spacing }) => ({
+  flexDirection: "row",
+  alignItems: "center",
+  alignSelf: "flex-start",
+  gap: spacing.xxs,
+  paddingVertical: spacing.xs,
+  marginBottom: spacing.sm,
+})
+
+const $changeNetworkText: ThemedStyle<TextStyle> = ({ colors }) => ({
+  color: colors.textDim,
 })
 
 const $header: ThemedStyle<ViewStyle> = ({ spacing }) => ({

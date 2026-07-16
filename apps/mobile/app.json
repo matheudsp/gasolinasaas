@@ -1,5 +1,5 @@
 {
-  "slug": "martinezapp",
+  "slug": "gasolina",
   "version": "1.0.0",
   "orientation": "portrait",
   "userInterfaceStyle": "automatic",
@@ -56,7 +56,6 @@
     },
     "router": {},
     "eas": {
-      "projectId": "03973ce3-5940-445b-835e-b8ec12cad043"
     }
   },
   "owner": "matheudsp"

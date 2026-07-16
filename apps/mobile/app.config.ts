@@ -8,31 +8,22 @@ import { ExpoConfig, ConfigContext } from "@expo/config"
  */
 import "tsx/cjs"
 
-import { tenants } from "./tenants/registry"
+import { tenantAlternateIcons } from "./tenants/registry"
 
 /**
- * Tenant deste build: `TENANT=<slug> eas build ...` (perfis em eas.json).
- * Cada tenant gera um binário próprio (nome, ícones, bundle id), todos a
- * partir deste mesmo codebase. Sem TENANT (ex.: `expo start`), cai no
- * grupo-martinez.
+ * App guarda-chuva "Gasolina" — UM binário para todas as redes.
+ *
+ * A identidade por tenant (nome, logo, cores) vem do server em runtime
+ * (tenant.branding), escolhida pelo usuário na tela de seleção de rede.
+ * A única coisa por-tenant que resta no nativo são os ícones alternativos
+ * do launcher (expo-dynamic-app-icon), embutidos no build a partir do
+ * tenants/registry.ts.
  */
-const tenantSlug = process.env.TENANT ?? "grupo-martinez"
-const tenant = tenants[tenantSlug]
-
-if (!tenant) {
-  throw new Error(
-    `Tenant desconhecido: "${tenantSlug}". Registre-o em tenants/registry.ts e crie tenants/${tenantSlug}/ com os assets (veja o comentário do registry).`
-  )
-}
-
-const tenantAssets = `./tenants/${tenant.slug}`
+const appAssets = "./assets/app-icons/gasolina"
 
 /**
- * Cores nativas assadas no binário — neutras e IGUAIS para todos os tenants,
- * de propósito: o que é nativo não muda via OTA, e manter tudo idêntico
- * preserva o fingerprint compartilhado entre os builds. A identidade visual
- * por tenant (logo e cores do tema) vem do server em runtime, configurada
- * no painel /admin.
+ * Cores nativas assadas no binário — neutras, iguais para todos.
+ * O que é nativo não muda via OTA.
  */
 const SPLASH_BACKGROUND = "#FFFFFF"
 const NOTIFICATION_ICON_COLOR = "#F7f7f7"
@@ -48,22 +39,20 @@ module.exports = ({ config }: ConfigContext): Partial<ExpoConfig> => {
 
   return {
     ...config,
-    name: tenant.name,
-    scheme: tenant.scheme,
-    icon: `${tenantAssets}/app-icon-all.png`,
+    name: "Gasolina",
+    scheme: "gasolina",
+    icon: `${appAssets}/app-icon-all.png`,
     updates: {
       ...config.updates,
       url: "https://u.expo.dev/03973ce3-5940-445b-835e-b8ec12cad043",
     },
-    // fingerprint: enquanto o lado nativo for idêntico, todos os binários
-    // (de todos os tenants) aceitam o mesmo update OTA.
     runtimeVersion: {
       policy: "fingerprint",
     },
     ios: {
       ...config.ios,
-      icon: `${tenantAssets}/app-icon-ios.png`,
-      bundleIdentifier: tenant.ios.bundleIdentifier,
+      icon: `${appAssets}/app-icon-ios.png`,
+      bundleIdentifier: "cloud.gasolina.app",
       // This privacyManifests is to get you started.
       // See Expo's guide on apple privacy manifests here:
       // https://docs.expo.dev/guides/apple-privacy/
@@ -81,17 +70,20 @@ module.exports = ({ config }: ConfigContext): Partial<ExpoConfig> => {
     },
     android: {
       ...config.android,
-      icon: `${tenantAssets}/app-icon-android-legacy.png`,
-      package: tenant.android.package,
+      icon: `${appAssets}/app-icon-android-legacy.png`,
+      package: "cloud.gasolina.app",
       adaptiveIcon: {
-        foregroundImage: `${tenantAssets}/app-icon-android-adaptive-foreground.png`,
-        backgroundImage: `${tenantAssets}/app-icon-android-adaptive-background.png`,
+        foregroundImage: `${appAssets}/app-icon-android-adaptive-foreground.png`,
+        backgroundImage: `${appAssets}/app-icon-android-adaptive-background.png`,
       },
-      googleServicesFile: `${tenantAssets}/google-services.json`,
+      // ATENÇÃO: precisa ser o google-services.json do app Firebase do
+      // package cloud.gasolina.app — o arquivo atual é placeholder copiado
+      // do martinez e NÃO vai funcionar num build Android de produção.
+      googleServicesFile: "./google-services.json",
     },
     web: {
       ...config.web,
-      favicon: `${tenantAssets}/app-icon-web-favicon.png`,
+      favicon: `${appAssets}/app-icon-web-favicon.png`,
     },
     plugins: [
       "@react-native-vector-icons/material-icons",
@@ -106,7 +98,7 @@ module.exports = ({ config }: ConfigContext): Partial<ExpoConfig> => {
       [
         "expo-splash-screen",
         {
-          image: `${tenantAssets}/splash-logo.png`,
+          image: `${appAssets}/splash-logo.png`,
           imageWidth: 300,
           resizeMode: "contain",
           backgroundColor: SPLASH_BACKGROUND,
@@ -115,10 +107,21 @@ module.exports = ({ config }: ConfigContext): Partial<ExpoConfig> => {
       [
         "expo-notifications",
         {
-          icon: `${tenantAssets}/app-icon-android-legacy.png`,
+          icon: `${appAssets}/app-icon-android-legacy.png`,
           color: NOTIFICATION_ICON_COLOR,
           sounds: [],
         },
+      ],
+      // Ícones alternativos do launcher, um por tenant registrado —
+      // trocados em runtime pelo src/lib/appIcon.ts na seleção de rede.
+      [
+        "@bsky.app/expo-dynamic-app-icon",
+        Object.fromEntries(
+          Object.entries(tenantAlternateIcons).map(([slug, icons]) => [
+            slug,
+            { ios: icons.ios, android: icons.android, prerendered: true },
+          ])
+        ),
       ],
       ...existingPlugins,
     ],

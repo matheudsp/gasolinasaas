@@ -3,18 +3,10 @@ import { RPCLink } from "@orpc/client/fetch";
 import { BatchLinkPlugin } from "@orpc/client/plugins";
 import { createTanstackQueryUtils } from "@orpc/tanstack-query";
 import { QueryCache, QueryClient } from "@tanstack/react-query";
+import { getActiveTenantSlug } from "@/lib/activeTenant";
 import { authClient } from "@/lib/auth";
 import type { AppRouterClient } from "../../../server/src/routers";
 import Config from "@/config";
-
-
-const TENANT_SLUG = Config.TENANT_SLUG;
-
-if (!TENANT_SLUG) {
-  throw new Error(
-    "Tenant não resolvido: o applicationId deste binário não está em tenants/registry.ts e não há EXPO_PUBLIC_TENANT_SLUG de fallback."
-  );
-}
 
 export const queryClient = new QueryClient({
   defaultOptions: {
@@ -43,9 +35,15 @@ export const link = new RPCLink({
     }),
   ],
   headers() {
-    const headers: Record<string, string> = {
-      "x-tenant-slug": TENANT_SLUG,
-    };
+    const headers: Record<string, string> = {};
+
+    // Lido POR REQUEST: o tenant é escolhido em runtime no app guarda-chuva.
+    // Sem rede escolhida o header simplesmente não vai — necessário pro
+    // tenant.listPublic da tela de seleção funcionar.
+    const tenantSlug = getActiveTenantSlug();
+    if (tenantSlug) {
+      headers["x-tenant-slug"] = tenantSlug;
+    }
 
     const cookies = authClient.getCookie();
     if (cookies) {
