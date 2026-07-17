@@ -28,7 +28,7 @@ module.exports = ({ config }: ConfigContext): Partial<ExpoConfig> => {
 
   return {
     ...config,
-    name: "Gasolina",
+    name: "Gasolina Cloud",
     scheme: "gasolina",
     icon: `./assets/app-icon/app-icon-all.png`,
     updates: {
@@ -99,10 +99,11 @@ module.exports = ({ config }: ConfigContext): Partial<ExpoConfig> => {
       ],
       [
         "@bsky.app/expo-dynamic-app-icon",
+        // Um único PNG por tenant serve as duas plataformas.
         Object.fromEntries(
-          Object.entries(tenantAlternateIcons).map(([slug, icons]) => [
+          Object.entries(tenantAlternateIcons).map(([slug, icon]) => [
             slug,
-            { ios: icons.ios, android: icons.android, prerendered: true },
+            { ios: icon, android: icon, prerendered: true },
           ])
         ),
       ],
