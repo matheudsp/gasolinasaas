@@ -1,0 +1,1 @@
+ALTER TABLE "push_notification" ADD COLUMN "kind" text DEFAULT 'campaign' NOT NULL;

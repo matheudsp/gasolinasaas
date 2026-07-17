@@ -21,13 +21,17 @@ app.onError(errorHandler);
 // Logger middleware
 app.use(logger());
 
+// ExecutionContext acessível via AsyncLocalStorage em QUALQUER handler —
+// waitUntil pra trabalho pós-resposta (e-mails do auth, push transacional
+// de fidelidade). Sem isso o Worker mata a promise junto com a resposta.
+app.use(async (c, next) => executionCtxStorage.run(c.executionCtx, next));
+
 // Session middleware for API and RPC routes
 app.use("/api/*", sessionMiddleware);
 app.use("/rpc/*", sessionMiddleware);
 
 // CORS for auth endpoints
 app.use("/api/auth/*", authCorsMiddleware);
-app.use("/api/auth/*", async (c, next) => executionCtxStorage.run(c.executionCtx, next));
 
 // Better Auth handler
 app.on(["POST", "GET"], "/api/auth/*", (c) => auth.handler(c.req.raw));

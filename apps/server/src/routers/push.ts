@@ -5,48 +5,7 @@ import { user } from "../db/schema/auth";
 import { pushNotification, pushNotificationRecipient, pushToken } from "../db/schema/push";
 import { ORPCError } from "@orpc/server";
 import { protectedProcedure, tenantOwnerProcedure } from "../lib/orpc";
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Tipos internos do Expo Push API
-// ─────────────────────────────────────────────────────────────────────────────
-
-type ExpoPushMessage = {
-  to: string;
-  title: string;
-  body: string;
-  data?: Record<string, unknown>;
-  sound?: "default" | null;
-  priority?: "default" | "normal" | "high";
-};
-
-type ExpoPushTicket =
-  | { status: "ok"; id: string }
-  | { status: "error"; message: string; details?: { error?: string } };
-
-type ExpoPushResponse = {
-  data: ExpoPushTicket[];
-};
-
-async function sendExpoPushBatch(messages: ExpoPushMessage[]): Promise<ExpoPushTicket[]> {
-  const response = await fetch("https://exp.host/--/api/v2/push/send", {
-    method: "POST",
-    headers: {
-      Accept: "application/json",
-      "Accept-Encoding": "gzip, deflate",
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(messages),
-  });
-
-  if (!response.ok) {
-    throw new ORPCError("INTERNAL_SERVER_ERROR", {
-      message: `Expo Push API error: ${response.status}`,
-    });
-  }
-
-  const json = (await response.json()) as ExpoPushResponse;
-  return json.data;
-}
+import { type ExpoPushMessage, type ExpoPushTicket, sendExpoPushBatch } from "../lib/push";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Router
@@ -195,6 +154,7 @@ export const pushRouter = {
             tenantId: context.tenant.id,
             title: input.title,
             body: input.body,
+            kind: "campaign",
             dataJson: JSON.stringify(payload),
             status: "sent",
             recipientCount: 0,
@@ -278,6 +238,7 @@ export const pushRouter = {
           tenantId: context.tenant.id,
           title: input.title,
           body: input.body,
+          kind: "campaign",
           dataJson: JSON.stringify(payload),
           status,
           recipientCount: tokens.length,
@@ -321,7 +282,9 @@ export const pushRouter = {
     }),
 
   /**
-   * Lista o histórico de notificações push enviadas pelo tenant.
+   * Histórico de CAMPANHAS enviadas pelo tenant. Pushes transacionais
+   * (crédito/resgate de fidelidade, um por evento) ficam de fora pra não
+   * inundar a lista — eles aparecem só na caixa in-app de cada usuário.
    */
   listNotifications: tenantOwnerProcedure
     .input(z.object({ limit: z.number().int().min(1).max(100).default(20) }))
@@ -329,7 +292,12 @@ export const pushRouter = {
       return context.db
         .select()
         .from(pushNotification)
-        .where(eq(pushNotification.tenantId, context.tenant.id))
+        .where(
+          and(
+            eq(pushNotification.tenantId, context.tenant.id),
+            eq(pushNotification.kind, "campaign"),
+          ),
+        )
         .orderBy(desc(pushNotification.createdAt))
         .limit(input.limit);
     }),

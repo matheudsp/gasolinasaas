@@ -35,12 +35,17 @@ export const pushToken = pgTable(
   ]
 );
 
-// Histórico de campanhas de notificação enviadas pelo tenant (agregado).
+// Histórico de notificações enviadas pelo tenant (agregado).
 export const pushNotification = pgTable("push_notification", {
   id: text("id").primaryKey(),
   tenantId: text("tenant_id")
     .notNull()
     .references(() => tenant.id, { onDelete: "cascade" }),
+  // "campaign" = disparo manual do painel (aparece no histórico do admin);
+  // "transactional" = automático por evento (crédito/resgate de fidelidade)
+  // — um por evento, então fica FORA do histórico de campanhas pra não
+  // inundá-lo, mas aparece normalmente na lista in-app do usuário.
+  kind: text("kind").notNull().default("campaign"),
   title: text("title").notNull(),
   body: text("body").notNull(),
   /** JSON serializado dos dados extras enviados junto à notificação. */

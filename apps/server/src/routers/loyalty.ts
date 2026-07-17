@@ -11,12 +11,14 @@ import {
   rewardRedemption,
 } from "../db/schema/loyalty";
 import { tenant, tenantMembership } from "../db/schema/tenant";
+import { executionCtxStorage } from "../lib/execution-context";
 import { settleExpiredPoints } from "../lib/loyalty-points";
 import {
   protectedProcedure,
   tenantOperatorProcedure,
   tenantOwnerProcedure,
 } from "../lib/orpc";
+import { sendTransactionalPush } from "../lib/push";
 
 // Tempo de vida do código de identificação do cliente (QR). Curto de
 // propósito: o crédito só é válido se o cliente gerou o QR há instantes,
@@ -262,6 +264,23 @@ export const loyaltyRouter = {
         .select({ name: user.name })
         .from(user)
         .where(eq(user.id, claimed.userId));
+
+      // Avisa o cliente FORA do caminho crítico da resposta (waitUntil):
+      // o caixa não pode esperar a Expo Push API, e falha no aviso jamais
+      // desfaz o crédito. type "points" deep-linka pra tela de pontos.
+      if (points > 0) {
+        const pushPromise = sendTransactionalPush(context.db, {
+          tenantId: context.tenant.id,
+          tenantSlug: context.tenant.slug,
+          userId: claimed.userId,
+          title: "Pontos creditados!",
+          body: `Você ganhou ${points} ${points === 1 ? "ponto" : "pontos"} no abastecimento de ${formatCentsBRL(input.amountCents)}.`,
+          data: { type: "points" },
+        }).catch((err) => {
+          console.error("[loyalty] Falha ao notificar crédito:", err);
+        });
+        executionCtxStorage.getStore()?.waitUntil(pushPromise);
+      }
 
       return {
         // A tela de sucesso usa o id para oferecer o estorno imediato.
@@ -838,7 +857,7 @@ export const loyaltyRouter = {
       const tenantId = context.tenant.id;
       const operatorId = context.session.user.id;
 
-      return context.db.transaction(async (tx) => {
+      const result = await context.db.transaction(async (tx) => {
         const now = new Date();
 
         // Portão de uso único: só um pedido consegue sair de "pending".
@@ -914,8 +933,29 @@ export const loyaltyRouter = {
           rewardName: rw?.name ?? null,
           points: rd.costPoints,
           customerName: customer?.name ?? null,
+          customerUserId: rd.userId,
         };
       });
+
+      // Push só DEPOIS do commit — um rollback não pode gerar aviso de
+      // resgate concluído. Fora do caminho crítico (waitUntil) e
+      // best-effort: falha no push não desfaz a entrega.
+      const pushPromise = sendTransactionalPush(context.db, {
+        tenantId,
+        tenantSlug: context.tenant.slug,
+        userId: result.customerUserId,
+        title: "Resgate concluído!",
+        body: result.rewardName
+          ? `Você resgatou ${result.rewardName}. ${result.points} pontos foram debitados.`
+          : `Resgate concluído. ${result.points} pontos foram debitados.`,
+        data: { type: "points" },
+      }).catch((err) => {
+        console.error("[loyalty] Falha ao notificar resgate:", err);
+      });
+      executionCtxStorage.getStore()?.waitUntil(pushPromise);
+
+      const { customerUserId: _customerUserId, ...response } = result;
+      return response;
     }),
 
   // ── Recompensas: gestão (owner) ─────────────────────────────────────────────
