@@ -1,5 +1,5 @@
 import { Link, useSearchParams } from "react-router-dom";
-import { appUrlForTenant } from "@/lib/appScheme";
+import { appUrlFromParam } from "@/lib/appScheme";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -21,11 +21,10 @@ import { CheckCircle2, Smartphone } from "lucide-react";
  * "esqueci a senha" pelo próprio painel.
  */
 export default function OnPasswordReset() {
-  // Vem do redirectTo do app (ForgotPasswordScreen) e é repassado pelo
-  // /reset-password — resolve o scheme do app certo quando a rede tiver
-  // app premium/dedicado.
+  // Scheme vindo do redirectTo do app (o mobile injeta o PRÓPRIO scheme) e
+  // repassado pelo /reset-password — reabre o app que iniciou o reset.
   const [searchParams] = useSearchParams();
-  const appUrl = appUrlForTenant(searchParams.get("tenant"));
+  const appUrl = appUrlFromParam(searchParams.get("app"));
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background p-4">

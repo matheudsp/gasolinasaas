@@ -6,6 +6,7 @@ import {
   type ReactNode,
 } from "react";
 import { authClient } from "@/lib/auth-client";
+import { AuthError } from "@/lib/authErrors";
 import { client, queryClient, setActiveTenant } from "@/lib/orpc";
 
 type Session = typeof authClient.$Infer.Session;
@@ -132,7 +133,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       await authClient.signIn.email({ email, password });
 
     if (signInError || !signInData) {
-      throw new Error(signInError?.message || "Falha na autenticação.");
+      // Preserva code/status (ex.: EMAIL_NOT_VERIFIED / 403) pro Login
+      // distinguir "confirme seu e-mail" das credenciais inválidas.
+      throw new AuthError(
+        signInError?.message || "Falha na autenticação.",
+        signInError?.code,
+        signInError?.status,
+      );
     }
 
     const role = getUserRole(signInData.user);

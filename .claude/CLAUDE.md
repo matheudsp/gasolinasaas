@@ -9,6 +9,25 @@ servidor serve todos os tenants** — o isolamento é feito em software, não po
 separado. (O modelo antigo de um build white-label por tenant foi removido; binários
 `com.mdsp.martinez` antigos auto-selecionam a rede "martinez" via `applicationId`.)
 
+### App dedicado (premium) — flag `tenant.hasDedicatedApp`
+
+`tenant.hasDedicatedApp` (bool, migration 0015; togglado por platform admin no
+`/admin`) marca a rede que tem **binário próprio** (fora do guarda-chuva). Ele
+governa branding de e-mail e scheme de deep link, via
+`lib/auth.ts:resolveEmailTenant`:
+- **dedicado**: e-mails assinados com o NOME do tenant; scheme = **slug** do
+  tenant (padronização: scheme == slug, lowercase);
+- **guarda-chuva** (ou request sem tenant): e-mails "Gasolina Cloud"; scheme
+  `gasolina`.
+
+Ainda **não existe** o binário dedicado (sem `APP_VARIANT`/perfis EAS por
+tenant). Quando existir, a fonte única em runtime deve ser `extra.tenantSlug`
+fixado no build pelo `app.config.ts`, e dela derivam seed do slug, esconder o
+seletor de rede, desativar `switchTenant`+ícone dinâmico e o scheme do
+`authClient`. **Não crie um segundo mecanismo de detecção**: o seed por
+`applicationId` (`lib/activeTenant.ts`) é hack pra UM binário legado morto
+(`com.mdsp.martinez`) e deve ser absorvido por `extra.tenantSlug`, não copiado.
+
 ## Monorepo
 
 pnpm workspaces + Turborepo. Três apps e **um único compartilhado**:
@@ -316,12 +335,14 @@ marca no bundle JS (bundle é compartilhado via OTA entre todas as redes):
   admin-only sob `AdminProtectedRoute`. `Layout` renderiza o `PaymentReminderBanner`.
   Públicas (sem sessão): `/politicas(/:slug)` — URL exigida pelas lojas —,
   `/verify-email` e o fluxo de reset de senha.
-- **Botões "Abrir o app"** (`VerifyEmail`, `OnPasswordReset`): o scheme vem de
-  `lib/appScheme.ts` — registry slug→scheme, default `gasolina://` (guarda-chuva).
-  App premium/dedicado = adicionar uma entrada. O slug chega via query `?tenant=`:
-  o mobile injeta no `redirectTo` do reset (ForgotPasswordScreen; `/reset-password`
-  repassa ao navegar) e o server injeta no callbackURL da verificação de e-mail
-  (`resolveEmailTenant` em `lib/auth.ts`, que também dá o branding do e-mail).
+- **Botões "Abrir o app"** (`VerifyEmail`, `OnPasswordReset`): o scheme chega
+  pronto na query `?app=` e `lib/appScheme.ts:appUrlFromParam` só valida (regex
+  RFC 3986; valor inválido → `gasolina://`). Sem registry — por padronização
+  **scheme == slug do tenant**. Quem decide o scheme:
+  - verify-email: o **server** injeta no callbackURL o scheme derivado de
+    `tenant.hasDedicatedApp` (`resolveEmailTenant`);
+  - reset de senha: o **mobile** injeta o PRÓPRIO scheme
+    (`Constants.expoConfig.scheme`) no `redirectTo`; `/reset-password` repassa.
 - Fidelidade numa página só (`/fidelidade`) com abas Auditoria/Recompensas/Config
   (`pages/LoyaltyAudit|RewardsManager|LoyaltyConfig`). A Auditoria tem busca de
   cliente por CPF, cards de passivo/taxa de resgate e estorno no drill-down de

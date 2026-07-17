@@ -21,6 +21,7 @@ import { Text } from "@/components/Text"
 import { TextField } from "@/components/TextField"
 
 import { authClient } from "@/lib/auth"
+import { authErrorMessage } from "@/lib/authErrors"
 import { useTenantBranding } from "@/lib/branding"
 import { useAppTheme } from "@/theme/context"
 import type { ThemedStyle } from "@/theme/types"
@@ -60,16 +61,9 @@ export function SignInScreen() {
         password,
       })
       if (signInError) {
-        // 403 = e-mail não verificado — o server já REENVIA o link nessa
-        // tentativa (sendOnSignIn), então a mensagem orienta a caixa de
-        // entrada em vez de mostrar o erro cru em inglês.
-        if (signInError.status === 403) {
-          setError(
-            "Seu e-mail ainda não foi confirmado. Reenviamos o link de confirmação — confira sua caixa de entrada e tente de novo.",
-          )
-        } else {
-          setError(signInError.message ?? "Credenciais inválidas. Tente novamente.")
-        }
+        // Traduz por code (o 403 de e-mail não-verificado já reenviou o
+        // link via sendOnSignIn no server) — nunca a message crua em inglês.
+        setError(authErrorMessage(signInError))
       }
     } catch {
       setError("Não foi possível conectar. Verifique sua internet e tente novamente.")
@@ -89,7 +83,7 @@ export function SignInScreen() {
         callbackURL: Linking.createURL("/"),
       })
       if (googleError) {
-        setError(googleError.message ?? "Erro ao entrar com Google.")
+        setError(authErrorMessage(googleError, "Erro ao entrar com Google."))
       }
     } catch {
       setError("Não foi possível conectar. Verifique sua internet e tente novamente.")

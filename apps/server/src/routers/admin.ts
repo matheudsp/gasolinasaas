@@ -35,6 +35,7 @@ export const adminRouter = {
           name: tenant.name,
           slug: tenant.slug,
           isActive: tenant.isActive,
+          hasDedicatedApp: tenant.hasDedicatedApp,
           createdAt: tenant.createdAt,
         })
         .from(tenant)
@@ -128,6 +129,7 @@ export const adminRouter = {
           id: z.string(),
           name: z.string().min(1).optional(),
           isActive: z.boolean().optional(),
+          hasDedicatedApp: z.boolean().optional(),
         }),
       )
       .handler(async ({ context, input }) => {

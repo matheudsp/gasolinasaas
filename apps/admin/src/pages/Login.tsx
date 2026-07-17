@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/card";
 import { LockKeyhole } from "lucide-react";
 import { Logo } from "@/components/Logo";
+import { authErrorMessage, isEmailNotVerified } from "@/lib/authErrors";
 import { useToast } from "@/components/ui/use-toast";
 
 export default function Login() {
@@ -35,21 +36,20 @@ export default function Login() {
       const role = await signIn(email, password);
       navigate(role === "admin" ? "/admin" : "/dashboard");
     } catch (err: unknown) {
-      let msg = "Falha na autenticação";
-      if (err && typeof err === "object" && "response" in err) {
-        const detail = (err as { response: { data: { detail?: unknown } } })
-          .response?.data?.detail;
-        if (Array.isArray(detail)) {
-          msg = detail.map((d: { msg?: string }) => d.msg).join(", ");
-        } else if (typeof detail === "string") {
-          msg = detail;
-        }
+      // E-mail não verificado: o server já REENVIA o link nessa tentativa
+      // (sendOnSignIn) — orienta a caixa de entrada em vez de "acesso negado".
+      if (isEmailNotVerified(err)) {
+        toast({
+          title: "Confirme seu e-mail",
+          description: authErrorMessage(err),
+        });
+      } else {
+        toast({
+          title: "Acesso Negado",
+          description: authErrorMessage(err),
+          variant: "destructive",
+        });
       }
-      toast({
-        title: "Acesso Negado",
-        description: msg,
-        variant: "destructive",
-      });
     } finally {
       setLoading(false);
     }

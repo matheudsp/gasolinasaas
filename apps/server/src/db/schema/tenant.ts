@@ -19,6 +19,11 @@ export const tenant = pgTable("tenant", {
   slug: text("slug").notNull().unique(),
   name: text("name").notNull(),
   isActive: boolean("is_active").notNull().default(true),
+  // true = a rede tem app dedicado (binário próprio, FORA do guarda-chuva).
+  // Governa branding de e-mail e scheme de deep link: dedicado usa o nome e
+  // o slug do tenant (slug == scheme, por padronização); guarda-chuva usa
+  // "Gasolina Cloud" e o scheme "gasolina". Ver lib/auth.ts:resolveEmailTenant.
+  hasDedicatedApp: boolean("has_dedicated_app").notNull().default(false),
   // Multiplicador de fidelidade: pontos que o cliente ganha por real gasto.
   // numeric para aceitar frações (ex.: 2,5 pontos por real).
   pointsPerReal: numeric("points_per_real", { precision: 6, scale: 2 })

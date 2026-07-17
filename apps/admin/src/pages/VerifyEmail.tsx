@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
-import { appUrlForTenant } from "@/lib/appScheme";
+import { appUrlFromParam } from "@/lib/appScheme";
 import { authClient } from "@/lib/auth-client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -30,9 +30,9 @@ export default function VerifyEmail() {
   const { toast } = useToast();
 
   const hasError = searchParams.get("error") === "invalid_token";
-  // Injetado no callbackURL pelo server (lib/auth.ts) — resolve o scheme do
-  // app certo quando a rede tiver app premium/dedicado.
-  const appUrl = appUrlForTenant(searchParams.get("tenant"));
+  // Scheme injetado no callbackURL pelo server (lib/auth.ts) — já vem
+  // resolvido pelo flag hasDedicatedApp (dedicado→slug; guarda-chuva→gasolina).
+  const appUrl = appUrlFromParam(searchParams.get("app"));
 
   const [email, setEmail] = useState(session?.user?.email ?? "");
   const [resending, setResending] = useState(false);

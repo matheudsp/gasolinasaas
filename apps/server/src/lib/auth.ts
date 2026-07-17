@@ -15,6 +15,8 @@ import { renderEmailHtml } from "@/assets/email-template";
 const authDb = drizzle(neon(env.DATABASE_URL || ""));
 
 const DEFAULT_BRAND = "Gasolina Cloud";
+// Scheme de deep link do app guarda-chuva (app.config.ts do mobile).
+const UMBRELLA_SCHEME = "gasolina";
 
 /**
  * Painel web — destino dos links enviados por e-mail. Derivado do primeiro
@@ -25,28 +27,34 @@ const DEFAULT_BRAND = "Gasolina Cloud";
 const frontendUrl = (env.CORS_ORIGIN?.split(",")[0] ?? "").trim();
 
 /**
- * Resolve a rede (tenant) do request para os e-mails transacionais: `brand`
- * assina o e-mail; `slug` viaja nos links como `?tenant=` para as páginas do
- * painel abrirem o APP CERTO no botão "Abrir o app" (redes com app
- * premium/dedicado têm scheme próprio — admin/src/lib/appScheme.ts). Usa a
- * mesma resolução dos handlers oRPC (header x-tenant-slug/x-tenant-id,
- * subdomínio ou path); requests sem tenant — ex: login no painel admin da
- * plataforma — caem no padrão Gasolina Cloud.
+ * Resolve como assinar e para onde apontar os e-mails transacionais da rede
+ * do request. O flag `tenant.hasDedicatedApp` decide TUDO:
+ * - dedicado (binário próprio): `brand` = nome do tenant, `scheme` = slug do
+ *   tenant (slug == scheme, por padronização);
+ * - guarda-chuva (ou sem tenant — ex: login no painel da plataforma):
+ *   `brand` = "Gasolina Cloud", `scheme` = "gasolina".
+ *
+ * `scheme` vai nos links como `?app=` para as páginas do painel reabrirem o
+ * APP CERTO no botão "Abrir o app". Mesma resolução dos handlers oRPC
+ * (header x-tenant-slug/x-tenant-id, subdomínio ou path).
  */
 const resolveEmailTenant = async (
   request?: Request,
-): Promise<{ brand: string; slug: string | null }> => {
+): Promise<{ brand: string; scheme: string }> => {
   if (!request) {
-    return { brand: DEFAULT_BRAND, slug: null };
+    return { brand: DEFAULT_BRAND, scheme: UMBRELLA_SCHEME };
   }
 
   try {
     const db = createDb(env.DATABASE_URL || "");
     const { tenant } = await resolveTenantContext({ request, db });
-    return { brand: tenant?.name ?? DEFAULT_BRAND, slug: tenant?.slug ?? null };
+    if (tenant?.hasDedicatedApp) {
+      return { brand: tenant.name, scheme: tenant.slug };
+    }
+    return { brand: DEFAULT_BRAND, scheme: UMBRELLA_SCHEME };
   } catch (err) {
     console.warn("[auth] Falha ao resolver tenant para branding de e-mail:", err);
-    return { brand: DEFAULT_BRAND, slug: null };
+    return { brand: DEFAULT_BRAND, scheme: UMBRELLA_SCHEME };
   }
 };
 
@@ -150,14 +158,14 @@ export const auth = betterAuth({
     sendOnSignIn: true,
     sendVerificationEmail: async ({ user, url, token }, request) => {
       const emailPromise = (async () => {
-        const { brand, slug } = await resolveEmailTenant(request);
+        const { brand, scheme } = await resolveEmailTenant(request);
 
         // O `url` do Better Auth carrega o callbackURL padrão ("/" do
         // BETTER_AUTH_URL) — o usuário cairia no JSON de health da API
         // depois de confirmar. Reconstruímos apontando pra página do painel
-        // (admin: pages/VerifyEmail.tsx), com o tenant no callback pra ela
-        // abrir o app certo.
-        const callbackUrl = `${frontendUrl}/verify-email${slug ? `?tenant=${encodeURIComponent(slug)}` : ""}`;
+        // (admin: pages/VerifyEmail.tsx), com o scheme do app no callback
+        // pra ela reabrir o app certo.
+        const callbackUrl = `${frontendUrl}/verify-email?app=${encodeURIComponent(scheme)}`;
         const verifyUrl = frontendUrl
           ? `${env.BETTER_AUTH_URL}/api/auth/verify-email?token=${token}&callbackURL=${encodeURIComponent(callbackUrl)}`
           : url;

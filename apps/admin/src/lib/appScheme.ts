@@ -1,28 +1,27 @@
 /**
- * Scheme de deep link do app de cada tenant — usado pelos botões "Abrir o
- * app" das páginas de e-mail (VerifyEmail, OnPasswordReset).
+ * Scheme de deep link do app a reabrir pelos botões "Abrir o app" das
+ * páginas de e-mail (VerifyEmail, OnPasswordReset).
  *
- * O app guarda-chuva ("Gasolina", scheme gasolina://) atende todas as redes,
- * então o mapa fica VAZIO por padrão. Quando um cliente contratar o app
- * premium/dedicado (binário próprio com scheme próprio), registre aqui:
+ * O scheme chega pronto na query `?app=`:
+ * - verify-email: o server injeta o scheme derivado de `tenant.hasDedicatedApp`
+ *   (dedicado → slug do tenant; guarda-chuva → "gasolina"). Ver
+ *   apps/server/src/lib/auth.ts:resolveEmailTenant.
+ * - reset de senha: o app mobile injeta o PRÓPRIO scheme no redirectTo, que o
+ *   /reset-password repassa.
  *
- *   const TENANT_APP_SCHEMES: Record<string, string> = {
- *     martinez: "martinez",
- *   }
- *
- * O slug chega às páginas via query param `?tenant=` — o mobile o injeta no
- * redirectTo do reset de senha e o server no callbackURL da verificação de
- * e-mail. Sem o param (ou sem entrada aqui), cai no guarda-chuva.
- *
- * Espelho conceitual de apps/mobile/tenants/registry.ts (ícones por tenant):
- * é o mesmo tipo de decisão "o que é por-tenant no lado nativo".
+ * Padronização: o scheme de um app dedicado é IGUAL ao slug do tenant. Por
+ * isso não há registry — o valor de `?app=` já é o scheme. Sem o param
+ * (link antigo), cai no guarda-chuva.
  */
-const TENANT_APP_SCHEMES: Record<string, string> = {};
+const UMBRELLA_SCHEME = "gasolina";
 
-const DEFAULT_SCHEME = "gasolina";
+// Schemes são lowercase, letras/números/+/-/. (RFC 3986) — barra valores
+// estranhos vindos da query antes de virar href.
+const SCHEME_RE = /^[a-z][a-z0-9+.-]*$/;
 
-/** URL de deep link ("scheme://") do app que atende o tenant. */
-export function appUrlForTenant(slug: string | null): string {
-  const scheme = (slug && TENANT_APP_SCHEMES[slug]) || DEFAULT_SCHEME;
+/** URL de deep link ("scheme://") a partir do `?app=` da query. */
+export function appUrlFromParam(appScheme: string | null): string {
+  const scheme =
+    appScheme && SCHEME_RE.test(appScheme) ? appScheme : UMBRELLA_SCHEME;
   return `${scheme}://`;
 }

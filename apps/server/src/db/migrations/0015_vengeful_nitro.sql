@@ -1,0 +1,1 @@
+ALTER TABLE "tenant" ADD COLUMN "has_dedicated_app" boolean DEFAULT false NOT NULL;

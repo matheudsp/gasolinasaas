@@ -6,6 +6,7 @@ import {
   Ban,
   Building2,
   CheckCircle2,
+  Cloud,
   CreditCard,
   DollarSign,
   FileText,
@@ -16,6 +17,7 @@ import {
   Plus,
   RefreshCw,
   ShieldCheck,
+  Smartphone,
   Trash2,
   UserMinus,
   UserPlus,
@@ -199,6 +201,19 @@ function TenantsTab() {
     onError: (e: Error) => toast.error(e.message),
   });
 
+  const appToggleMutation = useMutation({
+    ...orpc.admin.tenant.update.mutationOptions(),
+    onSuccess: async (t) => {
+      toast.success(
+        t.hasDedicatedApp
+          ? "Rede marcada como app dedicado."
+          : "Rede voltou para o app guarda-chuva.",
+      );
+      await invalidate();
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between pb-3">
@@ -216,6 +231,7 @@ function TenantsTab() {
             <TableRow>
               <TableHead>Nome</TableHead>
               <TableHead>Slug</TableHead>
+              <TableHead>App</TableHead>
               <TableHead>Status</TableHead>
               <TableHead>Criado em</TableHead>
               <TableHead className="w-10" />
@@ -225,7 +241,7 @@ function TenantsTab() {
             {isLoading ? (
               <TableRow>
                 <TableCell
-                  colSpan={5}
+                  colSpan={6}
                   className="py-10 text-center text-muted-foreground text-sm"
                 >
                   <Spinner className="mx-auto size-10" />
@@ -234,7 +250,7 @@ function TenantsTab() {
             ) : tenants.length === 0 ? (
               <TableRow>
                 <TableCell
-                  colSpan={5}
+                  colSpan={6}
                   className="py-10 text-center text-muted-foreground text-sm"
                 >
                   Nenhum domínio cadastrado.
@@ -246,6 +262,19 @@ function TenantsTab() {
                   <TableCell className="font-medium">{t.name}</TableCell>
                   <TableCell className="font-mono text-xs text-muted-foreground">
                     {t.slug}
+                  </TableCell>
+                  <TableCell>
+                    {t.hasDedicatedApp ? (
+                      <Badge variant="outline" className="gap-1">
+                        <Smartphone className="h-3 w-3" />
+                        Dedicado
+                      </Badge>
+                    ) : (
+                      <Badge variant="secondary" className="gap-1">
+                        <Cloud className="h-3 w-3" />
+                        Guarda-chuva
+                      </Badge>
+                    )}
                   </TableCell>
                   <TableCell>
                     <Badge variant={t.isActive ? "default" : "secondary"}>
@@ -278,6 +307,26 @@ function TenantsTab() {
                         >
                           <Pencil className="mr-2 h-4 w-4" />
                           Editar nome
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={() =>
+                            appToggleMutation.mutate({
+                              id: t.id,
+                              hasDedicatedApp: !t.hasDedicatedApp,
+                            })
+                          }
+                        >
+                          {t.hasDedicatedApp ? (
+                            <>
+                              <Cloud className="mr-2 h-4 w-4" />
+                              Voltar ao guarda-chuva
+                            </>
+                          ) : (
+                            <>
+                              <Smartphone className="mr-2 h-4 w-4" />
+                              Marcar como app dedicado
+                            </>
+                          )}
                         </DropdownMenuItem>
                         <DropdownMenuSeparator />
                         <DropdownMenuItem
@@ -587,7 +636,7 @@ function UsersTab() {
             {isLoading ? (
               <TableRow>
                 <TableCell
-                  colSpan={5}
+                  colSpan={6}
                   className="py-10 text-center text-muted-foreground text-sm"
                 >
                   <Spinner className="mx-auto size-10" />
@@ -596,7 +645,7 @@ function UsersTab() {
             ) : rows.length === 0 ? (
               <TableRow>
                 <TableCell
-                  colSpan={5}
+                  colSpan={6}
                   className="py-10 text-center text-muted-foreground text-sm"
                 >
                   Nenhum usuário encontrado.

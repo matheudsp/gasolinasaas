@@ -1,6 +1,7 @@
 import { useState } from "react"
 import { ActivityIndicator, Pressable, View, ViewStyle, TextStyle } from "react-native"
 import { Link, useRouter } from "expo-router"
+import Constants from "expo-constants"
 import { MaterialDesignIcons } from "@react-native-vector-icons/material-design-icons"
 
 import { Button } from "@/components/Button"
@@ -9,7 +10,6 @@ import { PoweredByGasolinaCloud } from "@/components/PoweredByGasolinaCloud"
 import { Screen } from "@/components/Screen"
 import { Text } from "@/components/Text"
 import { TextField } from "@/components/TextField"
-import { getActiveTenantSlug } from "@/lib/activeTenant"
 import { authClient } from "@/lib/auth"
 import { useAppTheme } from "@/theme/context"
 import type { ThemedStyle } from "@/theme/types"
@@ -44,14 +44,16 @@ export function ForgotPasswordScreen() {
     setIsLoading(true)
     setError(null)
     try {
-      // O tenant no redirectTo chega até o /on-password-reset do painel,
-      // que usa o slug pra abrir o APP CERTO no botão "Abrir o app" (redes
-      // com app premium/dedicado têm scheme próprio — lib/appScheme.ts do
-      // admin; sem o param, cai no guarda-chuva gasolina://).
-      const tenantSlug = getActiveTenantSlug()
+      // O PRÓPRIO scheme deste app vai no redirectTo e chega até o
+      // /on-password-reset do painel, que reabre o app certo no botão
+      // "Abrir o app". App guarda-chuva → "gasolina"; app dedicado → o
+      // scheme dele (== slug do tenant). Sem o param, o painel cai no
+      // guarda-chuva.
+      const appScheme = Constants.expoConfig?.scheme
+      const scheme = typeof appScheme === "string" ? appScheme : "gasolina"
       await authClient.requestPasswordReset({
         email: email.trim().toLowerCase(),
-        redirectTo: `${Config.FRONTEND_URL}/reset-password${tenantSlug ? `?tenant=${encodeURIComponent(tenantSlug)}` : ""}`,
+        redirectTo: `${Config.FRONTEND_URL}/reset-password?app=${encodeURIComponent(scheme)}`,
       })
       // Mesma confirmação independente do e-mail existir ou não na base —
       // evita que essa tela seja usada pra descobrir contas cadastradas.
