@@ -7,15 +7,42 @@ import { pushNotification, pushNotificationRecipient } from "../db/schema/push";
 import { isValidCpf, normalizeCpf } from "../lib/cpf";
 import { protectedProcedure, publicProcedure } from "../lib/orpc";
 
+/**
+ * Barra enumeração de CPFs: consome uma cota do Workers Rate Limiting API
+ * antes de qualquer resposta que revele se um CPF está cadastrado. O
+ * binding é undefined fora do Worker (testes) — nesse caso passa direto.
+ */
+async function enforceCpfRateLimit(
+  limiter: { limit: (o: { key: string }) => Promise<{ success: boolean }> } | undefined,
+  key: string,
+) {
+  if (!limiter) {
+    return;
+  }
+  const { success } = await limiter.limit({ key });
+  if (!success) {
+    throw new ORPCError("TOO_MANY_REQUESTS", {
+      status: 429,
+      message: "Muitas tentativas. Aguarde um minuto e tente de novo.",
+    });
+  }
+}
+
 export const userRouter = {
   /**
    * Verifica se um CPF está disponível para cadastro. Público de propósito:
    * o SignUp multi-step consulta ANTES de criar a conta, para dar um erro
    * amigável no step do CPF em vez de uma violação de unique no final.
+   * Rate-limited por IP — a resposta revela se o CPF existe na plataforma.
    */
   checkCpf: publicProcedure
     .input(z.object({ cpf: z.string().min(1) }))
     .handler(async ({ context, input }) => {
+      await enforceCpfRateLimit(
+        context.cpfRateLimit,
+        `checkCpf:${context.clientIp ?? "sem-ip"}`,
+      );
+
       const cpf = normalizeCpf(input.cpf);
 
       if (!isValidCpf(cpf)) {
@@ -37,6 +64,13 @@ export const userRouter = {
   setCpf: protectedProcedure
     .input(z.object({ cpf: z.string().min(1) }))
     .handler(async ({ context, input }) => {
+      // Autenticado, mas o CONFLICT também revela CPFs de terceiros —
+      // mesma cota, chaveada pela conta.
+      await enforceCpfRateLimit(
+        context.cpfRateLimit,
+        `setCpf:${context.session.user.id}`,
+      );
+
       const cpf = normalizeCpf(input.cpf);
 
       if (!isValidCpf(cpf)) {

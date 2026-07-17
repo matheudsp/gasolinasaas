@@ -50,6 +50,9 @@ export function SignUpScreen() {
   const [showPassword, setShowPassword] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [errors, setErrors] = useState<Record<string, string>>({})
+  // Com requireEmailVerification no server, o cadastro NÃO cria sessão —
+  // o usuário confirma o e-mail e então entra pelo sign-in.
+  const [awaitingVerification, setAwaitingVerification] = useState(false)
 
   // Checagem de disponibilidade do CPF antes de avançar o step — erro
   // amigável aqui, em vez de violação de unique lá no fim do cadastro.
@@ -113,6 +116,8 @@ export function SignUpScreen() {
       } else {
         setErrors({ general: error.message ?? "Erro ao criar conta. Tente novamente." })
       }
+    } else {
+      setAwaitingVerification(true)
     }
     setIsLoading(false)
   }
@@ -123,6 +128,27 @@ export function SignUpScreen() {
   }
 
   const checkingCpf = checkCpfMutation.isPending
+
+  if (awaitingVerification) {
+    return (
+      <Screen preset="scroll" contentContainerStyle={themed($screen)}>
+        <View style={themed($header)}>
+          <Text preset="heading" text="Confirme seu e-mail" />
+          <Text
+            text={`Enviamos um link de confirmação para ${email.trim().toLowerCase()}. Depois de confirmar, é só entrar com sua senha.`}
+            style={themed($subtitle)}
+          />
+        </View>
+        <Button
+          text="Ir para o login"
+          preset="filled"
+          onPress={() => router.replace("/(auth)/sign-in")}
+          style={themed($submitButton)}
+        />
+        <PoweredByGasolinaCloud style={themed($poweredByCompact)} />
+      </Screen>
+    )
+  }
 
   return (
     <Screen

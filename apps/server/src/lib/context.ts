@@ -1,5 +1,6 @@
 import type { Context as HonoContext } from "hono";
 import { createDb } from "../db";
+import type { RateLimitBinding } from "./hono-env";
 import { resolveTenantContext } from "./tenant";
 
 export type CreateContextOptions = {
@@ -7,7 +8,9 @@ export type CreateContextOptions = {
 };
 
 export async function createContext({ context }: CreateContextOptions) {
-  const env = context.env as Record<string, string>;
+  const env = context.env as Record<string, string> & {
+    CPF_RATE_LIMIT?: RateLimitBinding;
+  };
   const db = createDb(env.DATABASE_URL || "");
 
   const session = context.get("session")
@@ -23,6 +26,10 @@ export async function createContext({ context }: CreateContextOptions) {
   return {
     db,
     session,
+    // IP real do cliente (header da Cloudflare) — chave de rate limiting.
+    clientIp: context.req.header("cf-connecting-ip") ?? null,
+    // Binding do rate limiter; undefined fora do Worker (ex.: testes).
+    cpfRateLimit: env.CPF_RATE_LIMIT,
     ...tenantContext,
   };
 }

@@ -1,5 +1,5 @@
 import { ORPCError } from "@orpc/server";
-import { and, desc, eq, gt, isNotNull, sql } from "drizzle-orm";
+import { and, desc, eq, gt, isNotNull, ne, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { z } from "zod";
 
@@ -11,6 +11,7 @@ import {
   rewardRedemption,
 } from "../db/schema/loyalty";
 import { tenant, tenantMembership } from "../db/schema/tenant";
+import { isValidCpf, normalizeCpf } from "../lib/cpf";
 import { executionCtxStorage } from "../lib/execution-context";
 import { settleExpiredPoints } from "../lib/loyalty-points";
 import {
@@ -113,6 +114,9 @@ export const loyaltyRouter = {
           and(
             eq(loyaltyTransaction.tenantId, context.tenant.id),
             eq(loyaltyTransaction.userId, context.session.user.id),
+            // Esconde marcadores de 0 pontos (expiração de lote já consumido
+            // e créditos que arredondaram pra zero) — ruído no extrato.
+            ne(loyaltyTransaction.points, 0),
           ),
         )
         .orderBy(desc(loyaltyTransaction.createdAt))
@@ -207,58 +211,68 @@ export const loyaltyRouter = {
         });
       }
 
-      // Consome o código: só credita quem conseguir deletar a linha. Se dois
-      // pedidos chegarem com o mesmo código, apenas um recebe a linha de volta.
-      const [claimed] = await context.db
-        .delete(loyaltyScanCode)
-        .where(
-          and(
-            eq(loyaltyScanCode.tenantId, context.tenant.id),
-            eq(loyaltyScanCode.code, input.code),
-          ),
-        )
-        .returning({
-          userId: loyaltyScanCode.userId,
-          expiresAt: loyaltyScanCode.expiresAt,
-        });
+      // Consumo do código + crédito numa TRANSAÇÃO só: uma falha entre o
+      // delete e o insert não pode consumir o QR sem creditar (e um código
+      // expirado/duplicado faz rollback — o QR não é queimado à toa).
+      const { created, claimed, points } = await context.db.transaction(
+        async (tx) => {
+          // Consome o código: só credita quem conseguir deletar a linha. Se
+          // dois pedidos chegarem com o mesmo código, apenas um recebe a
+          // linha de volta.
+          const [claimedRow] = await tx
+            .delete(loyaltyScanCode)
+            .where(
+              and(
+                eq(loyaltyScanCode.tenantId, context.tenant.id),
+                eq(loyaltyScanCode.code, input.code),
+              ),
+            )
+            .returning({
+              userId: loyaltyScanCode.userId,
+              expiresAt: loyaltyScanCode.expiresAt,
+            });
 
-      if (!claimed) {
-        throw new ORPCError("NOT_FOUND", {
-          message: "Código inválido ou já utilizado",
-        });
-      }
+          if (!claimedRow) {
+            throw new ORPCError("NOT_FOUND", {
+              message: "Código inválido ou já utilizado",
+            });
+          }
 
-      if (claimed.expiresAt.getTime() < now.getTime()) {
-        throw new ORPCError("BAD_REQUEST", {
-          message: "Código expirado. Peça ao cliente para gerar um novo.",
-        });
-      }
+          if (claimedRow.expiresAt.getTime() < now.getTime()) {
+            throw new ORPCError("BAD_REQUEST", {
+              message: "Código expirado. Peça ao cliente para gerar um novo.",
+            });
+          }
 
-      // pointsPerReal vem como string (coluna numeric). O valor final de
-      // pontos é sempre inteiro (arredonda para baixo).
-      const multiplier = Number(context.tenant.pointsPerReal);
-      const points = Math.floor((input.amountCents * multiplier) / 100);
+          // pointsPerReal vem como string (coluna numeric). O valor final de
+          // pontos é sempre inteiro (arredonda para baixo).
+          const multiplier = Number(context.tenant.pointsPerReal);
+          const earned = Math.floor((input.amountCents * multiplier) / 100);
 
-      // Validade estampada no momento do crédito: mudar a config depois não
-      // altera pontos já ganhos.
-      const validityDays = context.tenant.pointsValidityDays;
-      const expiresAt = validityDays
-        ? new Date(now.getTime() + validityDays * 86_400_000)
-        : null;
+          // Validade estampada no momento do crédito: mudar a config depois
+          // não altera pontos já ganhos.
+          const validityDays = context.tenant.pointsValidityDays;
+          const expiresAt = validityDays
+            ? new Date(now.getTime() + validityDays * 86_400_000)
+            : null;
 
-      const [created] = await context.db
-        .insert(loyaltyTransaction)
-        .values({
-          id: crypto.randomUUID(),
-          tenantId: context.tenant.id,
-          userId: claimed.userId,
-          operatorUserId: context.session.user.id,
-          points,
-          amountCents: input.amountCents,
-          expiresAt,
-          createdAt: now,
-        })
-        .returning({ id: loyaltyTransaction.id });
+          const [createdRow] = await tx
+            .insert(loyaltyTransaction)
+            .values({
+              id: crypto.randomUUID(),
+              tenantId: context.tenant.id,
+              userId: claimedRow.userId,
+              operatorUserId: context.session.user.id,
+              points: earned,
+              amountCents: input.amountCents,
+              expiresAt,
+              createdAt: now,
+            })
+            .returning({ id: loyaltyTransaction.id });
+
+          return { created: createdRow, claimed: claimedRow, points: earned };
+        },
+      );
 
       const [customer] = await context.db
         .select({ name: user.name })
@@ -605,14 +619,86 @@ export const loyaltyRouter = {
           userId: loyaltyTransaction.userId,
           name: user.name,
           email: user.email,
+          cpf: user.cpf,
           points: sql<number>`coalesce(sum(${loyaltyTransaction.points}), 0)::int`,
         })
         .from(loyaltyTransaction)
         .innerJoin(user, eq(loyaltyTransaction.userId, user.id))
         .where(eq(loyaltyTransaction.tenantId, context.tenant.id))
-        .groupBy(loyaltyTransaction.userId, user.name, user.email)
+        .groupBy(loyaltyTransaction.userId, user.name, user.email, user.cpf)
         .orderBy(desc(sql`sum(${loyaltyTransaction.points})`))
         .limit(input.limit);
+    }),
+
+  /**
+   * Busca um cliente da REDE pelo CPF — pro dono localizar rapidamente um
+   * cliente na auditoria. Só encontra quem tem movimentação de fidelidade
+   * neste tenant: CPF de usuário da plataforma sem vínculo com a rede
+   * responde NOT_FOUND (o dono não pode sondar a base global).
+   */
+  customerByCpf: tenantOwnerProcedure
+    .input(z.object({ cpf: z.string().min(1) }))
+    .handler(async ({ context, input }) => {
+      const cpf = normalizeCpf(input.cpf);
+      if (!isValidCpf(cpf)) {
+        throw new ORPCError("BAD_REQUEST", { message: "CPF inválido" });
+      }
+
+      const [customer] = await context.db
+        .select({
+          id: user.id,
+          name: user.name,
+          email: user.email,
+          cpf: user.cpf,
+        })
+        .from(user)
+        .where(eq(user.cpf, cpf));
+
+      const notFound = new ORPCError("NOT_FOUND", {
+        message: "Nenhum cliente com esse CPF na sua rede.",
+      });
+
+      if (!customer) {
+        throw notFound;
+      }
+
+      const [totals] = await context.db
+        .select({
+          txCount: sql<number>`count(*)::int`,
+          credits: sql<number>`(count(*) filter (where ${loyaltyTransaction.amountCents} > 0))::int`,
+          spentCents: sql<number>`coalesce(sum(${loyaltyTransaction.amountCents}), 0)::int`,
+          lastActivityAt: sql<string | null>`max(${loyaltyTransaction.createdAt})`,
+        })
+        .from(loyaltyTransaction)
+        .where(
+          and(
+            eq(loyaltyTransaction.tenantId, context.tenant.id),
+            eq(loyaltyTransaction.userId, customer.id),
+          ),
+        );
+
+      if (!totals || totals.txCount === 0) {
+        throw notFound;
+      }
+
+      // Saldo com expire pass (materializa vencidos) — o número que o dono
+      // vê aqui bate com o que o cliente vê no app.
+      const snapshot = await settleExpiredPoints(
+        context.db,
+        context.tenant.id,
+        customer.id,
+      );
+
+      return {
+        userId: customer.id,
+        name: customer.name,
+        email: customer.email,
+        cpf: customer.cpf,
+        balance: snapshot.balance,
+        credits: totals.credits,
+        spentCents: totals.spentCents,
+        lastActivityAt: totals.lastActivityAt,
+      };
     }),
 
   /** Ranking de operadores por total de pontos creditados. */

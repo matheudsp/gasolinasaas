@@ -97,7 +97,7 @@ apps/server/src/
 ├── index.ts          # composição do app Hono (~95 linhas — mantenha enxuto)
 ├── handlers/         # api.ts (OpenAPIHandler) · rpc.ts (RPCHandler)
 ├── middlewares/      # cors.ts · error.ts · session.ts
-├── lib/              # auth · context · orpc · tenant · email · execution-context · hono-env
+├── lib/              # auth · context · orpc · tenant · email · execution-context · hono-env · loyalty-points · push · cpf
 ├── routers/          # station · fuel · tenant · subscription · admin · push · users · loyalty
 ├── routes/           # reward-image.ts · tenant-logo.ts — rotas Hono cruas (upload/serve no R2)
 ├── db/schema/        # auth · tenant · station · push · subscription · loyalty
@@ -133,11 +133,19 @@ O handler catch-all tenta **RPC primeiro, depois OpenAPI**; se nenhum casar, cai
 
 - `nodejs_compat` está ligado, mas nem tudo funciona. E-mail usa **`aws4fetch`
   contra a API do SES**, não `@aws-sdk/client-ses` (depende de `node:fs`, quebra no Worker).
-- Trabalho assíncrono pós-resposta (envio de e-mail) precisa de `waitUntil`. Como o
-  Better Auth não recebe o `ExecutionContext`, ele é propagado por `AsyncLocalStorage`
-  em `lib/execution-context.ts`, e `auth.ts` consome via
-  `executionCtxStorage.getStore()?.waitUntil(...)`. Se você adicionar background work
-  em auth, siga esse caminho — sem `waitUntil` o Worker mata a promise.
+- Trabalho assíncrono pós-resposta (e-mail, push transacional) precisa de `waitUntil`.
+  O `ExecutionContext` é propagado por `AsyncLocalStorage` em
+  `lib/execution-context.ts` para **TODAS as rotas** (middleware global no
+  `index.ts`), e os consumidores usam `executionCtxStorage.getStore()?.waitUntil(...)`
+  — é assim no auth (e-mails) e nos handlers oRPC de fidelidade (push). Sem
+  `waitUntil` o Worker mata a promise junto com a resposta.
+- **Rate limiting**: binding `CPF_RATE_LIMIT` (`ratelimits` no `wrangler.jsonc`,
+  10 req/60s por chave) protege `user.checkCpf` (chave = IP) e `user.setCpf`
+  (chave = userId) contra enumeração de CPFs. O binding chega ao handler via
+  `context.cpfRateLimit` + `context.clientIp` (`lib/context.ts`); é `undefined`
+  fora do Worker. **Depois de mexer no `wrangler.jsonc`, rode `npx wrangler types`
+  SEM `--include-runtime=false`** — sem os runtime types quebra `cloudflare:workers`
+  e `R2Bucket` no typecheck.
 - Secrets vão em `wrangler secret put` / `pnpm secrets:setup`. **Nunca em `vars` do
   `wrangler.jsonc`** — ficam visíveis no dashboard.
 
@@ -157,6 +165,22 @@ push só da rede ativa. `user.listNotifications` e `getUnreadNotificationCount`
 **filtram pelo tenant ativo** (join com `push_notification.tenant_id`) — sem isso a
 mesma conta veria notificações misturadas de todas as redes.
 
+**Dois tipos de notificação** (`push_notification.kind`): `campaign` (disparo manual
+do painel) e `transactional` (automática por evento — crédito de pontos e resgate
+concluído, via `lib/push.ts:sendTransactionalPush`, chamada em `loyalty.credit` e
+`loyalty.confirmRedemption` **via waitUntil, fora do caminho crítico e só após o
+commit**). O histórico do painel (`push.listNotifications`) filtra `kind='campaign'`
+pra não ser inundado; a caixa in-app do usuário mostra tudo — o registro
+transacional é gravado MESMO sem token (aparece in-app pra quem desativou push).
+
+**Deep link**: o `data` do push é união discriminada (`promotion` → posto,
+`points` → tela de pontos) e o server **sempre injeta `tenantSlug`** — o mobile
+descarta notificação de rede não-ativa (`lib/notificationRouting.ts`, um resolver
+pras duas origens: tap no push e lista in-app). O listener vive em
+`hooks/useNotificationDeepLink.ts`, montado no ROOT layout sem key/gate (sobrevive
+à troca de rede; cold start via `getLastNotificationResponseAsync`; destino fica
+pendente até sessão + rede resolverem).
+
 ## Programa de fidelidade (maior subsistema novo)
 
 Fidelidade white-label por tenant. Schema em `db/schema/loyalty.ts`, lógica em
@@ -167,12 +191,34 @@ Fidelidade white-label por tenant. Schema em `db/schema/loyalty.ts`, lógica em
   (null = nunca expiram) estampa `expiresAt` no crédito. Resgates consomem os lotes
   válidos mais antigos. Créditos vencidos viram transação negativa
   (`expiredTransactionId` → crédito de origem, unique = idempotente) via **expire
-  pass preguiçoso** em `lib/loyalty-points.ts` (roda em `myBalance`,
-  `requestRedemption`, `confirmRedemption` — não há cron; cliente dormente pode
-  ter expiração pendente até a próxima leitura de saldo, então rankings podem
-  superestimar levemente até lá). Isso preserva o invariante `SUM(points)`.
-  Tipo da linha no extrato: crédito = `amountCents`, resgate = `redemptionId`,
-  expiração = `expiredTransactionId`.
+  pass** em `lib/loyalty-points.ts`, que roda em DOIS lugares: preguiçoso
+  (`myBalance`, `requestRedemption`, `confirmRedemption`, `reverseCredit`) e
+  **em lote via Cron Trigger** (`jobs/expire-points.ts`, de hora em hora, até 20
+  clientes/execução — limite de subrequests; `triggers.crons` no `wrangler.jsonc`,
+  handler `scheduled` no `index.ts`). O settle materializa expiração pra TODO
+  lote vencido, **inclusive remaining 0** (linha de 0 pontos = marcador que faz
+  a query de candidatos do cron convergir; o extrato filtra `points != 0`).
+  Isso preserva o invariante `SUM(points)`.
+  Tipo da linha no extrato: crédito = `amountCents > 0`, resgate = `redemptionId`,
+  expiração = `expiredTransactionId`, **estorno = `reversedTransactionId`**.
+- **Estorno de crédito (`reverseCredit`):** débito manual ligado ao crédito de origem
+  (`reversedTransactionId`, unique = uso único, mesmo truque da expiração), SEMPRE no
+  valor do `remaining` do lote — **nunca `-points`** (lote já resgatado/expirado não
+  volta; saldo jamais fica negativo; quebrar essa regra faz a soma dos lotes divergir
+  de `SUM(points)` silenciosamente). `amountCents` do estorno é o NEGATIVO do
+  original — neta automaticamente `auditTotals`, `topOperators` e "Meus gastos".
+  Permissão: frentista estorna só os próprios créditos em até 30min; owner/admin
+  sempre. `settleExpiredPoints` devolve `lots` pós-settlement pra isso. UI: botão na
+  tela de sucesso do caixa (mobile) e no drill-down de transações da auditoria.
+- **Teto por crédito:** `tenant.maxCreditAmountCents` (null = sem teto), validado no
+  `credit` ANTES de consumir o QR. Configurável no `/fidelidade` → Config.
+- **`credit` é transacional:** consumo do scan code + insert do crédito na mesma
+  `db.transaction` — falha no meio não queima o QR sem creditar.
+- **`mySpending`** (protected + tenant): gasto do cliente agregado por mês a partir
+  de `amountCents` (estornos netam valor e contagem). Não roda expire pass.
+- **`customerByCpf`** (owner): busca cliente por CPF **só entre quem tem transação
+  no tenant** — NOT_FOUND para CPF sem vínculo com a rede (owner não sonda a base
+  global). `topCustomers` também retorna `cpf`.
 - `loyalty_scan_code` — QR de identidade do cliente (uso único, ~90s), um por cliente.
 - `reward` / `reward_redemption` — catálogo e pedidos de resgate.
 - `tenant.pointsPerReal` — multiplicador (`numeric`, aceita frações).
@@ -193,6 +239,31 @@ Fidelidade white-label por tenant. Schema em `db/schema/loyalty.ts`, lógica em
 
 `loyalty.myRole` (protected) retorna `owner|operator|null` — o mobile usa pra decidir
 se mostra a tab/tela de operador. Cliente comum → `null`.
+
+`auditTotals` devolve, além de `totalPoints`/`credits`/`customers`:
+`outstandingPoints` (SUM(points) sem filtro = passivo da rede — defasagem máxima
+de ~1h, o cron do expire pass regulariza clientes dormentes), `redeemedPoints` e
+`expiredPoints`. `credits` conta só `amount_cents > 0` (estorno não é +1 crédito).
+
+**Verificação de e-mail é OBRIGATÓRIA no login** (`requireEmailVerification` no
+better-auth): cadastro envia o link (sendOnSignUp herda do flag) e **não cria
+sessão** — o SignUp mostra "confirme seu e-mail" e manda pro sign-in; tentativa
+de login não-verificada responde 403 e **reenvia o link** (`sendOnSignIn`), e o
+SignInScreen traduz o 403 pra mensagem amigável. Google OAuth já chega
+verificado.
+
+**CPF do cliente:** `user.cpf` (nullable + unique — convive com base legada e
+Google OAuth; unique do Postgres ignora NULLs). Obrigatoriedade em DOIS lugares:
+SignUp multi-step (valida dígitos + `checkCpf` antes de avançar o step) e **gate
+pós-login** (`(app)/_layout` redireciona pra `/complete-profile`, que vive em
+`(onboarding)` — grupo sem redirect, não entra em loop; a tela chama `setCpf` e
+`refetch()` da sessão antes de voltar). Validação espelhada em `lib/cpf.ts`
+(server) e `utils/cpf.ts` (mobile) — sem packages/ compartilhado, manter em
+sincronia. No Better Auth: `user.additionalFields.cpf` com `required: false`
+(Google não manda CPF) e **sem generic explícito no `betterAuth()`** (fixar
+`BetterAuthOptions` mata a inferência do campo); no mobile,
+`inferAdditionalFields` com schema EXPLÍCITO (importar `typeof auth` puxaria
+`cloudflare:workers` pro bundle).
 
 **Fotos de recompensa (R2):** `reward.imageUrl` guarda **caminho relativo**
 (`/images/rewards/{tenantId}/{rewardId}?v=...`), nunca URL absoluta — cada cliente
@@ -237,17 +308,23 @@ marca no bundle JS (bundle é compartilhado via OTA entre todas as redes):
 - Rotas em `App.tsx` (react-router): owner/admin sob `TenantProtectedRoute` + `Layout`;
   admin-only sob `AdminProtectedRoute`. `Layout` renderiza o `PaymentReminderBanner`.
 - Fidelidade numa página só (`/fidelidade`) com abas Auditoria/Recompensas/Config
-  (`pages/LoyaltyAudit|RewardsManager|LoyaltyConfig`). Gestão de donos na aba "Donos"
+  (`pages/LoyaltyAudit|RewardsManager|LoyaltyConfig`). A Auditoria tem busca de
+  cliente por CPF, cards de passivo/taxa de resgate e estorno no drill-down de
+  operador; a Config tem o teto por crédito. Gestão de donos na aba "Donos"
   do `/admin` (`pages/admin/OwnersTab`). Branding do app em `/marca` (`AppBranding`).
+  O form de push (`PushNotifications`) tem seletor de destino (genérica/promoção
+  com posto/pontos) que monta o `data` do deep link.
 
 **Mobile** (`apps/mobile`, Expo + expo-router) — **app guarda-chuva único**:
 - **Identidade nativa única** no `app.config.ts`: nome "Gasolina", scheme `gasolina`,
   bundle/package `cloud.gasolina.app`, assets em `assets/app-icons/gasolina/`,
   `google-services.json` único na raiz do app. Sem `TENANT` env, sem perfis EAS por
   tenant. `tenants/registry.ts` virou SÓ o mapa de ícones alternativos do launcher
-  (`tenantAlternateIcons`, consumido pelo plugin `@bsky.app/expo-dynamic-app-icon` no
-  build e por `src/lib/appIcon.ts` em runtime) — ícone de tenant novo = PNGs em
-  `tenants/<slug>/` + registrar + novo build nativo; sem ícone, usa o padrão Gasolina.
+  (`tenantAlternateIcons: Record<string, string>` — **UM PNG quadrado ≥1024px por
+  tenant em `tenants/<slug>/icon.png` serve iOS e Android**; consumido pelo plugin
+  `@bsky.app/expo-dynamic-app-icon` no build e por `src/lib/appIcon.ts` em runtime)
+  — ícone de tenant novo = `icon.png` + registrar + novo build nativo; sem ícone,
+  usa o padrão Gasolina.
 - **Rede ativa em runtime:** `src/lib/activeTenant.ts` (MMKV `tenant.active.slug`,
   getter síncrono pros headers + hook reativo pros gates). Migração one-shot no
   import: binário `com.mdsp.martinez` → seed "martinez"; em dev,
@@ -277,7 +354,8 @@ marca no bundle JS (bundle é compartilhado via OTA entre todas as redes):
   `production`/`preview` — um binário, um canal, todas as redes.
 - Tabs em `src/app/(app)/(tabs)/`: Início · Meus pontos · Operador (só owner/operator,
   via `hidden` + `loyalty.myRole`) · Minha Conta. Telas empilhadas em `(app)/` (station,
-  rewards, notifications, about).
+  rewards, notifications, about, spending). Gate de CPF: `(onboarding)/complete-profile`.
+  SignUp é multi-step (dados pessoais com CPF mascarado → contato → senha).
 - Telas em `src/screens/`; arquivos de rota são finos (`export default () => <Screen/>`).
 - Marca da plataforma: `components/PoweredByGasolinaCloud` (nuvem-gota SVG, roxo #7C3AED).
   Políticas (Termos/Regulamento/Privacidade) vêm de `.md` em `assets/policies/`.
@@ -351,7 +429,9 @@ marca no bundle JS (bundle é compartilhado via OTA entre todas as redes):
 - `tenantProcedure` está definido mas nenhum router o usa (clientes finais não são
   membros → `protectedProcedure` + checagem manual de `context.tenant`).
 - Migrations: `0007`–`0009` (fidelidade + rewards), `0010` (expiração de pontos +
-  colunas de branding), `0011` (remove `brand_background_color`). O **bucket R2
+  colunas de branding), `0011` (remove `brand_background_color`; é `DROP IF EXISTS`
+  — bancos de dev que iteraram via `db:push` não a tinham aplicado), `0012`
+  (estorno + teto), `0013` (cpf), `0014` (`push_notification.kind`). O **bucket R2
   `gasolina-reward-images` precisa existir** (`wrangler r2 bucket create`) antes de
   deploy — ele também guarda os logos (`tenant-logos/`).
 - Criar tenant (`admin.tenant.create`) **não atribui dono** — use

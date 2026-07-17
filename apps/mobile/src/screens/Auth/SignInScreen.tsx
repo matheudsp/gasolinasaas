@@ -60,7 +60,16 @@ export function SignInScreen() {
         password,
       })
       if (signInError) {
-        setError(signInError.message ?? "Credenciais inválidas. Tente novamente.")
+        // 403 = e-mail não verificado — o server já REENVIA o link nessa
+        // tentativa (sendOnSignIn), então a mensagem orienta a caixa de
+        // entrada em vez de mostrar o erro cru em inglês.
+        if (signInError.status === 403) {
+          setError(
+            "Seu e-mail ainda não foi confirmado. Reenviamos o link de confirmação — confira sua caixa de entrada e tente de novo.",
+          )
+        } else {
+          setError(signInError.message ?? "Credenciais inválidas. Tente novamente.")
+        }
       }
     } catch {
       setError("Não foi possível conectar. Verifique sua internet e tente novamente.")

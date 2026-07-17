@@ -12,10 +12,13 @@ import { loyaltyTransaction } from "../db/schema/loyalty";
  * negativa no ledger (expiredTransactionId aponta pro crédito) — assim o
  * invariante "saldo = SUM(points)" continua valendo em todo o sistema.
  *
- * O expire pass é preguiçoso: roda quando o saldo do cliente é lido ou usado
- * (myBalance, requestRedemption, confirmRedemption). Não há cron; um cliente
- * dormente pode ficar com expirações pendentes de materializar, mas qualquer
- * leitura/uso do saldo dele acerta o ledger antes de decidir qualquer coisa.
+ * O expire pass roda em dois lugares:
+ * - preguiçoso, quando o saldo do cliente é lido ou usado (myBalance,
+ *   requestRedemption, confirmRedemption, reverseCredit) — garante exatidão
+ *   no momento do uso;
+ * - em lote, via Cron Trigger (jobs/expire-points.ts, de hora em hora) —
+ *   regulariza clientes dormentes para o passivo e os rankings do painel
+ *   não ficarem superestimados.
  */
 
 // Janela do aviso "seus pontos estão perto de expirar" exibido no app.
@@ -156,11 +159,20 @@ export async function settleExpiredPoints(
 
   const lots = computeCreditLots(rows);
 
+  // Todo lote vencido ainda sem linha de expiração — INCLUSIVE os já
+  // totalmente consumidos (remaining 0). A linha de 0 pontos não muda o
+  // saldo; ela existe como MARCADOR de "settled", que faz a query de
+  // candidatos do cron (jobs/expire-points.ts) convergir em vez de
+  // reprocessar o mesmo cliente toda hora. O extrato esconde linhas de
+  // 0 pontos.
+  const alreadySettled = new Set(
+    rows.flatMap((r) => (r.expiredTransactionId ? [r.expiredTransactionId] : []))
+  );
   const due = lots.filter(
     (lot) =>
-      lot.remaining > 0 &&
       lot.expiresAt !== null &&
-      lot.expiresAt.getTime() <= now.getTime()
+      lot.expiresAt.getTime() <= now.getTime() &&
+      !alreadySettled.has(lot.id)
   );
 
   if (due.length > 0) {

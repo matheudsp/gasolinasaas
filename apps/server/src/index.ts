@@ -1,7 +1,9 @@
 import { Hono } from "hono";
 import { logger } from "hono/logger";
+import { createDb } from "./db";
 import { apiHandler } from "./handlers/api";
 import { rpcHandler } from "./handlers/rpc";
+import { runExpirePointsJob } from "./jobs/expire-points";
 import { auth } from "./lib/auth";
 import { createContext } from "./lib/context";
 import { executionCtxStorage } from "./lib/execution-context";
@@ -98,4 +100,21 @@ app.get("/session", (c) => {
   });
 });
 
-export default app;
+export default {
+  fetch: app.fetch,
+
+  // Cron Trigger (wrangler.jsonc → triggers.crons): expire pass em lote.
+  // Complementa o expire pass preguiçoso pra clientes dormentes — sem ele o
+  // passivo do painel fica superestimado até cada cliente abrir o app.
+  async scheduled(
+    _controller: unknown,
+    env: AppEnv["Bindings"],
+    _ctx: unknown,
+  ) {
+    const db = createDb(env.DATABASE_URL || "");
+    const result = await runExpirePointsJob(db);
+    console.log(
+      `[expire-points] clientes: ${result.processed} ok, ${result.failed} falhas; pontos expirados: ${result.expiredPoints}`,
+    );
+  },
+};

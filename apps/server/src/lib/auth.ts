@@ -70,6 +70,11 @@ export const auth = betterAuth({
   ],
   emailAndPassword: {
     enabled: true,
+    // Login só com e-mail verificado — sem isso, uma conta criada com
+    // e-mail alheio receberia pushes e dados de fidelidade do dono real do
+    // endereço. O cadastro envia o link (sendOnSignUp herda deste flag) e
+    // tentativas de login não-verificadas reenviam (sendOnSignIn abaixo).
+    requireEmailVerification: true,
     revokeSessionsOnPasswordReset: true,
 
 
@@ -127,6 +132,9 @@ export const auth = betterAuth({
   },
 
   emailVerification: {
+    // Reenvia o link quando um usuário não-verificado tenta logar — o app
+    // mostra "reenviamos o link" sem precisar de endpoint de reenvio.
+    sendOnSignIn: true,
     sendVerificationEmail: async ({ user, url }, request) => {
       const emailPromise = (async () => {
         const brand = await resolveEmailBrand(request);

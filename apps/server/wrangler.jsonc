@@ -22,6 +22,20 @@
 			"bucket_name": "gasolina-reward-images"
 		}
 	],
+	// Rate Limiting API do Workers (contador local por colo, melhor esforço).
+	// Usado no checkCpf/setCpf pra barrar enumeração de CPFs cadastrados.
+	"ratelimits": [
+		{
+			"name": "CPF_RATE_LIMIT",
+			"namespace_id": "1001",
+			// 10 verificações por IP a cada 60s — folga pro fluxo real de
+			// cadastro (1-2 chamadas), inviável pra varredura em massa.
+			"simple": {
+				"limit": 10,
+				"period": 60
+			}
+		}
+	],
 	"routes": [
 		{
 			"pattern": "api.gasolina.cloud",
@@ -31,6 +45,13 @@
 			"previews_enabled": false
 		}
 	],
+	// Cron do expire pass em lote (jobs/expire-points.ts): de hora em hora,
+	// até 20 clientes por execução (limite de subrequests do plano).
+	"triggers": {
+		"crons": [
+			"0 * * * *"
+		]
+	},
 	"workers_dev": false,
 	"preview_urls": false,
 	"observability": {

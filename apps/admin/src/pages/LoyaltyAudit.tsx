@@ -5,6 +5,7 @@ import {
   Coins,
   History,
   Percent,
+  Search,
   Trophy,
   Undo2,
   UserCheck,
@@ -15,6 +16,7 @@ import { orpc } from "@/lib/orpc";
 import { useAuth } from "@/context/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import {
   Dialog,
   DialogContent,
@@ -49,6 +51,15 @@ function fmtDateTime(d: Date | string | null) {
 function fmtBRL(cents: number | null) {
   if (cents === null) return "—";
   return `R$ ${(cents / 100).toFixed(2).replace(".", ",")}`;
+}
+
+/** "12345678909" → "123.456.789-09" (aceita parcial, pra máscara ao digitar). */
+function fmtCpf(raw: string | null) {
+  if (!raw) return "—";
+  const d = raw.replace(/\D/g, "").slice(0, 11);
+  const parts = [d.slice(0, 3), d.slice(3, 6), d.slice(6, 9)].filter(Boolean);
+  const base = parts.join(".");
+  return d.length > 9 ? `${base}-${d.slice(9)}` : base;
 }
 
 function Stat({
@@ -159,6 +170,24 @@ export function LoyaltyAudit() {
       ? totals.redeemedPoints / totals.totalPoints
       : null;
 
+  // Busca de cliente por CPF (imperativa — dispara no submit).
+  const [searchCpf, setSearchCpf] = useState("");
+  const customerSearch = useMutation(
+    orpc.loyalty.customerByCpf.mutationOptions(),
+  );
+
+  const handleSearchCpf = () => {
+    const digits = searchCpf.replace(/\D/g, "");
+    if (digits.length !== 11) {
+      toast.warning("Informe o CPF completo (11 dígitos).");
+      return;
+    }
+    customerSearch.mutate(
+      { cpf: digits },
+      { onError: (err: Error) => toast.error(err.message) },
+    );
+  };
+
   return (
     <div className="space-y-6">
       {/* ── Totais ──────────────────────────────────────────────────────── */}
@@ -182,7 +211,7 @@ export function LoyaltyAudit() {
           icon={<Wallet className="h-5 w-5" />}
           label="Pontos em circulação"
           value={(totals?.outstandingPoints ?? 0).toLocaleString("pt-BR")}
-          hint="Pontos de clientes inativos podem ainda não ter expirado — o valor real pode ser um pouco menor."
+          hint="Expirações são consolidadas automaticamente a cada hora."
         />
         <Stat
           icon={<Percent className="h-5 w-5" />}
@@ -194,6 +223,84 @@ export function LoyaltyAudit() {
           }
         />
       </div>
+
+      {/* ── Busca de cliente por CPF ────────────────────────────────────── */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <Search className="h-4 w-4" />
+            Buscar cliente por CPF
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex items-center gap-2">
+            <Input
+              placeholder="000.000.000-00"
+              inputMode="numeric"
+              maxLength={14}
+              className="w-48"
+              value={searchCpf}
+              onChange={(e) => setSearchCpf(fmtCpf(e.target.value))}
+              onKeyDown={(e) => e.key === "Enter" && handleSearchCpf()}
+              disabled={customerSearch.isPending}
+            />
+            <Button
+              onClick={handleSearchCpf}
+              disabled={customerSearch.isPending}
+              className="gap-2"
+            >
+              {customerSearch.isPending ? (
+                <Spinner className="size-4" />
+              ) : (
+                <Search className="h-4 w-4" />
+              )}
+              Buscar
+            </Button>
+          </div>
+
+          {customerSearch.data && (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Cliente</TableHead>
+                  <TableHead>CPF</TableHead>
+                  <TableHead className="text-right">Saldo</TableHead>
+                  <TableHead className="text-right">Abastecimentos</TableHead>
+                  <TableHead className="text-right">Total gasto</TableHead>
+                  <TableHead>Última atividade</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                <TableRow>
+                  <TableCell>
+                    <div className="font-medium">
+                      {customerSearch.data.name ?? "—"}
+                    </div>
+                    <div className="text-xs text-muted-foreground">
+                      {customerSearch.data.email}
+                    </div>
+                  </TableCell>
+                  <TableCell className="tabular-nums whitespace-nowrap">
+                    {fmtCpf(customerSearch.data.cpf)}
+                  </TableCell>
+                  <TableCell className="text-right font-semibold tabular-nums">
+                    {customerSearch.data.balance.toLocaleString("pt-BR")}
+                  </TableCell>
+                  <TableCell className="text-right tabular-nums">
+                    {customerSearch.data.credits.toLocaleString("pt-BR")}
+                  </TableCell>
+                  <TableCell className="text-right tabular-nums whitespace-nowrap">
+                    {fmtBRL(customerSearch.data.spentCents)}
+                  </TableCell>
+                  <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
+                    {fmtDateTime(customerSearch.data.lastActivityAt)}
+                  </TableCell>
+                </TableRow>
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
 
       {/* ── Ranking de clientes ─────────────────────────────────────────── */}
       <Card>
@@ -219,6 +326,7 @@ export function LoyaltyAudit() {
                   <TableHead className="w-12">#</TableHead>
                   <TableHead>Cliente</TableHead>
                   <TableHead>E-mail</TableHead>
+                  <TableHead>CPF</TableHead>
                   <TableHead className="text-right">Pontos</TableHead>
                 </TableRow>
               </TableHeader>
@@ -233,6 +341,9 @@ export function LoyaltyAudit() {
                     </TableCell>
                     <TableCell className="text-muted-foreground text-sm">
                       {c.email}
+                    </TableCell>
+                    <TableCell className="text-muted-foreground text-sm tabular-nums whitespace-nowrap">
+                      {fmtCpf(c.cpf)}
                     </TableCell>
                     <TableCell className="text-right font-semibold tabular-nums">
                       {c.points.toLocaleString("pt-BR")}
