@@ -7,6 +7,8 @@
 	],
 	"vars": {
 		"NODE_ENV": "production",
+		// CORS_ORIGIN também é usado como endereço do painel nos links de
+		// e-mail (confirmação de conta) — o primeiro da lista é o painel.
 		"CORS_ORIGIN": "https://sistema.gasolina.cloud",
 		"BETTER_AUTH_URL": "https://api.gasolina.cloud",
 		"GOOGLE_CLIENT_ID": "484457928446-lp1cvif4co0gghj01ff16sbosloh8na3.apps.googleusercontent.com",

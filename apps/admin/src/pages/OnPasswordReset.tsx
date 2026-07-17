@@ -1,4 +1,5 @@
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
+import { appUrlForTenant } from "@/lib/appScheme";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -20,6 +21,12 @@ import { CheckCircle2, Smartphone } from "lucide-react";
  * "esqueci a senha" pelo próprio painel.
  */
 export default function OnPasswordReset() {
+  // Vem do redirectTo do app (ForgotPasswordScreen) e é repassado pelo
+  // /reset-password — resolve o scheme do app certo quando a rede tiver
+  // app premium/dedicado.
+  const [searchParams] = useSearchParams();
+  const appUrl = appUrlForTenant(searchParams.get("tenant"));
+
   return (
     <div className="flex min-h-screen items-center justify-center bg-background p-4">
       <Card className="w-full max-w-sm border-border shadow-sm">
@@ -49,8 +56,7 @@ export default function OnPasswordReset() {
 
         <CardFooter className="flex flex-col gap-3 pb-8">
           <Button asChild className="w-full h-11 text-base shadow-sm">
-            {/* martinezapp:// é o scheme configurado no app.json do Expo */}
-            <a href="martinezapp://">Abrir o app</a>
+            <a href={appUrl}>Abrir o app</a>
           </Button>
           <p className="text-xs text-muted-foreground text-center px-4">
             Se o app não abrir automaticamente, abra-o manualmente e faça login

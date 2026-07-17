@@ -17,6 +17,7 @@ import ForgotPassword from "./pages/ForgotPassword";
 import ResetPassword from "./pages/ResetPassword";
 import OnPasswordReset from "./pages/OnPasswordReset";
 import VerifyEmail from "./pages/VerifyEmail";
+import Policies, { PolicyDetail } from "./pages/Policies";
 
 export default function App() {
   return (
@@ -27,6 +28,10 @@ export default function App() {
       <Route path="/reset-password" element={<ResetPassword />} />
       <Route path="/on-password-reset" element={<OnPasswordReset />} />
       <Route path="/verify-email" element={<VerifyEmail />} />
+      {/* Públicas: também são a URL da política de privacidade exigida
+          pelas lojas. Não colocar sob rota protegida. */}
+      <Route path="/politicas" element={<Policies />} />
+      <Route path="/politicas/:slug" element={<PolicyDetail />} />
       <Route
         element={
           <TenantProtectedRoute>

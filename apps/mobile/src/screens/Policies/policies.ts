@@ -1,12 +1,15 @@
-// Caminho relativo (não o alias @assets): o babel-plugin-inline-import resolve
-// o arquivo por conta própria e não conhece os aliases do Metro/tsconfig.
-import politicaDePrivacidade from "../../../assets/policies/politica-de-privacidade.md"
-import regulamento from "../../../assets/policies/regulamento.md"
-import termosDeUso from "../../../assets/policies/termos-de-uso.md"
+// Caminho relativo (não alias): o babel-plugin-inline-import resolve o arquivo
+// por conta própria e não conhece os aliases do Metro/tsconfig. Os .md são
+// FONTE ÚNICA compartilhada com o admin (packages/policies) — como o plugin
+// inlina o conteúdo em tempo de build, o Metro nem precisa resolver o arquivo
+// fora de apps/mobile. Ver packages/policies/README.md.
+import politicaDePrivacidade from "../../../../../packages/policies/politica-de-privacidade.md"
+import regulamento from "../../../../../packages/policies/regulamento.md"
+import termosDeUso from "../../../../../packages/policies/termos-de-uso.md"
 
 /**
- * Registro das políticas do app. O conteúdo vem dos arquivos .md em
- * assets/policies/ (inlinados como string no build — ver babel.config.js):
+ * Registro das políticas do app. O conteúdo vem dos .md em
+ * packages/policies/ (inlinados como string no build — ver babel.config.js):
  * para alterar um texto, basta editar o .md correspondente.
  */
 export const POLICIES = {

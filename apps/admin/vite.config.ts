@@ -19,6 +19,9 @@ export default defineConfig(({ mode }) => {
     resolve: {
       alias: {
         '@': path.resolve(__dirname, './src'),
+        // Textos legais compartilhados com o app mobile (fonte única).
+        // Importados com ?raw — ver packages/policies/README.md.
+        '@policies': path.resolve(__dirname, '../../packages/policies'),
       },
     },
   }

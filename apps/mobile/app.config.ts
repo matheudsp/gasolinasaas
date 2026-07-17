@@ -23,20 +23,34 @@ const NOTIFICATION_ICON_COLOR = "#F7f7f7"
  * You can read more about Expo's Configuration Resolution Rules here:
  * https://docs.expo.dev/workflow/configuration/#configuration-resolution-rules
  */
+/**
+ * Projeto EAS do app guarda-chuva. É a fonte ÚNICA do id: o `updates.url`
+ * e o `extra.eas.projectId` têm que apontar pro mesmo projeto — divergir
+ * faz o OTA publicar num lugar e o app buscar update/push em outro
+ * (`getEasProjectId()` em hooks/usePushNotifications.ts lê o extra, e sem
+ * ele o token de push nem é obtido em build nativo).
+ */
+const EAS_PROJECT_ID = "725eef85-bd62-42a2-9b29-320ff5ba0046"
+
 module.exports = ({ config }: ConfigContext): Partial<ExpoConfig> => {
   const existingPlugins = config.plugins ?? []
 
   return {
     ...config,
     name: "Gasolina Cloud",
+    slug: "gasolina",
     scheme: "gasolina",
     icon: `./assets/app-icon/app-icon-all.png`,
     updates: {
       ...config.updates,
-      url: "https://u.expo.dev/03973ce3-5940-445b-835e-b8ec12cad043",
+      url: `https://u.expo.dev/${EAS_PROJECT_ID}`,
     },
     runtimeVersion: {
       policy: "fingerprint",
+    },
+    extra: {
+      ...config.extra,
+      eas: { ...config.extra?.eas, projectId: EAS_PROJECT_ID },
     },
     ios: {
       ...config.ios,

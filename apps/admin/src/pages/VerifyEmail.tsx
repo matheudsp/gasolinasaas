@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
+import { appUrlForTenant } from "@/lib/appScheme";
 import { authClient } from "@/lib/auth-client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -29,6 +30,9 @@ export default function VerifyEmail() {
   const { toast } = useToast();
 
   const hasError = searchParams.get("error") === "invalid_token";
+  // Injetado no callbackURL pelo server (lib/auth.ts) — resolve o scheme do
+  // app certo quando a rede tiver app premium/dedicado.
+  const appUrl = appUrlForTenant(searchParams.get("tenant"));
 
   const [email, setEmail] = useState(session?.user?.email ?? "");
   const [resending, setResending] = useState(false);
@@ -87,7 +91,7 @@ export default function VerifyEmail() {
 
           <CardFooter className="flex flex-col gap-3 pb-8">
             <Button asChild className="w-full h-11 text-base shadow-sm">
-              <a href="martinezapp://">Abrir o app</a>
+              <a href={appUrl}>Abrir o app</a>
             </Button>
           </CardFooter>
         </Card>

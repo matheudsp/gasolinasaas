@@ -98,7 +98,13 @@ export default function ResetPassword() {
       title: "Senha redefinida com sucesso",
       description: "Faça login com sua nova senha.",
     });
-    navigate("/on-password-reset", { replace: true });
+    // Repassa o tenant (se veio no redirectTo do app) — o on-password-reset
+    // usa pra abrir o app certo quando a rede tiver app dedicado.
+    const tenant = searchParams.get("tenant");
+    navigate(
+      `/on-password-reset${tenant ? `?tenant=${encodeURIComponent(tenant)}` : ""}`,
+      { replace: true },
+    );
   }
 
   return (
