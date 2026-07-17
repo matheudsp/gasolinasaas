@@ -16,6 +16,7 @@ import {
   QUERY_CACHE_MAX_AGE,
   queryCachePersister,
 } from "@/lib/queryPersistence"
+import { useNotificationDeepLink } from "@/hooks/useNotificationDeepLink"
 import { usePushNotifications } from "@/hooks/usePushNotifications"
 
 SplashScreen.preventAutoHideAsync()
@@ -26,6 +27,14 @@ if (__DEV__) {
 
 function PushNotificationRegistrar() {
   usePushNotifications()
+  return null
+}
+
+// SEM key e SEM gate de sessão, de propósito: o listener de tap precisa
+// sobreviver à troca de rede e existir antes do login (destino fica
+// pendente até sessão + rede resolverem).
+function NotificationDeepLinkHandler() {
+  useNotificationDeepLink()
   return null
 }
 
@@ -67,6 +76,7 @@ export default function Root() {
             {/* key remonta o registrar na troca de rede → re-registra o
                 token sob o header do tenant novo. */}
             {session && <PushNotificationRegistrar key={activeSlug ?? "none"} />}
+            <NotificationDeepLinkHandler />
             <Slot />
           </KeyboardProvider>
         </ThemeProvider>

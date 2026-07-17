@@ -1,6 +1,6 @@
 import { env } from "cloudflare:workers";
 import { expo } from "@better-auth/expo";
-import { type BetterAuthOptions, betterAuth } from "better-auth";
+import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { neon } from "@neondatabase/serverless";
 import { drizzle } from "drizzle-orm/neon-http";
@@ -37,9 +37,18 @@ const resolveEmailBrand = async (request?: Request): Promise<string> => {
   }
 };
 
-export const auth = betterAuth<BetterAuthOptions>({
+// Sem generic explícito no betterAuth: fixar BetterAuthOptions mataria a
+// inferência de user.additionalFields (o cpf sumiria do tipo da sessão).
+export const auth = betterAuth({
   baseURL: env.BETTER_AUTH_URL || "",
   appName: "GasolinaAuth",
+  user: {
+    additionalFields: {
+      // required: false de propósito — o Google OAuth não passa CPF; a
+      // obrigatoriedade vive no cadastro multi-step e no gate pós-login.
+      cpf: { type: "string", required: false, input: true },
+    },
+  },
   database: drizzleAdapter(authDb, {
     provider: "pg",
     schema: {

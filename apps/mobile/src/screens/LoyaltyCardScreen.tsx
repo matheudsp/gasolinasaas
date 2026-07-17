@@ -17,6 +17,8 @@ import { Header } from "@/components/Header"
 import { Screen } from "@/components/Screen"
 import { Text } from "@/components/Text"
 import { orpc } from "@/lib/orpc"
+import { formatBRL } from "@/utils/formatCurrency"
+import { formatDateBR } from "@/utils/formatDate"
 import { useAppTheme } from "@/theme/context"
 import type { ThemedStyle } from "@/theme/types"
 
@@ -157,7 +159,7 @@ export const LoyaltyCardScreen: FC<LoyaltyCardScreenProps> = function LoyaltyCar
               <View key={t.id} style={themed($txRow)}>
                 <View style={$txInfo}>
                   <Text weight="bold" text={txLabel(t.type)} />
-                  {t.amountCents != null && (
+                  {t.amountCents != null && t.amountCents > 0 && (
                     <Text
                       size="xxs"
                       style={themed($dim)}
@@ -168,10 +170,10 @@ export const LoyaltyCardScreen: FC<LoyaltyCardScreenProps> = function LoyaltyCar
                     <Text
                       size="xxs"
                       style={themed($dim)}
-                      text={`Válidos até ${formatDate(t.expiresAt)}`}
+                      text={`Válidos até ${formatDateBR(t.expiresAt)}`}
                     />
                   )}
-                  <Text size="xxs" style={themed($dim)} text={formatDate(t.createdAt)} />
+                  <Text size="xxs" style={themed($dim)} text={formatDateBR(t.createdAt)} />
                 </View>
                 <Text
                   weight="bold"
@@ -189,12 +191,14 @@ export const LoyaltyCardScreen: FC<LoyaltyCardScreenProps> = function LoyaltyCar
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-function txLabel(type: "credit" | "expiration" | "redemption"): string {
+function txLabel(type: "credit" | "expiration" | "redemption" | "reversal"): string {
   switch (type) {
     case "credit":
       return "Pontos ganhos"
     case "expiration":
       return "Pontos expirados"
+    case "reversal":
+      return "Estorno de crédito"
     default:
       return "Resgate"
   }
@@ -210,18 +214,6 @@ function formatRelativeDays(d: Date | string): string {
     return "amanhã"
   }
   return `em ${days} dias`
-}
-
-function formatBRL(cents: number): string {
-  return `R$ ${(cents / 100).toFixed(2).replace(".", ",")}`
-}
-
-function formatDate(d: Date | string): string {
-  return new Date(d).toLocaleDateString("pt-BR", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-  })
 }
 
 // ── Styles ────────────────────────────────────────────────────────────────────

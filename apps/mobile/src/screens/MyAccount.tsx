@@ -25,6 +25,7 @@ import { useTenantBranding } from "@/lib/branding"
 import { orpc } from "@/lib/orpc"
 import { useAppTheme } from "@/theme/context"
 import type { ThemedStyle, ThemeContextModeT } from "@/theme/types"
+import { formatBRL } from "@/utils/formatCurrency"
 import { storage } from "@/utils/storage"
 import { usePreferredFuel } from "@/hooks/usePreferredFuel"
 import { useNotificationSettings } from "@/hooks/useNotificationSettings"
@@ -52,11 +53,14 @@ function PreferenceRow({
   icon,
   label,
   value,
+  hint,
 }: {
   href: Href
   icon: MaterialDesignIconsIconName
   label: string
   value: string
+  /** Nem toda linha abre uma seleção — telas informativas passam o próprio hint. */
+  hint?: string
 }) {
   const { themed, theme } = useAppTheme()
   return (
@@ -64,7 +68,7 @@ function PreferenceRow({
       <Button
         accessibilityRole="button"
         accessibilityLabel={label}
-        accessibilityHint={`Abre a seleção de ${label.toLowerCase()}`}
+        accessibilityHint={hint ?? `Abre a seleção de ${label.toLowerCase()}`}
         android_ripple={{ color: theme.colors.palette.neutral300 }}
         style={themed($prefRowButton)}
         preset="ghost"
@@ -112,6 +116,7 @@ export function MyAccountScreen() {
   const { notifEnabled, refresh: refreshNotif } = useNotificationSettings()
 
   const { data: balanceData } = useQuery(orpc.loyalty.myBalance.queryOptions())
+  const { data: spending } = useQuery(orpc.loyalty.mySpending.queryOptions())
   const { data: roleData } = useQuery(orpc.loyalty.myRole.queryOptions())
   const isOperator = roleData?.role === "owner" || roleData?.role === "operator"
 
@@ -223,6 +228,14 @@ export function MyAccountScreen() {
           icon="wallet-giftcard"
           label="Meus pontos"
           value={`${balanceData?.balance ?? 0} pontos`}
+        />
+
+        <PreferenceRow
+          href="/(app)/spending"
+          icon="cash-multiple"
+          label="Meus gastos"
+          value={`${formatBRL(spending?.currentMonthCents ?? 0)} este mês`}
+          hint="Abre o histórico de gastos com abastecimento"
         />
 
         {isOperator && (

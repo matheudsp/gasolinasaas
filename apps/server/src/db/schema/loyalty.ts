@@ -39,11 +39,13 @@ export const loyaltyScanCode = pgTable(
 
 /**
  * Ledger de pontos de fidelidade. O saldo do cliente é SUM(points); nunca
- * mantemos um saldo mutável solto. Três tipos de linha:
- * - crédito (caixa): points > 0, amountCents preenchido;
+ * mantemos um saldo mutável solto. Quatro tipos de linha:
+ * - crédito (caixa): points > 0, amountCents > 0;
  * - resgate: points < 0, redemptionId preenchido;
  * - expiração: points < 0, expiredTransactionId preenchido (materializada
- *   pelo expire pass em lib/loyalty-points.ts — mantém SUM(points) correto).
+ *   pelo expire pass em lib/loyalty-points.ts — mantém SUM(points) correto);
+ * - estorno: points < 0, reversedTransactionId preenchido, amountCents < 0
+ *   (neta o crédito original em auditorias e no total gasto do cliente).
  */
 export const loyaltyTransaction = pgTable(
   "loyalty_transaction",
@@ -78,11 +80,21 @@ export const loyaltyTransaction = pgTable(
       (): AnyPgColumn => loyaltyTransaction.id,
       { onDelete: "cascade" }
     ),
+    // Preenchido quando a transação é o ESTORNO (débito manual do operador)
+    // de um crédito lançado por engano — aponta para o crédito de origem.
+    // O unique abaixo garante no máximo um estorno por crédito (portão de
+    // uso único, mesmo truque da expiração). O valor do estorno é SEMPRE o
+    // remaining do lote (nunca -points), então saldo nunca fica negativo.
+    reversedTransactionId: text("reversed_transaction_id").references(
+      (): AnyPgColumn => loyaltyTransaction.id,
+      { onDelete: "cascade" }
+    ),
     createdAt: timestamp("created_at").notNull(),
   },
   (t) => [
     index("loyalty_transaction_user_idx").on(t.tenantId, t.userId),
     unique("loyalty_expiration_per_credit").on(t.expiredTransactionId),
+    unique("loyalty_reversal_per_credit").on(t.reversedTransactionId),
   ]
 );
 

@@ -1,12 +1,25 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { Coins, History, Trophy, UserCheck, Users } from "lucide-react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
+import {
+  Coins,
+  History,
+  Percent,
+  Trophy,
+  Undo2,
+  UserCheck,
+  Users,
+  Wallet,
+} from "lucide-react";
 import { orpc } from "@/lib/orpc";
 import { useAuth } from "@/context/AuthContext";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
@@ -42,10 +55,12 @@ function Stat({
   icon,
   label,
   value,
+  hint,
 }: {
   icon: React.ReactNode;
   label: string;
   value: string;
+  hint?: string;
 }) {
   return (
     <Card>
@@ -54,6 +69,11 @@ function Stat({
         <div>
           <p className="text-2xl font-bold tracking-tight">{value}</p>
           <p className="text-xs text-muted-foreground">{label}</p>
+          {hint && (
+            <p className="mt-1 text-[11px] leading-tight text-muted-foreground/70">
+              {hint}
+            </p>
+          )}
         </div>
       </CardContent>
     </Card>
@@ -95,17 +115,54 @@ export function LoyaltyAudit() {
     name: string | null;
   } | null>(null);
 
-  const { data: operatorTx = [], isLoading: loadingOperatorTx } = useQuery(
-    orpc.loyalty.operatorTransactions.queryOptions({
-      input: { operatorUserId: selectedOperator?.userId ?? "", limit: 100 },
-      enabled: !!selectedOperator,
-    }),
-  );
+  const operatorTxOptions = orpc.loyalty.operatorTransactions.queryOptions({
+    input: { operatorUserId: selectedOperator?.userId ?? "", limit: 100 },
+    enabled: !!selectedOperator,
+  });
+  const { data: operatorTx = [], isLoading: loadingOperatorTx } =
+    useQuery(operatorTxOptions);
+
+  // Crédito selecionado para estorno (confirmação em Dialog).
+  const [reverseTarget, setReverseTarget] = useState<{
+    id: string;
+    customerName: string | null;
+    points: number;
+    amountCents: number | null;
+  } | null>(null);
+
+  const qc = useQueryClient();
+  const reverse = useMutation({
+    ...orpc.loyalty.reverseCredit.mutationOptions(),
+    onSuccess: (data) => {
+      toast.success(
+        `Crédito estornado — ${data.reversedPoints} pontos devolvidos.`,
+      );
+      setReverseTarget(null);
+      qc.invalidateQueries({ queryKey: operatorTxOptions.queryKey });
+      qc.invalidateQueries(orpc.loyalty.auditTotals.queryOptions());
+      qc.invalidateQueries(
+        orpc.loyalty.topOperators.queryOptions({
+          input: { limit: RANK_LIMIT },
+        }),
+      );
+      qc.invalidateQueries(
+        orpc.loyalty.topCustomers.queryOptions({
+          input: { limit: RANK_LIMIT },
+        }),
+      );
+    },
+    onError: (err: Error) => toast.error(`Erro: ${err.message}`),
+  });
+
+  const redemptionRate =
+    totals && totals.totalPoints > 0
+      ? totals.redeemedPoints / totals.totalPoints
+      : null;
 
   return (
     <div className="space-y-6">
       {/* ── Totais ──────────────────────────────────────────────────────── */}
-      <div className="grid gap-4 sm:grid-cols-3">
+      <div className="grid gap-4 sm:grid-cols-3 lg:grid-cols-5">
         <Stat
           icon={<Coins className="h-5 w-5" />}
           label="Pontos creditados"
@@ -120,6 +177,21 @@ export function LoyaltyAudit() {
           icon={<Users className="h-5 w-5" />}
           label="Clientes com pontos"
           value={(totals?.customers ?? 0).toLocaleString("pt-BR")}
+        />
+        <Stat
+          icon={<Wallet className="h-5 w-5" />}
+          label="Pontos em circulação"
+          value={(totals?.outstandingPoints ?? 0).toLocaleString("pt-BR")}
+          hint="Pontos de clientes inativos podem ainda não ter expirado — o valor real pode ser um pouco menor."
+        />
+        <Stat
+          icon={<Percent className="h-5 w-5" />}
+          label="Taxa de resgate"
+          value={
+            redemptionRate === null
+              ? "—"
+              : `${(redemptionRate * 100).toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%`
+          }
         />
       </div>
 
@@ -336,6 +408,7 @@ export function LoyaltyAudit() {
                     <TableHead>Cliente beneficiado</TableHead>
                     <TableHead className="text-right">Valor</TableHead>
                     <TableHead className="text-right">Pontos</TableHead>
+                    <TableHead className="text-right">Ações</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -356,7 +429,32 @@ export function LoyaltyAudit() {
                         {fmtBRL(tx.amountCents)}
                       </TableCell>
                       <TableCell className="text-right font-semibold tabular-nums">
-                        +{tx.points.toLocaleString("pt-BR")}
+                        {tx.points > 0 ? "+" : ""}
+                        {tx.points.toLocaleString("pt-BR")}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        {tx.amountCents !== null && tx.amountCents > 0 ? (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="text-destructive hover:text-destructive hover:bg-destructive/10 gap-1.5"
+                            onClick={() =>
+                              setReverseTarget({
+                                id: tx.id,
+                                customerName: tx.customerName,
+                                points: tx.points,
+                                amountCents: tx.amountCents,
+                              })
+                            }
+                          >
+                            <Undo2 className="h-3.5 w-3.5" />
+                            Estornar
+                          </Button>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">
+                            Estorno
+                          </span>
+                        )}
                       </TableCell>
                     </TableRow>
                   ))}
@@ -364,6 +462,46 @@ export function LoyaltyAudit() {
               </Table>
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Confirmação de estorno ───────────────────────────────────────── */}
+      <Dialog
+        open={reverseTarget !== null}
+        onOpenChange={(open) => !open && setReverseTarget(null)}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Estornar crédito?</DialogTitle>
+            <DialogDescription>
+              {reverseTarget
+                ? `Crédito de ${fmtBRL(reverseTarget.amountCents)} (${reverseTarget.points.toLocaleString("pt-BR")} pontos) para ${reverseTarget.customerName ?? "cliente"}. `
+                : ""}
+              Serão devolvidos apenas os pontos que o cliente ainda não usou —
+              o saldo dele nunca fica negativo. Essa ação não pode ser desfeita.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="ghost"
+              onClick={() => setReverseTarget(null)}
+              disabled={reverse.isPending}
+            >
+              Cancelar
+            </Button>
+            <Button
+              variant="destructive"
+              className="gap-2"
+              disabled={reverse.isPending}
+              onClick={() =>
+                reverseTarget &&
+                reverse.mutate({ transactionId: reverseTarget.id })
+              }
+            >
+              {reverse.isPending && <Spinner className="size-4" />}
+              Estornar
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

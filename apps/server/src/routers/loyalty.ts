@@ -24,6 +24,12 @@ import {
 const SCAN_CODE_TTL_MS = 90_000;
 // Resgate dá mais folga que o crédito — o cliente precisa caminhar até o caixa.
 const REDEMPTION_TTL_MS = 300_000;
+// Janela em que o frentista pode estornar um crédito que ELE MESMO fez
+// (corrigir o próprio erro de digitação). Owner e admin estornam sempre.
+const REVERSAL_WINDOW_MS = 30 * 60_000;
+
+const formatCentsBRL = (cents: number) =>
+  (cents / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
 export const loyaltyRouter = {
   // ── Cliente ────────────────────────────────────────────────────────────────
@@ -93,10 +99,11 @@ export const loyaltyRouter = {
           points: loyaltyTransaction.points,
           amountCents: loyaltyTransaction.amountCents,
           expiresAt: loyaltyTransaction.expiresAt,
-          // Rótulo da linha no extrato do app: crédito, resgate ou expiração.
+          // Rótulo da linha no extrato do app: crédito, resgate, expiração ou
+          // estorno.
           type: sql<
-            "credit" | "expiration" | "redemption"
-          >`case when ${loyaltyTransaction.expiredTransactionId} is not null then 'expiration' when ${loyaltyTransaction.points} >= 0 then 'credit' else 'redemption' end`,
+            "credit" | "expiration" | "redemption" | "reversal"
+          >`case when ${loyaltyTransaction.expiredTransactionId} is not null then 'expiration' when ${loyaltyTransaction.reversedTransactionId} is not null then 'reversal' when ${loyaltyTransaction.points} >= 0 then 'credit' else 'redemption' end`,
           createdAt: loyaltyTransaction.createdAt,
         })
         .from(loyaltyTransaction)
@@ -109,6 +116,46 @@ export const loyaltyRouter = {
         .orderBy(desc(loyaltyTransaction.createdAt))
         .limit(input.limit);
     }),
+
+  /**
+   * Total gasto em abastecimentos pelo cliente na rede ativa, agregado do
+   * ledger (amountCents dos créditos; estornos entram negativos e corrigem o
+   * total). Não roda o expire pass — expiração de pontos não muda o valor
+   * gasto em reais.
+   */
+  mySpending: protectedProcedure.handler(async ({ context }) => {
+    if (!context.tenant) {
+      throw new ORPCError("BAD_REQUEST", { message: "Tenant é obrigatório" });
+    }
+
+    const rows = await context.db
+      .select({
+        // "YYYY-MM" — chave estável do mês, formatação fica no client.
+        month: sql<string>`to_char(date_trunc('month', ${loyaltyTransaction.createdAt}), 'YYYY-MM')`,
+        totalCents: sql<number>`coalesce(sum(${loyaltyTransaction.amountCents}), 0)::int`,
+        // Abastecimentos do mês; estornos descontam (netam) a contagem.
+        count: sql<number>`(count(*) filter (where ${loyaltyTransaction.amountCents} > 0) - count(*) filter (where ${loyaltyTransaction.amountCents} < 0))::int`,
+      })
+      .from(loyaltyTransaction)
+      .where(
+        and(
+          eq(loyaltyTransaction.tenantId, context.tenant.id),
+          eq(loyaltyTransaction.userId, context.session.user.id),
+          isNotNull(loyaltyTransaction.amountCents),
+        ),
+      )
+      .groupBy(sql`date_trunc('month', ${loyaltyTransaction.createdAt})`)
+      .orderBy(desc(sql`date_trunc('month', ${loyaltyTransaction.createdAt})`));
+
+    const currentMonth = new Date().toISOString().slice(0, 7);
+
+    return {
+      totalCents: rows.reduce((sum, r) => sum + r.totalCents, 0),
+      currentMonthCents:
+        rows.find((r) => r.month === currentMonth)?.totalCents ?? 0,
+      byMonth: rows.slice(0, 12),
+    };
+  }),
 
   /**
    * Papel do usuário logado no tenant atual — o app mobile usa para decidir se
@@ -149,6 +196,15 @@ export const loyaltyRouter = {
     .handler(async ({ context, input }) => {
       const now = new Date();
 
+      // Teto por crédito (proteção contra typo do frentista) — checado ANTES
+      // de consumir o código, para o cliente não precisar gerar outro QR.
+      const maxCents = context.tenant.maxCreditAmountCents;
+      if (maxCents !== null && input.amountCents > maxCents) {
+        throw new ORPCError("BAD_REQUEST", {
+          message: `Valor acima do máximo permitido por crédito (${formatCentsBRL(maxCents)}). Confira o valor digitado.`,
+        });
+      }
+
       // Consome o código: só credita quem conseguir deletar a linha. Se dois
       // pedidos chegarem com o mesmo código, apenas um recebe a linha de volta.
       const [claimed] = await context.db
@@ -188,16 +244,19 @@ export const loyaltyRouter = {
         ? new Date(now.getTime() + validityDays * 86_400_000)
         : null;
 
-      await context.db.insert(loyaltyTransaction).values({
-        id: crypto.randomUUID(),
-        tenantId: context.tenant.id,
-        userId: claimed.userId,
-        operatorUserId: context.session.user.id,
-        points,
-        amountCents: input.amountCents,
-        expiresAt,
-        createdAt: now,
-      });
+      const [created] = await context.db
+        .insert(loyaltyTransaction)
+        .values({
+          id: crypto.randomUUID(),
+          tenantId: context.tenant.id,
+          userId: claimed.userId,
+          operatorUserId: context.session.user.id,
+          points,
+          amountCents: input.amountCents,
+          expiresAt,
+          createdAt: now,
+        })
+        .returning({ id: loyaltyTransaction.id });
 
       const [customer] = await context.db
         .select({ name: user.name })
@@ -205,10 +264,146 @@ export const loyaltyRouter = {
         .where(eq(user.id, claimed.userId));
 
       return {
+        // A tela de sucesso usa o id para oferecer o estorno imediato.
+        transactionId: created.id,
         points,
         amountCents: input.amountCents,
         customerName: customer?.name ?? null,
       };
+    }),
+
+  /**
+   * Estorna um crédito lançado por engano. Débito manual ligado ao crédito de
+   * origem (reversedTransactionId) no valor do que AINDA RESTA do lote — o
+   * saldo do cliente nunca fica negativo: o que já virou brinde entregue ou
+   * expirou a rede absorve. O unique no schema barra o segundo estorno.
+   *
+   * Permissão: o frentista estorna só os créditos que ele mesmo fez, em até
+   * 30 minutos; owner (e admin da plataforma) estorna qualquer um, sempre.
+   */
+  reverseCredit: tenantOperatorProcedure
+    .input(z.object({ transactionId: z.string().min(1) }))
+    .handler(async ({ context, input }) => {
+      const tenantId = context.tenant.id;
+      const callerId = context.session.user.id;
+      const isPlatformAdmin =
+        (context.session.user as { role?: string }).role === "admin";
+
+      return context.db.transaction(async (tx) => {
+        const now = new Date();
+
+        const [original] = await tx
+          .select({
+            id: loyaltyTransaction.id,
+            userId: loyaltyTransaction.userId,
+            operatorUserId: loyaltyTransaction.operatorUserId,
+            points: loyaltyTransaction.points,
+            amountCents: loyaltyTransaction.amountCents,
+            createdAt: loyaltyTransaction.createdAt,
+          })
+          .from(loyaltyTransaction)
+          .where(
+            and(
+              eq(loyaltyTransaction.id, input.transactionId),
+              eq(loyaltyTransaction.tenantId, tenantId),
+              gt(loyaltyTransaction.points, 0),
+              gt(loyaltyTransaction.amountCents, 0),
+            ),
+          );
+
+        if (!original || original.amountCents === null) {
+          throw new ORPCError("NOT_FOUND", {
+            message: "Crédito não encontrado",
+          });
+        }
+
+        // requireOperatorAccess não injeta a membership (admin da plataforma
+        // não tem uma) — buscamos o papel aqui para diferenciar owner de
+        // frentista.
+        if (!isPlatformAdmin) {
+          const [membership] = await tx
+            .select({ role: tenantMembership.role })
+            .from(tenantMembership)
+            .where(
+              and(
+                eq(tenantMembership.tenantId, tenantId),
+                eq(tenantMembership.userId, callerId),
+              ),
+            );
+
+          if (membership?.role !== "owner") {
+            if (original.operatorUserId !== callerId) {
+              throw new ORPCError("FORBIDDEN", {
+                message: "Você só pode estornar créditos feitos por você.",
+              });
+            }
+            if (now.getTime() - original.createdAt.getTime() > REVERSAL_WINDOW_MS) {
+              throw new ORPCError("FORBIDDEN", {
+                message:
+                  "O prazo de 30 minutos para estornar acabou. Peça ao dono da rede.",
+              });
+            }
+          }
+        }
+
+        // Expire pass dentro da transação: um lote que venceu não pode ser
+        // estornado (viraria saldo negativo). Os lotes voltam já ajustados.
+        const snapshot = await settleExpiredPoints(
+          tx,
+          tenantId,
+          original.userId,
+          now,
+        );
+
+        const lot = snapshot.lots.find((l) => l.id === original.id);
+        const remaining = lot?.remaining ?? 0;
+
+        if (remaining <= 0) {
+          throw new ORPCError("BAD_REQUEST", {
+            message:
+              "Nada a estornar — os pontos deste crédito já foram resgatados ou expiraram.",
+          });
+        }
+
+        // Portão de uso único: o unique em reversedTransactionId garante no
+        // máximo um estorno por crédito, mesmo sob concorrência.
+        const [reversal] = await tx
+          .insert(loyaltyTransaction)
+          .values({
+            id: crypto.randomUUID(),
+            tenantId,
+            userId: original.userId,
+            // Quem estornou (trilha de auditoria) — não quem creditou.
+            operatorUserId: callerId,
+            points: -remaining,
+            // Negativo de propósito: neta o crédito original nos totais de
+            // auditoria e no total gasto do cliente.
+            amountCents: -original.amountCents,
+            reversedTransactionId: original.id,
+            createdAt: now,
+          })
+          .onConflictDoNothing({
+            target: [loyaltyTransaction.reversedTransactionId],
+          })
+          .returning({ id: loyaltyTransaction.id });
+
+        if (!reversal) {
+          throw new ORPCError("CONFLICT", {
+            message: "Este crédito já foi estornado.",
+          });
+        }
+
+        const [customer] = await tx
+          .select({ name: user.name })
+          .from(user)
+          .where(eq(user.id, original.userId));
+
+        return {
+          reversedPoints: remaining,
+          amountCents: original.amountCents,
+          customerName: customer?.name ?? null,
+        };
+      });
     }),
 
   // ── Gestão de operadores (owner) ────────────────────────────────────────────
@@ -305,11 +500,12 @@ export const loyaltyRouter = {
 
   // ── Configuração do programa (owner) ────────────────────────────────────────
 
-  /** Configuração de fidelidade do tenant (multiplicador e validade). */
+  /** Configuração de fidelidade do tenant (multiplicador, validade e teto). */
   getConfig: tenantOwnerProcedure.handler(({ context }) => {
     return {
       pointsPerReal: Number(context.tenant.pointsPerReal),
       pointsValidityDays: context.tenant.pointsValidityDays ?? null,
+      maxCreditAmountCents: context.tenant.maxCreditAmountCents ?? null,
     };
   }),
 
@@ -323,6 +519,8 @@ export const loyaltyRouter = {
       z.object({
         pointsPerReal: z.number().min(0).max(1000),
         pointsValidityDays: z.number().int().min(1).max(3650).nullable(),
+        // Teto por crédito em centavos. Null = sem teto.
+        maxCreditAmountCents: z.number().int().min(1).nullable(),
       }),
     )
     .handler(async ({ context, input }) => {
@@ -334,6 +532,7 @@ export const loyaltyRouter = {
         .set({
           pointsPerReal: value.toString(),
           pointsValidityDays: input.pointsValidityDays,
+          maxCreditAmountCents: input.maxCreditAmountCents,
           updatedAt: new Date(),
         })
         .where(eq(tenant.id, context.tenant.id));
@@ -341,6 +540,7 @@ export const loyaltyRouter = {
       return {
         pointsPerReal: value,
         pointsValidityDays: input.pointsValidityDays,
+        maxCreditAmountCents: input.maxCreditAmountCents,
       };
     }),
 
@@ -350,11 +550,19 @@ export const loyaltyRouter = {
   auditTotals: tenantOwnerProcedure.handler(async ({ context }) => {
     const [row] = await context.db
       .select({
-        // Só o fluxo de crédito (caixa): amountCents preenchido — exclui
-        // débitos de resgate e ajustes manuais.
+        // Fluxo de crédito (caixa): amountCents preenchido — inclui os
+        // estornos (amountCents negativo), que netam o total automaticamente.
         totalPoints: sql<number>`coalesce(sum(${loyaltyTransaction.points}) filter (where ${loyaltyTransaction.amountCents} is not null), 0)::int`,
-        credits: sql<number>`(count(*) filter (where ${loyaltyTransaction.amountCents} is not null))::int`,
+        // Só créditos de verdade (> 0): estorno não conta como +1 crédito.
+        credits: sql<number>`(count(*) filter (where ${loyaltyTransaction.amountCents} > 0))::int`,
         customers: sql<number>`count(distinct ${loyaltyTransaction.userId})::int`,
+        // Pontos em circulação = a dívida da rede. SUM(points) sem filtro,
+        // pelo invariante do ledger. Superestimado para clientes dormentes:
+        // o expire pass é preguiçoso e só materializa expirações quando o
+        // saldo deles é lido.
+        outstandingPoints: sql<number>`coalesce(sum(${loyaltyTransaction.points}), 0)::int`,
+        redeemedPoints: sql<number>`abs(coalesce(sum(${loyaltyTransaction.points}) filter (where ${loyaltyTransaction.redemptionId} is not null), 0))::int`,
+        expiredPoints: sql<number>`abs(coalesce(sum(${loyaltyTransaction.points}) filter (where ${loyaltyTransaction.expiredTransactionId} is not null), 0))::int`,
       })
       .from(loyaltyTransaction)
       .where(eq(loyaltyTransaction.tenantId, context.tenant.id));
@@ -363,6 +571,9 @@ export const loyaltyRouter = {
       totalPoints: row?.totalPoints ?? 0,
       credits: row?.credits ?? 0,
       customers: row?.customers ?? 0,
+      outstandingPoints: row?.outstandingPoints ?? 0,
+      redeemedPoints: row?.redeemedPoints ?? 0,
+      expiredPoints: row?.expiredPoints ?? 0,
     };
   }),
 

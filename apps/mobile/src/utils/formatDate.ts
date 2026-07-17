@@ -19,3 +19,15 @@ export const formatDate = (date: string, dateFormat?: string, options?: Options)
   }
   return format(parseISO(date), dateFormat ?? "MMM dd, yyyy", dateOptions)
 }
+
+/**
+ * "dd/mm/aaaa" a partir de Date OU string ISO — o formatDate acima só aceita
+ * string (parseISO quebra com Date), o que não serve pros retornos do oRPC.
+ */
+export const formatDateBR = (date: Date | string): string => {
+  return new Date(date).toLocaleDateString("pt-BR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  })
+}

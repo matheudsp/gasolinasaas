@@ -15,3 +15,8 @@ export function formatPriceBRL(raw: string): string {
     maximumFractionDigits: 3,
   })
 }
+
+/** Centavos → "R$ 150,00". Para valores monetários inteiros (fidelidade). */
+export function formatBRL(cents: number): string {
+  return `R$ ${(cents / 100).toFixed(2).replace(".", ",")}`
+}

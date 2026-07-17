@@ -10,6 +10,7 @@ export default function OnboardingLayout() {
     <Stack>
       <Stack.Screen name="welcome" options={{ headerShown: false, animation: "fade" }} />
       <Stack.Screen name="select-network" options={{ headerShown: false, animation: "fade" }} />
+      <Stack.Screen name="complete-profile" options={{ headerShown: false, animation: "fade" }} />
     </Stack>
   )
 }

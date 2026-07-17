@@ -1,5 +1,6 @@
 import { mmkvStorageAdapter } from "@/utils/storage";
 import { expoClient} from "@better-auth/expo/client";
+import { inferAdditionalFields } from "better-auth/client/plugins";
 import { createAuthClient } from "better-auth/react";
 import { getActiveTenantSlug } from "@/lib/activeTenant";
 import Config from "@/config";
@@ -24,6 +25,11 @@ export const authClient = createAuthClient({
     },
   },
   plugins: [
+    // Schema EXPLÍCITO (não inferAdditionalFields<typeof auth>): importar o
+    // tipo do server puxaria `cloudflare:workers` pro bundle do app.
+    inferAdditionalFields({
+      user: { cpf: { type: "string", required: false } },
+    }),
     expoClient({
       scheme: "gasolina",
       storagePrefix: "gasolina-auth",

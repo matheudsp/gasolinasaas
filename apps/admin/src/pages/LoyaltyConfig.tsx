@@ -38,6 +38,7 @@ export function LoyaltyConfig() {
 
   const [points, setPoints] = useState("");
   const [validityDays, setValidityDays] = useState("");
+  const [maxCredit, setMaxCredit] = useState("");
   const [email, setEmail] = useState("");
 
   // Config (pontos por real + validade dos pontos)
@@ -50,6 +51,11 @@ export function LoyaltyConfig() {
       setPoints(String(config.pointsPerReal));
       setValidityDays(
         config.pointsValidityDays ? String(config.pointsValidityDays) : "",
+      );
+      setMaxCredit(
+        config.maxCreditAmountCents
+          ? String(config.maxCreditAmountCents / 100).replace(".", ",")
+          : "",
       );
     }
   }, [config]);
@@ -99,9 +105,21 @@ export function LoyaltyConfig() {
       parsedValidity >= 1 &&
       parsedValidity <= 3650);
 
+  // Teto por crédito: vazio = sem teto (null no server). Aceita "500" ou
+  // "500,00" em reais; convertido pra centavos.
+  const trimmedMaxCredit = maxCredit.trim();
+  const parsedMaxCreditCents =
+    trimmedMaxCredit === ""
+      ? null
+      : Math.round(Number(trimmedMaxCredit.replace(",", ".")) * 100);
+  const maxCreditValid =
+    parsedMaxCreditCents === null ||
+    (Number.isFinite(parsedMaxCreditCents) && parsedMaxCreditCents >= 1);
+
   const configDirty = config
     ? parsedPoints !== config.pointsPerReal ||
-      parsedValidity !== (config.pointsValidityDays ?? null)
+      parsedValidity !== (config.pointsValidityDays ?? null) ||
+      parsedMaxCreditCents !== (config.maxCreditAmountCents ?? null)
     : false;
 
   const handleSaveConfig = () => {
@@ -115,9 +133,16 @@ export function LoyaltyConfig() {
       );
       return;
     }
+    if (!maxCreditValid) {
+      toast.warning(
+        "Valor máximo por crédito deve ser um valor em reais — ou vazio para não ter teto.",
+      );
+      return;
+    }
     updateConfig.mutate({
       pointsPerReal: parsedPoints,
       pointsValidityDays: parsedValidity,
+      maxCreditAmountCents: parsedMaxCreditCents,
     });
   };
 
@@ -187,12 +212,34 @@ export function LoyaltyConfig() {
             </p>
           </div>
 
+          <div className="space-y-1.5">
+            <Label htmlFor="max-credit">
+              Valor máximo por crédito (R$)
+            </Label>
+            <Input
+              id="max-credit"
+              type="text"
+              inputMode="decimal"
+              placeholder="Sem teto"
+              className="w-32"
+              value={maxCredit}
+              onChange={(e) => setMaxCredit(e.target.value)}
+              disabled={updateConfig.isPending || !enabled}
+            />
+            <p className="text-xs text-muted-foreground">
+              Protege contra erro de digitação do frentista (ex.: R$ 1.500 em
+              vez de R$ 150). Créditos acima desse valor são bloqueados no
+              caixa. Deixe vazio para não ter teto.
+            </p>
+          </div>
+
           <Button
             onClick={handleSaveConfig}
             disabled={
               updateConfig.isPending ||
               !pointsValid ||
               !validityValid ||
+              !maxCreditValid ||
               !configDirty
             }
             className="gap-2"

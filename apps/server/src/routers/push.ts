@@ -155,11 +155,30 @@ export const pushRouter = {
       z.object({
         title: z.string().min(1),
         body: z.string().min(1),
-        data: z.record(z.string(), z.unknown()).optional(),
+        // Destino do deep link ao tocar na notificação. União discriminada:
+        // "promotion" abre um posto, "points" abre a tela de pontos. Sem
+        // data = notificação genérica (abre a lista de notificações).
+        data: z
+          .discriminatedUnion("type", [
+            z.object({
+              type: z.literal("promotion"),
+              stationId: z.string().min(1),
+            }),
+            z.object({ type: z.literal("points") }),
+          ])
+          .optional(),
         sound: z.enum(["default"]).optional(),
       }),
     )
     .handler(async ({ context, input }) => {
+      // tenantSlug sempre no payload: o app descarta notificação de rede que
+      // não é a ativa (uma notificação antiga na bandeja, de antes de uma
+      // troca de rede, deep-linkaria pra um posto de outro tenant).
+      const payload: Record<string, unknown> = {
+        ...(input.data ?? {}),
+        tenantSlug: context.tenant.slug,
+      };
+
       const tokens = await context.db
         .select({ id: pushToken.id, token: pushToken.token, userId: pushToken.userId })
         .from(pushToken)
@@ -176,7 +195,7 @@ export const pushRouter = {
             tenantId: context.tenant.id,
             title: input.title,
             body: input.body,
-            dataJson: input.data ? JSON.stringify(input.data) : null,
+            dataJson: JSON.stringify(payload),
             status: "sent",
             recipientCount: 0,
             successCount: 0,
@@ -194,7 +213,7 @@ export const pushRouter = {
         to: t.token,
         title: input.title,
         body: input.body,
-        ...(input.data ? { data: input.data as Record<string, unknown> } : {}),
+        data: payload,
         ...(input.sound ? { sound: input.sound } : {}),
         priority: "high",
       }));
@@ -259,7 +278,7 @@ export const pushRouter = {
           tenantId: context.tenant.id,
           title: input.title,
           body: input.body,
-          dataJson: input.data ? JSON.stringify(input.data) : null,
+          dataJson: JSON.stringify(payload),
           status,
           recipientCount: tokens.length,
           successCount,

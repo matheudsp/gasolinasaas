@@ -85,6 +85,20 @@
       "when": 1784133056425,
       "tag": "0011_stale_spirit",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1784242847213,
+      "tag": "0012_long_the_enforcers",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1784243123441,
+      "tag": "0013_daily_valeria_richards",
+      "breakpoints": true
     }
   ]
 }

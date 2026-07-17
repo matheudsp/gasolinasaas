@@ -16,6 +16,10 @@ import { Header } from "@/components/Header"
 import { Screen } from "@/components/Screen"
 import { Text } from "@/components/Text"
 import { orpc, queryClient } from "@/lib/orpc"
+import {
+  NOTIFICATIONS_FALLBACK_HREF,
+  resolveNotificationHref,
+} from "@/lib/notificationRouting"
 import { useAppTheme } from "@/theme/context"
 import type { ThemedStyle } from "@/theme/types"
 
@@ -28,6 +32,8 @@ type NotificationItem = {
   id: string
   title: string
   body: string
+  /** Payload de deep link — o server já devolve parseado do dataJson. */
+  data: unknown
   createdAt: Date | string
   sentAt: Date | string | null
   isRead: boolean
@@ -59,6 +65,13 @@ export const NotificationsScreen: FC = function NotificationsScreen() {
   function handlePress(item: NotificationItem) {
     if (!item.isRead) {
       markAsRead({ notificationId: item.id })
+    }
+
+    // Mesmo resolver do tap no push — o fallback é esta própria lista, então
+    // só navega quando a notificação tem um destino de verdade.
+    const href = resolveNotificationHref(item.data)
+    if (href !== NOTIFICATIONS_FALLBACK_HREF) {
+      router.push(href)
     }
   }
 

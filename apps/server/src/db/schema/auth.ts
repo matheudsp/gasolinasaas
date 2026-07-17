@@ -5,6 +5,10 @@ export const user = pgTable("user", {
   name: text("name").notNull(),
   email: text("email").notNull().unique(),
   emailVerified: boolean("email_verified").notNull(),
+  // CPF do cliente, só dígitos. Nullable para conviver com a base legada e
+  // com o cadastro via Google (que não passa CPF) — a obrigatoriedade é
+  // garantida pelo gate pós-login no app. O unique do Postgres ignora NULLs.
+  cpf: text("cpf").unique(),
   image: text("image"),
   role: text("role"),
   banned: boolean("banned"),

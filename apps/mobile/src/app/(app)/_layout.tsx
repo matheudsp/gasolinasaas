@@ -24,5 +24,10 @@ export default function AppLayout() {
   }
   if (!data?.user) return <Redirect href="/(auth)/sign-in" />
 
+  // Gate de CPF: contas legadas e login via Google não têm CPF — preencher
+  // é obrigatório antes de usar o app. A tela vive em (onboarding), grupo
+  // sem redirect de saída (não entra em loop).
+  if (!data.user.cpf) return <Redirect href="/complete-profile" />
+
   return <Slot />
 }

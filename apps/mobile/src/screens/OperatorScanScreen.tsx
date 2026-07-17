@@ -65,11 +65,43 @@ export const OperatorScanScreen: FC<OperatorScanScreenProps> = function Operator
     },
   })
 
+  const reverseMutation = useMutation({
+    ...orpc.loyalty.reverseCredit.mutationOptions(),
+    onSuccess: (data) => {
+      Alert.alert(
+        "Crédito estornado",
+        `${data.reversedPoints} pontos foram devolvidos${data.customerName ? ` de ${data.customerName}` : ""}. Para creditar o valor certo, peça ao cliente para gerar um novo QR.`,
+      )
+      resetToScan()
+    },
+    onError: (error) => {
+      Alert.alert("Não foi possível estornar", error.message)
+    },
+  })
+
+  function handleReverse() {
+    const transactionId = creditMutation.data?.transactionId
+    if (!transactionId) return
+    Alert.alert(
+      "Estornar crédito?",
+      "Os pontos deste crédito serão devolvidos. O QR escaneado já foi consumido — para creditar o valor certo, o cliente precisa gerar um novo QR.",
+      [
+        { text: "Cancelar", style: "cancel" },
+        {
+          text: "Estornar",
+          style: "destructive",
+          onPress: () => reverseMutation.mutate({ transactionId }),
+        },
+      ],
+    )
+  }
+
   function resetToScan() {
     lockRef.current = false
     creditMutation.reset()
     peekMutation.reset()
     confirmMutation.reset()
+    reverseMutation.reset()
     setCode(null)
     setAmount("")
     setStage("scan")
@@ -245,6 +277,15 @@ export const OperatorScanScreen: FC<OperatorScanScreenProps> = function Operator
             onPress={resetToScan}
             style={themed($doneButton)}
           />
+          {mode === "credit" && creditMutation.data?.transactionId ? (
+            <Button
+              text={reverseMutation.isPending ? "Estornando..." : "Estornar este crédito"}
+              preset="ghost"
+              disabled={reverseMutation.isPending}
+              onPress={handleReverse}
+              style={themed($reverseButton)}
+            />
+          ) : null}
         </View>
       )}
     </Screen>
@@ -430,6 +471,10 @@ const $doneBadge: ThemedStyle<ViewStyle> = ({ colors, spacing }) => ({
 
 const $doneButton: ThemedStyle<ViewStyle> = ({ spacing }) => ({
   marginTop: spacing.lg,
+  alignSelf: "stretch",
+})
+
+const $reverseButton: ThemedStyle<ViewStyle> = () => ({
   alignSelf: "stretch",
 })
 

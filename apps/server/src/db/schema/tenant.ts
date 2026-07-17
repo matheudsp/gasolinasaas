@@ -29,6 +29,9 @@ export const tenant = pgTable("tenant", {
   // Null = pontos nunca expiram. Vale apenas para créditos posteriores à
   // configuração — créditos antigos mantêm o expiresAt com que nasceram.
   pointsValidityDays: integer("points_validity_days"),
+  // Teto por crédito de fidelidade, em centavos. Protege contra erro de
+  // digitação do frentista (1500 em vez de 150). Null = sem teto.
+  maxCreditAmountCents: integer("max_credit_amount_cents"),
   // Branding white-label exposto ao app mobile via `tenant.branding`.
   // logoUrl guarda caminho RELATIVO (/images/tenant-logos/{id}?v=...), nunca
   // URL absoluta — cada cliente prefixa com a própria base de API.

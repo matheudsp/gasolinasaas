@@ -1,1 +1,1 @@
-ALTER TABLE "tenant" DROP COLUMN "brand_background_color";
+ALTER TABLE "tenant" DROP COLUMN IF EXISTS "brand_background_color";

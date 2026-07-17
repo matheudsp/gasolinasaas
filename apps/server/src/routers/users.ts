@@ -1,11 +1,75 @@
-import { and, desc, eq, isNull, lt } from "drizzle-orm";
+import { and, desc, eq, isNull, lt, ne } from "drizzle-orm";
 import { ORPCError } from "@orpc/server";
 import { z } from "zod";
 
+import { user } from "../db/schema/auth";
 import { pushNotification, pushNotificationRecipient } from "../db/schema/push";
-import { protectedProcedure } from "../lib/orpc";
+import { isValidCpf, normalizeCpf } from "../lib/cpf";
+import { protectedProcedure, publicProcedure } from "../lib/orpc";
 
 export const userRouter = {
+  /**
+   * Verifica se um CPF está disponível para cadastro. Público de propósito:
+   * o SignUp multi-step consulta ANTES de criar a conta, para dar um erro
+   * amigável no step do CPF em vez de uma violação de unique no final.
+   */
+  checkCpf: publicProcedure
+    .input(z.object({ cpf: z.string().min(1) }))
+    .handler(async ({ context, input }) => {
+      const cpf = normalizeCpf(input.cpf);
+
+      if (!isValidCpf(cpf)) {
+        throw new ORPCError("BAD_REQUEST", { message: "CPF inválido" });
+      }
+
+      const [existing] = await context.db
+        .select({ id: user.id })
+        .from(user)
+        .where(eq(user.cpf, cpf));
+
+      return { available: !existing };
+    }),
+
+  /**
+   * Grava o CPF do usuário logado — o caminho do gate pós-login (base legada
+   * e contas criadas via Google, que não têm CPF).
+   */
+  setCpf: protectedProcedure
+    .input(z.object({ cpf: z.string().min(1) }))
+    .handler(async ({ context, input }) => {
+      const cpf = normalizeCpf(input.cpf);
+
+      if (!isValidCpf(cpf)) {
+        throw new ORPCError("BAD_REQUEST", { message: "CPF inválido" });
+      }
+
+      const [taken] = await context.db
+        .select({ id: user.id })
+        .from(user)
+        .where(and(eq(user.cpf, cpf), ne(user.id, context.session.user.id)));
+
+      if (taken) {
+        throw new ORPCError("CONFLICT", {
+          message: "Este CPF já está cadastrado em outra conta.",
+        });
+      }
+
+      try {
+        await context.db
+          .update(user)
+          .set({ cpf, updatedAt: new Date() })
+          .where(eq(user.id, context.session.user.id));
+      } catch {
+        // Corrida residual: dois cadastros simultâneos com o mesmo CPF — o
+        // unique do banco pega o segundo.
+        throw new ORPCError("CONFLICT", {
+          message: "Este CPF já está cadastrado em outra conta.",
+        });
+      }
+
+      return { success: true };
+    }),
+
   /**
    * Lista as notificações efetivamente destinadas ao usuário autenticado,
    * com status de entrega/leitura reais — via pushNotificationRecipient,

@@ -31,12 +31,13 @@ export type LedgerRow = {
   createdAt: Date;
   expiresAt: Date | null;
   expiredTransactionId: string | null;
+  reversedTransactionId: string | null;
 };
 
-type CreditLot = {
+export type CreditLot = {
   /** id da transação de crédito que originou o lote */
   id: string;
-  /** pontos ainda não consumidos por resgates/expirações */
+  /** pontos ainda não consumidos por resgates/expirações/estornos */
   remaining: number;
   expiresAt: Date | null;
 };
@@ -45,6 +46,8 @@ type CreditLot = {
  * Reconstrói os lotes de crédito do cliente reproduzindo o histórico em ordem:
  * - crédito abre um lote;
  * - expiração já materializada debita o próprio lote de origem;
+ * - estorno debita o próprio lote de origem (o valor é sempre gerado a partir
+ *   de lot.remaining — nunca de -points — então o Math.max é só cinto);
  * - resgate consome os lotes mais antigos que ainda eram válidos na data.
  *
  * Sobra de débito sem lote válido (dados anteriores à feature ou corrida rara)
@@ -64,6 +67,14 @@ export function computeCreditLots(rows: LedgerRow[]): CreditLot[] {
 
     if (row.expiredTransactionId) {
       const lot = lots.find((l) => l.id === row.expiredTransactionId);
+      if (lot) {
+        lot.remaining = Math.max(0, lot.remaining - debit);
+      }
+      continue;
+    }
+
+    if (row.reversedTransactionId) {
+      const lot = lots.find((l) => l.id === row.reversedTransactionId);
       if (lot) {
         lot.remaining = Math.max(0, lot.remaining - debit);
       }
@@ -104,6 +115,12 @@ export type LoyaltySnapshot = {
   expiredNow: number;
   /** Lotes que vencem nos próximos 30 dias, do mais próximo pro mais distante. */
   expiringSoon: { points: number; expiresAt: Date }[];
+  /**
+   * Lotes de crédito com o remaining PÓS-settlement (lotes que acabaram de
+   * expirar aparecem zerados). O estorno usa isso para saber quanto de um
+   * crédito específico ainda pode ser desfeito.
+   */
+  lots: CreditLot[];
 };
 
 /**
@@ -126,6 +143,7 @@ export async function settleExpiredPoints(
       createdAt: loyaltyTransaction.createdAt,
       expiresAt: loyaltyTransaction.expiresAt,
       expiredTransactionId: loyaltyTransaction.expiredTransactionId,
+      reversedTransactionId: loyaltyTransaction.reversedTransactionId,
     })
     .from(loyaltyTransaction)
     .where(
@@ -185,5 +203,9 @@ export async function settleExpiredPoints(
     0
   );
 
-  return { balance, expiredNow, expiringSoon };
+  const settledLots = lots.map((lot) =>
+    due.includes(lot) ? { ...lot, remaining: 0 } : lot
+  );
+
+  return { balance, expiredNow, expiringSoon, lots: settledLots };
 }

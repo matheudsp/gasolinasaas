@@ -19,6 +19,13 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Separator } from "@/components/ui/separator";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   Table,
   TableBody,
   TableCell,
@@ -39,6 +46,28 @@ function fmtDateTime(d: Date | string | null | undefined) {
     hour: "2-digit",
     minute: "2-digit",
   });
+}
+
+// Destino do deep link ao tocar na notificação (espelha a união do server).
+type NotificationKind = "generic" | "promotion" | "points";
+
+const kindLabels: Record<NotificationKind, string> = {
+  generic: "Genérica (abre as notificações)",
+  promotion: "Promoção (abre um posto)",
+  points: "Pontos (abre a tela de pontos)",
+};
+
+/** Rótulo do destino para o histórico, a partir do dataJson persistido. */
+function destinationLabel(dataJson: string | null): string {
+  if (!dataJson) return "—";
+  try {
+    const data = JSON.parse(dataJson) as { type?: string };
+    if (data.type === "promotion") return "Posto";
+    if (data.type === "points") return "Pontos";
+    return "—";
+  } catch {
+    return "—";
+  }
 }
 
 const statusMap: Record<
@@ -79,10 +108,16 @@ export default function PushNotificationsPage() {
   // Form state
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
+  const [kind, setKind] = useState<NotificationKind>("generic");
+  const [stationId, setStationId] = useState("");
 
   // Queries
   const { data: tokens = [], isLoading: tokensLoading } = useQuery(
     orpc.push.listTokens.queryOptions({ enabled }),
+  );
+
+  const { data: stations = [] } = useQuery(
+    orpc.station.search.queryOptions({ input: {}, enabled }),
   );
 
   const { data: notifications = [], isLoading: notificationsLoading } =
@@ -102,6 +137,8 @@ export default function PushNotificationsPage() {
       );
       setTitle("");
       setBody("");
+      setKind("generic");
+      setStationId("");
       qc.invalidateQueries(
         orpc.push.listNotifications.queryOptions({ input: { limit: 50 } }),
       );
@@ -116,7 +153,20 @@ export default function PushNotificationsPage() {
       toast.warning("Preencha o título e a mensagem antes de enviar.");
       return;
     }
-    sendMutation.mutate({ title: title.trim(), body: body.trim() });
+    if (kind === "promotion" && !stationId) {
+      toast.warning("Escolha o posto da promoção antes de enviar.");
+      return;
+    }
+    sendMutation.mutate({
+      title: title.trim(),
+      body: body.trim(),
+      data:
+        kind === "promotion"
+          ? { type: "promotion", stationId }
+          : kind === "points"
+            ? { type: "points" }
+            : undefined,
+    });
   };
 
   return (
@@ -169,6 +219,50 @@ export default function PushNotificationsPage() {
             <p className="text-xs text-muted-foreground text-right">
               {body.length}/300
             </p>
+          </div>
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-1.5">
+              <Label>Ao tocar, abrir</Label>
+              <Select
+                value={kind}
+                onValueChange={(v) => setKind(v as NotificationKind)}
+                disabled={sendMutation.isPending}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {(Object.keys(kindLabels) as NotificationKind[]).map((k) => (
+                    <SelectItem key={k} value={k}>
+                      {kindLabels[k]}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {kind === "promotion" && (
+              <div className="space-y-1.5">
+                <Label>Posto da promoção</Label>
+                <Select
+                  value={stationId}
+                  onValueChange={setStationId}
+                  disabled={sendMutation.isPending}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Escolha o posto" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {stations.map((s) => (
+                      <SelectItem key={s.id} value={s.id}>
+                        {s.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
           </div>
 
           <Separator />
@@ -246,6 +340,7 @@ export default function PushNotificationsPage() {
                 <TableRow>
                   <TableHead>Título</TableHead>
                   <TableHead>Mensagem</TableHead>
+                  <TableHead>Destino</TableHead>
                   <TableHead className="text-center">Enviados</TableHead>
                   <TableHead className="text-center">Falhas</TableHead>
                   <TableHead>Status</TableHead>
@@ -262,6 +357,9 @@ export default function PushNotificationsPage() {
                       </TableCell>
                       <TableCell className="max-w-[240px] truncate text-muted-foreground text-sm">
                         {n.body}
+                      </TableCell>
+                      <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
+                        {destinationLabel(n.dataJson)}
                       </TableCell>
                       <TableCell className="text-center text-sm">
                         {n.successCount}/{n.recipientCount}
