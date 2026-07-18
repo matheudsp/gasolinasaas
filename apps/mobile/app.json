@@ -55,8 +55,7 @@
       "version": "11.5.0"
     },
     "router": {},
-    "eas": {
-    }
+    "eas": {}
   },
   "owner": "matheudsp"
 }

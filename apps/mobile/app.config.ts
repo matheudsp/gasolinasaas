@@ -30,7 +30,7 @@ const NOTIFICATION_ICON_COLOR = "#F7f7f7"
  * (`getEasProjectId()` em hooks/usePushNotifications.ts lê o extra, e sem
  * ele o token de push nem é obtido em build nativo).
  */
-const EAS_PROJECT_ID = "725eef85-bd62-42a2-9b29-320ff5ba0046"
+const EAS_PROJECT_ID = "fdc24707-450d-4d54-befc-396a017289ff"
 
 module.exports = ({ config }: ConfigContext): Partial<ExpoConfig> => {
   const existingPlugins = config.plugins ?? []

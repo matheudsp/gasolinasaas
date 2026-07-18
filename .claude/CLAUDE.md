@@ -459,7 +459,7 @@ marca no bundle JS (bundle é compartilhado via OTA entre todas as redes):
   ainda não foi cadastrado nas lojas; o ícone dinâmico nunca foi validado em build
   nativo (não dá pra testar no Expo Go/web). Os assets em `assets/app-icon/` (nuvem
   roxa) JÁ são a identidade definitiva do Gasolina Cloud. Projeto EAS:
-  `725eef85-bd62-42a2-9b29-320ff5ba0046`, fonte única em `EAS_PROJECT_ID` no
+  `fdc24707-450d-4d54-befc-396a017289ff`, fonte única em `EAS_PROJECT_ID` no
   `app.config.ts` (updates.url + extra.eas.projectId SEMPRE juntos — divergir
   quebra push/OTA).
 - `registerToken` roda em TODO boot logado — falta torná-lo condicional (só quando o
