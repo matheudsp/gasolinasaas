@@ -180,7 +180,10 @@ const $baseViewStyle: ThemedStyle<ViewStyle> = ({ spacing }) => ({
   alignItems: "center",
   paddingVertical: spacing.sm,
   paddingHorizontal: spacing.sm,
-  overflow: "hidden",
+  // Sem `overflow: "hidden"`: no Android ele cortava o último glifo do texto
+  // (a fonte Space Grotesk renderiza um pouco mais larga que o medido, então
+  // "Continuar" aparecia como "Continu"). O fundo do botão fica no próprio
+  // container, então não precisa de clip.
 })
 
 const $baseTextStyle: ThemedStyle<TextStyle> = ({ typography }) => ({
@@ -190,16 +193,17 @@ const $baseTextStyle: ThemedStyle<TextStyle> = ({ typography }) => ({
   textAlign: "center",
   flexShrink: 1,
   flexGrow: 0,
-  zIndex: 2,
+  // includeFontPadding: false centraliza melhor no Android. Sem zIndex: no
+  // Android o zIndex vira empilhamento (tipo elevation) e o texto sumia atrás
+  // do fundo do Pressable — bug específico do Android.
+  includeFontPadding: false,
 })
 
 const $rightAccessoryStyle: ThemedStyle<ViewStyle> = ({ spacing }) => ({
   marginStart: spacing.xs,
-  zIndex: 1,
 })
 const $leftAccessoryStyle: ThemedStyle<ViewStyle> = ({ spacing }) => ({
   marginEnd: spacing.xs,
-  zIndex: 1,
 })
 
 const $viewPresets: Record<Presets, ThemedStyleArray<ViewStyle>> = {

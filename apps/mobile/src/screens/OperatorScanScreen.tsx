@@ -147,13 +147,13 @@ export const OperatorScanScreen: FC<OperatorScanScreenProps> = function Operator
         <View style={themed($modeRow)}>
           <Button
             text="Creditar"
-            preset={mode === "credit" ? "filled" : "default"}
+            preset={mode === "credit" ? "primary" : "default"}
             style={$modeButton}
             onPress={() => setMode("credit")}
           />
           <Button
             text="Resgatar"
-            preset={mode === "redeem" ? "filled" : "default"}
+            preset={mode === "redeem" ? "primary" : "default"}
             style={$modeButton}
             onPress={() => setMode("redeem")}
           />
