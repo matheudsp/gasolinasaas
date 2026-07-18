@@ -31,8 +31,12 @@ bundle id, scheme (== slug) e `extra.tenantSlug` fixo. Peças:
 - `app.config.ts` lê `APP_VARIANT`: sem env = guarda-chuva "Gasolina Cloud"
   (scheme `gasolina`, bundle `cloud.gasolina.app`); com env = a rede dedicada.
   Falha cedo se o `google-services.json` da rede faltar. **Todos os dedicados
-  COMPARTILHAM o mesmo projeto EAS** (`EAS_PROJECT_ID` constante) — varia só o
-  bundle id; o fingerprint difere por app, então OTA não vaza entre eles.
+  COMPARTILHAM o mesmo projeto EAS** (`EAS_PROJECT_ID` constante) — varia só a
+  identidade nativa (bundle id, ícone, scheme). Com `runtimeVersion` em
+  `appVersion`, TODOS os variantes têm o mesmo runtime version (a `version` do
+  app.json), então um `eas update` no canal atinge todos — o que é CORRETO: o
+  bundle JS é idêntico (a identidade dedicada é nativa, não JS; o `tenantSlug`
+  vem de `extra`, fixado no build, não do bundle).
 - **Runtime, fonte única:** `lib/activeTenant.ts` lê `extra.tenantSlug` e faz o
   seed da rede ativa (`IS_DEDICATED_APP`/`DEDICATED_TENANT_SLUG` exportados) — o
   dedicado pula seletor e onboarding no cold start. O seed por `applicationId`
@@ -392,8 +396,12 @@ marca no bundle JS (bundle é compartilhado via OTA entre todas as redes):
   (header ainda da rede antiga) → persiste slug novo → limpa `tenant.branding.v1` →
   `queryClient.clear()` + cache persistido → `clearPreferredFuel()` → re-registro de
   push via `key={activeSlug}` no root layout. Não fecha mais o app (o ícone é fixo).
-- **EAS Update:** `runtimeVersion: { policy: "fingerprint" }` + channels
-  `production`/`preview` — um binário, um canal, todas as redes.
+- **EAS Update:** `runtimeVersion: { policy: "appVersion" }` (= a `version` do
+  app.json) + channels `production`/`preview`. **NÃO use policy `fingerprint`**:
+  ela recalcula um hash dos módulos nativos em cada ambiente e DIVERGIA entre o
+  Mac e o EAS por causa do hoisting não-determinístico do pnpm (bateu 4x). Com
+  appVersion os dois leem a mesma string. Suba a `version` a cada release de
+  LOJA (muda nativo); OTA fica compatível entre builds da MESMA version.
 - Tabs em `src/app/(app)/(tabs)/`: Início · Meus pontos · Operador (só owner/operator,
   via `hidden` + `loyalty.myRole`) · Minha Conta. Telas empilhadas em `(app)/` (station,
   rewards, notifications, about, spending). Gate de CPF: `(onboarding)/complete-profile`.

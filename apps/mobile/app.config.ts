@@ -83,8 +83,14 @@ module.exports = ({ config }: ConfigContext): Partial<ExpoConfig> => {
       ...config.updates,
       url: `https://u.expo.dev/${EAS_PROJECT_ID}`,
     },
+    // runtimeVersion = a `version` do app (app.json, hoje "1.0.0"). Estável
+    // por construção: Mac e EAS leem a mesma string, sem recomputar hash. A
+    // policy "fingerprint" era recalculada em cada ambiente e divergia por
+    // causa do hoisting não-determinístico do pnpm (local macOS vs EAS Linux).
+    // Regra: suba a `version` a cada release de LOJA (quando muda nativo); OTA
+    // (eas update) continua compatível entre builds da MESMA version.
     runtimeVersion: {
-      policy: "fingerprint",
+      policy: "appVersion",
     },
     extra: {
       ...config.extra,
