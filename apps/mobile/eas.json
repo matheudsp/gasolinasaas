@@ -35,6 +35,14 @@
     },
     "production": {
       "channel": "production"
+    },
+    "preview:martinez": {
+      "extends": "preview",
+      "env": { "APP_VARIANT": "martinez" }
+    },
+    "production:martinez": {
+      "extends": "production",
+      "env": { "APP_VARIANT": "martinez" }
     }
   },
   "submit": {

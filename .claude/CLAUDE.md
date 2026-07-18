@@ -2,8 +2,9 @@
 
 SaaS multi-tenant para postos e redes de postos. **Um único app mobile "guarda-chuva"
 ("Gasolina", bundle `cloud.gasolina.app`) serve todas as redes**: o usuário escolhe a
-rede (tenant) em runtime e o app inteiro rebrandeia — nome, logo, cores do tema e até
-o ícone nativo do launcher. Cada rede tem seus postos, preços de combustível, programa
+rede (tenant) em runtime e o app inteiro rebrandeia — nome, logo e cores do tema (o
+ícone nativo do launcher é fixo "Gasolina Cloud"; troca de ícone em runtime foi
+removida por não ser boa UX). Cada rede tem seus postos, preços de combustível, programa
 de fidelidade e envia push para os próprios clientes. **Uma única infraestrutura de
 servidor serve todos os tenants** — o isolamento é feito em software, não por deploy
 separado. (O modelo antigo de um build white-label por tenant foi removido; binários
@@ -20,13 +21,30 @@ governa branding de e-mail e scheme de deep link, via
 - **guarda-chuva** (ou request sem tenant): e-mails "Gasolina Cloud"; scheme
   `gasolina`.
 
-Ainda **não existe** o binário dedicado (sem `APP_VARIANT`/perfis EAS por
-tenant). Quando existir, a fonte única em runtime deve ser `extra.tenantSlug`
-fixado no build pelo `app.config.ts`, e dela derivam seed do slug, esconder o
-seletor de rede, desativar `switchTenant`+ícone dinâmico e o scheme do
-`authClient`. **Não crie um segundo mecanismo de detecção**: o seed por
-`applicationId` (`lib/activeTenant.ts`) é hack pra UM binário legado morto
-(`com.mdsp.martinez`) e deve ser absorvido por `extra.tenantSlug`, não copiado.
+**Mecanismo de build dedicado (mobile):** `APP_VARIANT=<slug>` (env de um
+profile EAS) monta a identidade nativa da rede em BUILD-TIME — ícone, nome,
+bundle id, scheme (== slug) e `extra.tenantSlug` fixo. Peças:
+- `tenants/dedicated.ts` — registry por-tenant (nome, bundleId, icon,
+  adaptiveBackgroundColor, googleServicesFile), consumido só no `app.config.ts`
+  (Node/build-time). Ícone fixo em `tenants/<slug>/icon.png` (estático, NÃO é o
+  ícone dinâmico removido).
+- `app.config.ts` lê `APP_VARIANT`: sem env = guarda-chuva "Gasolina Cloud"
+  (scheme `gasolina`, bundle `cloud.gasolina.app`); com env = a rede dedicada.
+  Falha cedo se o `google-services.json` da rede faltar. **Todos os dedicados
+  COMPARTILHAM o mesmo projeto EAS** (`EAS_PROJECT_ID` constante) — varia só o
+  bundle id; o fingerprint difere por app, então OTA não vaza entre eles.
+- **Runtime, fonte única:** `lib/activeTenant.ts` lê `extra.tenantSlug` e faz o
+  seed da rede ativa (`IS_DEDICATED_APP`/`DEDICATED_TENANT_SLUG` exportados) — o
+  dedicado pula seletor e onboarding no cold start. O seed por `applicationId`
+  (`com.mdsp.martinez`) virou fallback legado morto; **não copie pra novas
+  redes** — use `extra.tenantSlug`.
+- `eas.json`: profiles `preview:<slug>` / `production:<slug>` com
+  `env.APP_VARIANT`.
+
+**Pendências manuais por rede dedicada (o build só compila com elas):** bundle
+id REAL (hoje placeholder `app.gasolina.martinez`) + `google-services.json` do
+app Firebase daquele bundle id em `tenants/<slug>/`. As lojas exigem que o app
+saia na conta de desenvolvedor do cliente (diretriz 4.2.6 da Apple).
 
 ## Monorepo
 
@@ -353,14 +371,12 @@ marca no bundle JS (bundle é compartilhado via OTA entre todas as redes):
 
 **Mobile** (`apps/mobile`, Expo + expo-router) — **app guarda-chuva único**:
 - **Identidade nativa única** no `app.config.ts`: nome "Gasolina", scheme `gasolina`,
-  bundle/package `cloud.gasolina.app`, assets em `assets/app-icons/gasolina/`,
+  bundle/package `cloud.gasolina.app`, ícone fixo em `assets/app-icon/`,
   `google-services.json` único na raiz do app. Sem `TENANT` env, sem perfis EAS por
-  tenant. `tenants/registry.ts` virou SÓ o mapa de ícones alternativos do launcher
-  (`tenantAlternateIcons: Record<string, string>` — **UM PNG quadrado ≥1024px por
-  tenant em `tenants/<slug>/icon.png` serve iOS e Android**; consumido pelo plugin
-  `@bsky.app/expo-dynamic-app-icon` no build e por `src/lib/appIcon.ts` em runtime)
-  — ícone de tenant novo = `icon.png` + registrar + novo build nativo; sem ícone,
-  usa o padrão Gasolina.
+  tenant. **O ícone do launcher NÃO muda por rede** — trocar o ícone nativo em
+  runtime (o antigo `@bsky.app/expo-dynamic-app-icon` + `tenants/registry.ts` +
+  `lib/appIcon.ts`) foi REMOVIDO: no Android o módulo matava o processo e os atalhos
+  fixados morriam (péssima UX). Todas as redes usam o ícone "Gasolina Cloud".
 - **Rede ativa em runtime:** `src/lib/activeTenant.ts` (MMKV `tenant.active.slug`,
   getter síncrono pros headers + hook reativo pros gates). Migração one-shot no
   import: binário `com.mdsp.martinez` → seed "martinez"; em dev,
@@ -375,17 +391,7 @@ marca no bundle JS (bundle é compartilhado via OTA entre todas as redes):
 - **Troca de rede:** `src/lib/switchTenant.ts` — ordem importa: unregister do push
   (header ainda da rede antiga) → persiste slug novo → limpa `tenant.branding.v1` →
   `queryClient.clear()` + cache persistido → `clearPreferredFuel()` → re-registro de
-  push via `key={activeSlug}` no root layout → `setAppIconForTenant` POR ÚLTIMO.
-- **Ícone dinâmico no Android — MUITO cuidado:** o módulo (@bsky.app fork) joga o
-  app pro background e MATA o processo de propósito, e **NÃO relança**; qualquer
-  chamada mata o app mesmo sem mudança real de ícone, por isso `lib/appIcon.ts`
-  guarda o ícone aplicado no MMKV (`appIcon.applied.v1`) e só chama o módulo quando
-  o alvo difere (`willChangeAppIcon`). **Atalhos fixados na tela inicial apontam pro
-  activity-alias antigo (desabilitado) e MORREM** — o app reaparece na gaveta com o
-  ícone novo (às vezes só após refresh do launcher). O seletor AVISA antes da troca
-  real no Android. Recovery em dev: `adb shell am start -n
-  cloud.gasolina.app/cloud.gasolina.app.MainActivity<slug>` ou reinstalar. Só
-  funciona em build nativo (não Expo Go/web).
+  push via `key={activeSlug}` no root layout. Não fecha mais o app (o ícone é fixo).
 - **EAS Update:** `runtimeVersion: { policy: "fingerprint" }` + channels
   `production`/`preview` — um binário, um canal, todas as redes.
 - Tabs em `src/app/(app)/(tabs)/`: Início · Meus pontos · Operador (só owner/operator,
@@ -456,8 +462,7 @@ marca no bundle JS (bundle é compartilhado via OTA entre todas as redes):
 - **Pendências de produção do app guarda-chuva (manuais):** o `google-services.json`
   na raiz do mobile é PLACEHOLDER copiado do martinez (não funciona em build Android
   de produção — precisa do app Firebase do package `cloud.gasolina.app`); o app novo
-  ainda não foi cadastrado nas lojas; o ícone dinâmico nunca foi validado em build
-  nativo (não dá pra testar no Expo Go/web). Os assets em `assets/app-icon/` (nuvem
+  ainda não foi cadastrado nas lojas. Os assets em `assets/app-icon/` (nuvem
   roxa) JÁ são a identidade definitiva do Gasolina Cloud. Projeto EAS:
   `fdc24707-450d-4d54-befc-396a017289ff`, fonte única em `EAS_PROJECT_ID` no
   `app.config.ts` (updates.url + extra.eas.projectId SEMPRE juntos — divergir

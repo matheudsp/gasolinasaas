@@ -33,3 +33,13 @@ node_modules
 /CLAUDE.md
 /CLAUDE.md.bak
 # END Ruler Generated Files
+
+# Artefatos de rodar expo/eas da RAIZ por engano (o app Expo é apps/mobile).
+# NÃO devem existir na raiz — rode expo/eas de dentro de apps/mobile/.
+/android/
+/ios/
+/.expo/
+/app.json
+# Binários de build local
+*.apk
+*.aab

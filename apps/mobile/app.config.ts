@@ -1,4 +1,5 @@
 import { ExpoConfig, ConfigContext } from "@expo/config"
+import { existsSync } from "node:fs"
 
 /**
  * Use tsx/cjs here so we can use TypeScript for our Config Plugins
@@ -8,7 +9,7 @@ import { ExpoConfig, ConfigContext } from "@expo/config"
  */
 import "tsx/cjs"
 
-import { tenantAlternateIcons } from "./tenants/registry"
+import { DEDICATED_APPS } from "./tenants/dedicated"
 
 /**
  * Cores nativas assadas no binário — neutras, iguais para todos.
@@ -17,30 +18,67 @@ import { tenantAlternateIcons } from "./tenants/registry"
 const SPLASH_BACKGROUND = "#FFFFFF"
 const NOTIFICATION_ICON_COLOR = "#F7f7f7"
 
+// Identidade padrão do app guarda-chuva.
+const UMBRELLA_ICON = "./assets/app-icon/app-icon-all.png"
+const UMBRELLA_BUNDLE_ID = "cloud.gasolina.app"
+
+/**
+ * Projeto EAS. É a fonte ÚNICA do id: o `updates.url` e o
+ * `extra.eas.projectId` têm que apontar pro mesmo projeto — divergir faz o
+ * OTA publicar num lugar e o app buscar update/push em outro
+ * (`getEasProjectId()` em hooks/usePushNotifications.ts lê o extra, e sem ele
+ * o token de push nem é obtido em build nativo). Decisão de produto: todos os
+ * apps dedicados COMPARTILHAM este projeto (varia só o bundle id); o
+ * fingerprint difere por app, então updates não vazam entre eles.
+ */
+const EAS_PROJECT_ID = "fdc24707-450d-4d54-befc-396a017289ff"
+
+/**
+ * `APP_VARIANT=<slug>` (env do profile EAS) monta um BUILD DEDICADO daquela
+ * rede: ícone, nome, bundle id e scheme próprios, e `extra.tenantSlug` fixo
+ * (o app pula o seletor de rede — ver src/lib/activeTenant.ts). Sem a env, é
+ * o app guarda-chuva "Gasolina Cloud".
+ */
+const APP_VARIANT = process.env.APP_VARIANT?.trim() || null
+const dedicated = APP_VARIANT ? DEDICATED_APPS[APP_VARIANT] : null
+
+if (APP_VARIANT && !dedicated) {
+  throw new Error(
+    `APP_VARIANT="${APP_VARIANT}" não está registrado em tenants/dedicated.ts.`,
+  )
+}
+
+// O google-services.json do app dedicado precisa existir no build (bundle id
+// próprio = app Firebase próprio). Falha cedo com mensagem clara em vez do
+// erro cru do prebuild.
+if (dedicated && !existsSync(dedicated.googleServicesFile)) {
+  throw new Error(
+    `Build dedicado "${dedicated.slug}": falta ${dedicated.googleServicesFile}. ` +
+      `Baixe o google-services.json do app Firebase do bundle id ${dedicated.bundleId} e coloque nesse caminho.`,
+  )
+}
+
+const appIcon = dedicated?.icon ?? UMBRELLA_ICON
+const bundleId = dedicated?.bundleId ?? UMBRELLA_BUNDLE_ID
+const scheme = dedicated?.slug ?? "gasolina"
+
 /**
  * @param config ExpoConfig coming from the static config app.json if it exists
  *
  * You can read more about Expo's Configuration Resolution Rules here:
  * https://docs.expo.dev/workflow/configuration/#configuration-resolution-rules
  */
-/**
- * Projeto EAS do app guarda-chuva. É a fonte ÚNICA do id: o `updates.url`
- * e o `extra.eas.projectId` têm que apontar pro mesmo projeto — divergir
- * faz o OTA publicar num lugar e o app buscar update/push em outro
- * (`getEasProjectId()` em hooks/usePushNotifications.ts lê o extra, e sem
- * ele o token de push nem é obtido em build nativo).
- */
-const EAS_PROJECT_ID = "fdc24707-450d-4d54-befc-396a017289ff"
-
 module.exports = ({ config }: ConfigContext): Partial<ExpoConfig> => {
   const existingPlugins = config.plugins ?? []
 
   return {
     ...config,
-    name: "Gasolina Cloud",
+    name: dedicated?.name ?? "Gasolina Cloud",
+    // `slug` identifica o PROJETO EAS (compartilhado) — NÃO é o slug da rede.
+    // Mantém "gasolina" em todos os variantes; o scheme é que == slug da rede.
     slug: "gasolina",
-    scheme: "gasolina",
-    icon: `./assets/app-icon/app-icon-all.png`,
+    scheme,
+    icon: appIcon,
     updates: {
       ...config.updates,
       url: `https://u.expo.dev/${EAS_PROJECT_ID}`,
@@ -51,11 +89,14 @@ module.exports = ({ config }: ConfigContext): Partial<ExpoConfig> => {
     extra: {
       ...config.extra,
       eas: { ...config.extra?.eas, projectId: EAS_PROJECT_ID },
+      // Fixa a rede no build dedicado — a fonte única em runtime. Undefined
+      // no guarda-chuva (a rede é escolhida no seletor).
+      tenantSlug: dedicated?.slug,
     },
     ios: {
       ...config.ios,
-      icon: `./assets/app-icon/app-icon-all.png`,
-      bundleIdentifier: "cloud.gasolina.app",
+      icon: appIcon,
+      bundleIdentifier: bundleId,
       // This privacyManifests is to get you started.
       // See Expo's guide on apple privacy manifests here:
       // https://docs.expo.dev/guides/apple-privacy/
@@ -73,16 +114,20 @@ module.exports = ({ config }: ConfigContext): Partial<ExpoConfig> => {
     },
     android: {
       ...config.android,
-      icon: `./assets/app-icon/app-icon-all.png`,
-      package: "cloud.gasolina.app",
-      adaptiveIcon: {
-        foregroundImage: `./assets/app-icon/android-adaptive-foreground.png`,
-        backgroundImage: `./assets/app-icon/android-adaptive-background.png`,
-      },
-      // ATENÇÃO: precisa ser o google-services.json do app Firebase do
-      // package cloud.gasolina.app — o arquivo atual é placeholder copiado
-      // do martinez e NÃO vai funcionar num build Android de produção.
-      googleServicesFile: "./google-services.json",
+      icon: appIcon,
+      package: bundleId,
+      adaptiveIcon: dedicated
+        ? {
+            foregroundImage: dedicated.icon,
+            backgroundColor: dedicated.adaptiveBackgroundColor,
+          }
+        : {
+            foregroundImage: `./assets/app-icon/android-adaptive-foreground.png`,
+            backgroundImage: `./assets/app-icon/android-adaptive-background.png`,
+          },
+      // Guarda-chuva: google-services.json do app cloud.gasolina.app (o da
+      // raiz). Dedicado: o do bundle id próprio (validado acima).
+      googleServicesFile: dedicated?.googleServicesFile ?? "./google-services.json",
     },
     plugins: [
       "@react-native-vector-icons/material-icons",
@@ -106,20 +151,10 @@ module.exports = ({ config }: ConfigContext): Partial<ExpoConfig> => {
       [
         "expo-notifications",
         {
-          icon: `./assets/app-icon/app-icon-all.png`,
+          icon: appIcon,
           color: NOTIFICATION_ICON_COLOR,
           sounds: [],
         },
-      ],
-      [
-        "@bsky.app/expo-dynamic-app-icon",
-        // Um único PNG por tenant serve as duas plataformas.
-        Object.fromEntries(
-          Object.entries(tenantAlternateIcons).map(([slug, icon]) => [
-            slug,
-            { ios: icon, android: icon, prerendered: true },
-          ])
-        ),
       ],
       ...existingPlugins,
     ],

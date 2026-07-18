@@ -1,5 +1,4 @@
 import { getActiveTenantSlug, setActiveTenantSlug } from "@/lib/activeTenant"
-import { setAppIconForTenant } from "@/lib/appIcon"
 import { authClient } from "@/lib/auth"
 import { client, queryClient } from "@/lib/orpc"
 import { QUERY_CACHE_STORAGE_KEY } from "@/lib/queryPersistence"
@@ -12,13 +11,8 @@ import { storage } from "@/utils/storage"
  * Troca a rede (tenant) ativa do app guarda-chuva.
  *
  * Cada etapa é best-effort: falha de rede não pode deixar o usuário preso
- * entre duas redes. A ordem importa:
- * - o unregister de push sai ANTES da troca (o header ainda aponta pra rede
- *   antiga — é lá que o token deve morrer);
- * - a troca de ícone é a ÚLTIMA coisa, porque no Android ela FECHA o app;
- *   como o slug novo já está persistido, o app reabre direto na rede nova
- *   (e o buster por tenant da persistência descarta o cache antigo mesmo
- *   que as limpezas abaixo tenham sido interrompidas).
+ * entre duas redes. A ordem importa: o unregister de push sai ANTES da troca
+ * (o header ainda aponta pra rede antiga — é lá que o token deve morrer).
  */
 export async function switchTenant(newSlug: string) {
   const previousSlug = getActiveTenantSlug()
@@ -55,7 +49,4 @@ export async function switchTenant(newSlug: string) {
 
   // O re-registro de push acontece sozinho: o root layout remonta o
   // PushNotificationRegistrar via key={activeSlug}.
-
-  // 6. Por último (Android fecha o app aqui).
-  setAppIconForTenant(newSlug)
 }
