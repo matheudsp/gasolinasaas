@@ -47,11 +47,13 @@
 			"previews_enabled": false
 		}
 	],
-	// Cron do expire pass em lote (jobs/expire-points.ts): de hora em hora,
-	// até 20 clientes por execução (limite de subrequests do plano).
+	// Cron do expire pass em lote (jobs/expire-points.ts): 1x/dia às 03:00
+	// UTC (= meia-noite no horário de Brasília), horário de baixo tráfego.
+	// Crons são SEMPRE em UTC. Até 20 clientes por execução (limite de
+	// subrequests do plano).
 	"triggers": {
 		"crons": [
-			"0 * * * *"
+			"0 3 * * *"
 		]
 	},
 	"workers_dev": false,

@@ -219,8 +219,8 @@ Fidelidade white-label por tenant. Schema em `db/schema/loyalty.ts`, lógica em
   (`expiredTransactionId` → crédito de origem, unique = idempotente) via **expire
   pass** em `lib/loyalty-points.ts`, que roda em DOIS lugares: preguiçoso
   (`myBalance`, `requestRedemption`, `confirmRedemption`, `reverseCredit`) e
-  **em lote via Cron Trigger** (`jobs/expire-points.ts`, de hora em hora, até 20
-  clientes/execução — limite de subrequests; `triggers.crons` no `wrangler.jsonc`,
+  **em lote via Cron Trigger** (`jobs/expire-points.ts`, 1x/dia às 03:00 UTC, até
+  20 clientes/execução — limite de subrequests; `triggers.crons` no `wrangler.jsonc`,
   handler `scheduled` no `index.ts`). O settle materializa expiração pra TODO
   lote vencido, **inclusive remaining 0** (linha de 0 pontos = marcador que faz
   a query de candidatos do cron convergir; o extrato filtra `points != 0`).
@@ -267,8 +267,8 @@ Fidelidade white-label por tenant. Schema em `db/schema/loyalty.ts`, lógica em
 se mostra a tab/tela de operador. Cliente comum → `null`.
 
 `auditTotals` devolve, além de `totalPoints`/`credits`/`customers`:
-`outstandingPoints` (SUM(points) sem filtro = passivo da rede — defasagem máxima
-de ~1h, o cron do expire pass regulariza clientes dormentes), `redeemedPoints` e
+`outstandingPoints` (SUM(points) sem filtro = passivo da rede — o cron do expire
+pass regulariza clientes dormentes 1x/dia), `redeemedPoints` e
 `expiredPoints`. `credits` conta só `amount_cents > 0` (estorno não é +1 crédito).
 
 **Verificação de e-mail é OBRIGATÓRIA no login** (`requireEmailVerification` no

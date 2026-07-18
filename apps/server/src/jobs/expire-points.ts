@@ -9,8 +9,13 @@ import { settleExpiredPoints } from "../lib/loyalty-points";
  * Quantos clientes processar por execução. O plano da Cloudflare limita
  * subrequests por invocação (50 no free) e cada settle custa 1 select +
  * até 1 insert no Neon — 20 clientes ≈ 41 subrequests no pior caso.
- * O cron roda de hora em hora, então a capacidade é ~480 clientes/dia;
- * o backlog drena em poucas execuções e o regime é poucos por hora.
+ *
+ * O cron roda 1x/dia, então a capacidade é ~20 clientes/dia. Se a base de
+ * clientes DORMENTES com pontos a vencer for maior que isso, o backlog não
+ * drena — aí suba este limite (no plano pago o teto de subrequests é 1000,
+ * dá pra ~450) ou aumente a frequência do cron no wrangler.jsonc. O expire
+ * pass preguiçoso continua acertando o saldo no momento de uso; só o passivo
+ * do painel para clientes que NUNCA abrem o app fica defasado até o cron.
  */
 const BATCH_LIMIT = 20;
 

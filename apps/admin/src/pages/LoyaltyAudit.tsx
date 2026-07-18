@@ -211,7 +211,7 @@ export function LoyaltyAudit() {
           icon={<Wallet className="h-5 w-5" />}
           label="Pontos em circulação"
           value={(totals?.outstandingPoints ?? 0).toLocaleString("pt-BR")}
-          hint="Expirações são consolidadas automaticamente a cada hora."
+          hint="Expirações são consolidadas automaticamente uma vez por dia."
         />
         <Stat
           icon={<Percent className="h-5 w-5" />}
