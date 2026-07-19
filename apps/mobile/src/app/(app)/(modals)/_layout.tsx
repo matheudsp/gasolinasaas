@@ -11,6 +11,10 @@ export default function ModalLayout() {
         name="selectFuel"
         options={{ presentation: "modal", animation: "slide_from_bottom" }}
       />
+      <Stack.Screen
+        name="confirmRedemption/index"
+        options={{ presentation: "modal", animation: "slide_from_bottom" }}
+      />
     </Stack>
   )
 }

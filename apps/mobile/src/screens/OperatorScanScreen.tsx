@@ -1,6 +1,6 @@
-import { FC, useRef, useState } from "react"
-import { ActivityIndicator, Alert, StyleSheet, TextStyle, View, ViewStyle } from "react-native"
-import { useRouter } from "expo-router"
+import { FC, useCallback, useRef, useState } from "react"
+import { Alert, StyleSheet, TextStyle, View, ViewStyle } from "react-native"
+import { useFocusEffect, useRouter } from "expo-router"
 import { useMutation } from "@tanstack/react-query"
 import { CameraView, useCameraPermissions } from "expo-camera"
 import { useSafeAreaInsets } from "react-native-safe-area-context"
@@ -16,7 +16,9 @@ import { useAppTheme } from "@/theme/context"
 import type { ThemedStyle } from "@/theme/types"
 
 type Mode = "credit" | "redeem"
-type Stage = "scan" | "amount" | "confirm" | "done"
+// Só o fluxo de CRÉDITO é inline (scan → amount → done). O resgate abre o
+// modal de confirmação (com foto do produto) e volta pra "scan".
+type Stage = "scan" | "amount" | "done"
 
 interface OperatorScanScreenProps {
   /** false quando renderizada como tab — sem botão de voltar. */
@@ -44,23 +46,6 @@ export const OperatorScanScreen: FC<OperatorScanScreenProps> = function Operator
     onSuccess: () => setStage("done"),
     onError: (error) => {
       Alert.alert("Não foi possível creditar", error.message)
-      resetToScan()
-    },
-  })
-
-  const peekMutation = useMutation({
-    ...orpc.loyalty.peekRedemption.mutationOptions(),
-    onError: (error) => {
-      Alert.alert("Resgate inválido", error.message)
-      resetToScan()
-    },
-  })
-
-  const confirmMutation = useMutation({
-    ...orpc.loyalty.confirmRedemption.mutationOptions(),
-    onSuccess: () => setStage("done"),
-    onError: (error) => {
-      Alert.alert("Não foi possível confirmar", error.message)
       resetToScan()
     },
   })
@@ -99,24 +84,33 @@ export const OperatorScanScreen: FC<OperatorScanScreenProps> = function Operator
   function resetToScan() {
     lockRef.current = false
     creditMutation.reset()
-    peekMutation.reset()
-    confirmMutation.reset()
     reverseMutation.reset()
     setCode(null)
     setAmount("")
     setStage("scan")
   }
 
+  // Ao voltar do modal de resgate (ou reentrar na tela), libera o scanner.
+  useFocusEffect(
+    useCallback(() => {
+      lockRef.current = false
+    }, []),
+  )
+
   function handleScanned(value: string) {
     if (lockRef.current) return
     lockRef.current = true
-    setCode(value)
 
     if (mode === "credit") {
+      setCode(value)
       setStage("amount")
     } else {
-      setStage("confirm")
-      peekMutation.mutate({ code: value })
+      // Resgate: confirma no modal (com foto do produto). Não altera o stage
+      // — a tela fica em "scan"; o useFocusEffect solta a trava na volta.
+      router.push({
+        pathname: "/(app)/(modals)/confirmRedemption",
+        params: { code: value },
+      })
     }
   }
 
@@ -126,11 +120,6 @@ export const OperatorScanScreen: FC<OperatorScanScreenProps> = function Operator
   function handleCredit() {
     if (!(code && amountValid)) return
     creditMutation.mutate({ code, amountCents })
-  }
-
-  function handleConfirmRedeem() {
-    if (!code) return
-    confirmMutation.mutate({ code })
   }
 
   const $bottomSafe = { paddingBottom: insets.bottom + theme.spacing.lg }
@@ -200,84 +189,27 @@ export const OperatorScanScreen: FC<OperatorScanScreenProps> = function Operator
           />
           <Button text="Cancelar" preset="ghost" onPress={resetToScan} />
         </View>
-      ) : stage === "confirm" ? (
-        <View style={[themed($panel), $bottomSafe]}>
-          {peekMutation.isPending || !peekMutation.data ? (
-            <View style={themed($panelCentered)}>
-              <ActivityIndicator size="large" color={theme.colors.tint} />
-            </View>
-          ) : (
-            <>
-              <MaterialDesignIcons
-                name="gift-outline"
-                size={40}
-                color={theme.colors.tint}
-                style={themed($panelIcon)}
-              />
-              <Text weight="bold" text="Confirmar resgate" style={themed($panelTitle)} />
-
-              <View style={themed($redeemCard)}>
-                <Text weight="bold" text={peekMutation.data.rewardName ?? "Recompensa"} />
-                <Text
-                  size="xs"
-                  style={themed($dim)}
-                  text={`${peekMutation.data.costPoints} pontos${peekMutation.data.customerName ? ` · ${peekMutation.data.customerName}` : ""}`}
-                />
-              </View>
-
-              <Text
-                size="xs"
-                style={themed($dim)}
-                text="Entregue o produto ao cliente e confirme. Os pontos serão debitados agora."
-              />
-
-              <Button
-                text={confirmMutation.isPending ? "Confirmando..." : "Confirmar entrega"}
-                preset="filled"
-                disabled={confirmMutation.isPending}
-                onPress={handleConfirmRedeem}
-              />
-              <Button text="Cancelar" preset="ghost" onPress={resetToScan} />
-            </>
-          )}
-        </View>
       ) : (
         <View style={[themed($panel), themed($panelCentered), $bottomSafe]}>
           <View style={themed($doneBadge)}>
             <MaterialDesignIcons name="check" size={40} color={theme.colors.palette.neutral100} />
           </View>
-          {mode === "credit" ? (
-            <>
-              <Text preset="heading" text={`+${creditMutation.data?.points ?? 0} pontos`} />
-              <Text
-                style={themed($dim)}
-                text={
-                  creditMutation.data?.customerName
-                    ? `Creditados para ${creditMutation.data.customerName}.`
-                    : "Pontos creditados."
-                }
-              />
-            </>
-          ) : (
-            <>
-              <Text preset="heading" text={`−${confirmMutation.data?.points ?? 0} pontos`} />
-              <Text
-                style={themed($dim)}
-                text={
-                  confirmMutation.data?.rewardName
-                    ? `${confirmMutation.data.rewardName} entregue${confirmMutation.data.customerName ? ` para ${confirmMutation.data.customerName}` : ""}.`
-                    : "Resgate concluído."
-                }
-              />
-            </>
-          )}
+          <Text preset="heading" text={`+${creditMutation.data?.points ?? 0} pontos`} />
+          <Text
+            style={themed($dim)}
+            text={
+              creditMutation.data?.customerName
+                ? `Creditados para ${creditMutation.data.customerName}.`
+                : "Pontos creditados."
+            }
+          />
           <Button
             text="Escanear outro"
             preset="filled"
             onPress={resetToScan}
             style={themed($doneButton)}
           />
-          {mode === "credit" && creditMutation.data?.transactionId ? (
+          {creditMutation.data?.transactionId ? (
             <Button
               text={reverseMutation.isPending ? "Estornando..." : "Estornar este crédito"}
               preset="ghost"
@@ -443,15 +375,6 @@ const $panelTitle: ThemedStyle<TextStyle> = ({ colors }) => ({
   color: colors.text,
   fontSize: 18,
   textAlign: "center",
-})
-
-const $redeemCard: ThemedStyle<ViewStyle> = ({ colors, spacing }) => ({
-  alignSelf: "stretch",
-  backgroundColor: colors.palette.neutral200,
-  borderRadius: 12,
-  padding: spacing.md,
-  marginVertical: spacing.sm,
-  gap: spacing.xxs,
 })
 
 const $field: ThemedStyle<ViewStyle> = ({ spacing }) => ({

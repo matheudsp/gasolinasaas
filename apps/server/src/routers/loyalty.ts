@@ -917,7 +917,7 @@ export const loyaltyRouter = {
       }
 
       const [rw] = await context.db
-        .select({ name: reward.name })
+        .select({ name: reward.name, imageUrl: reward.imageUrl })
         .from(reward)
         .where(eq(reward.id, rd.rewardId));
       const [customer] = await context.db
@@ -927,6 +927,9 @@ export const loyaltyRouter = {
 
       return {
         rewardName: rw?.name ?? null,
+        // Caminho relativo (o mobile prefixa com Config.API_URL) — o operador
+        // confere a foto do produto antes de baixar do estoque físico.
+        rewardImageUrl: rw?.imageUrl ?? null,
         costPoints: rd.costPoints,
         customerName: customer?.name ?? null,
       };

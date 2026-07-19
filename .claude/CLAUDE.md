@@ -277,9 +277,12 @@ Fidelidade white-label por tenant. Schema em `db/schema/loyalty.ts`, lógica em
   operador autenticado, nunca do app do cliente; o código é consumido atomicamente.
   Transação de crédito tem `amountCents` preenchido.
 - **Resgate (débito na entrega):** cliente pede (`requestRedemption`) e recebe um
-  código — NÃO debita. Operador escaneia → `peekRedemption` (vê recompensa/custo) →
-  `confirmRedemption` (transação: consome o código, recheca saldo, baixa estoque,
-  insere transação negativa com `redemptionId`).
+  código — NÃO debita. Operador escaneia → abre o **modal
+  `(app)/(modals)/confirmRedemption`** (`ConfirmRedemptionScreen`) que chama
+  `peekRedemption` (recompensa/custo/**imageUrl** + cliente, sem consumir) e mostra
+  a FOTO do produto pro operador conferir o estoque físico → `confirmRedemption`
+  (transação: consome o código, recheca saldo, baixa estoque, insere transação
+  negativa com `redemptionId`). Cancelar não consome (resgate segue pendente).
 - **Distinguir tipo de transação:** crédito = `amountCents IS NOT NULL`; resgate =
   `redemptionId IS NOT NULL`. Rankings/auditoria filtram por isso — ex: "operadores
   que mais creditaram" só conta `amountCents IS NOT NULL` (senão os resgates que o
