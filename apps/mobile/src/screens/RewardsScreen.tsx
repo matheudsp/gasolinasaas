@@ -59,11 +59,7 @@ export const RewardsScreen: FC = function RewardsScreen() {
 
       <View style={themed($balanceStrip)}>
         <MaterialDesignIcons name="star-circle" size={18} color={theme.colors.tint} />
-        <Text
-          weight="bold"
-          text={`${balance} pontos disponíveis`}
-          style={themed($balanceText)}
-        />
+        <Text weight="bold" text={`${balance} pontos disponíveis`} style={themed($balanceText)} />
       </View>
 
       <FlatList
@@ -88,11 +84,7 @@ export const RewardsScreen: FC = function RewardsScreen() {
             </View>
           ) : (
             <View style={themed($centered)}>
-              <MaterialDesignIcons
-                name="gift-outline"
-                size={32}
-                color={theme.colors.textDim}
-              />
+              <MaterialDesignIcons name="gift-outline" size={32} color={theme.colors.textDim} />
               <Text style={themed($dim)} text="Nenhuma recompensa disponível ainda." />
             </View>
           )
@@ -100,7 +92,7 @@ export const RewardsScreen: FC = function RewardsScreen() {
         renderItem={({ item }) => {
           const soldOut = item.stock !== null && item.stock <= 0
           const canAfford = balance >= item.costPoints
-          const disabled = soldOut || !canAfford || requestMutation.isPending
+          const missing = item.costPoints - balance
 
           return (
             <View style={themed($card)}>
@@ -122,28 +114,68 @@ export const RewardsScreen: FC = function RewardsScreen() {
               <View style={$cardBody}>
                 <Text weight="bold" text={item.name} numberOfLines={1} />
                 {!!item.description && (
-                  <Text
-                    size="xs"
-                    style={themed($dim)}
-                    text={item.description}
-                    numberOfLines={2}
-                  />
+                  <Text size="xs" style={themed($dim)} text={item.description} numberOfLines={2} />
                 )}
                 <View style={themed($costRow)}>
                   <MaterialDesignIcons name="star" size={14} color={theme.colors.tint} />
-                  <Text weight="bold" size="xs" style={themed($costText)} text={`${item.costPoints} pontos`} />
-                  {soldOut && (
-                    <Text size="xxs" style={themed($soldOut)} text="• esgotado" />
-                  )}
+                  <Text
+                    weight="bold"
+                    size="xs"
+                    style={themed($costText)}
+                    text={`${item.costPoints} pontos`}
+                  />
+                  {soldOut && <Text size="xxs" style={themed($soldOut)} text="• esgotado" />}
                 </View>
 
-                <Button
-                  text={soldOut ? "Esgotado" : canAfford ? "Resgatar" : "Saldo insuficiente"}
-                  preset="filled"
-                  disabled={disabled}
-                  style={themed($resgatarButton)}
-                  onPress={() => requestMutation.mutate({ rewardId: item.id })}
-                />
+                {soldOut ? (
+                  <Button
+                    text="Esgotado"
+                    preset="default"
+                    disabled
+                    LeftAccessory={(p) => (
+                      <MaterialDesignIcons
+                        name="package-variant-closed"
+                        size={16}
+                        color={theme.colors.error}
+                        style={p.style}
+                      />
+                    )}
+                    style={[themed($actionButton), themed($soldOutButton)]}
+                    textStyle={themed($soldOutButtonText)}
+                  />
+                ) : canAfford ? (
+                  <Button
+                    text={requestMutation.isPending ? "Gerando..." : "Resgatar"}
+                    preset="primary"
+                    disabled={requestMutation.isPending}
+                    LeftAccessory={(p) => (
+                      <MaterialDesignIcons
+                        name="gift"
+                        size={18}
+                        color={theme.colors.palette.neutral100}
+                        style={p.style}
+                      />
+                    )}
+                    style={themed($actionButton)}
+                    onPress={() => requestMutation.mutate({ rewardId: item.id })}
+                  />
+                ) : (
+                  <Button
+                    text={`Faltam ${missing} ${missing === 1 ? "ponto" : "pontos"}`}
+                    preset="default"
+                    disabled
+                    LeftAccessory={(p) => (
+                      <MaterialDesignIcons
+                        name="lock-outline"
+                        size={16}
+                        color={theme.colors.textDim}
+                        style={p.style}
+                      />
+                    )}
+                    style={themed($actionButton)}
+                    textStyle={themed($insufficientButtonText)}
+                  />
+                )}
               </View>
             </View>
           )
@@ -270,10 +302,28 @@ const $soldOut: ThemedStyle<TextStyle> = ({ colors }) => ({
   color: colors.error,
 })
 
-const $resgatarButton: ThemedStyle<ViewStyle> = () => ({
-  alignSelf: "flex-start",
-  minHeight: 36,
-  paddingVertical: 6,
+// Base dos três estados do botão: mesma altura/largura pra a diferença ficar
+// no ESTILO (cor), não no tamanho.
+const $actionButton: ThemedStyle<ViewStyle> = ({ spacing }) => ({
+  alignSelf: "stretch",
+  minHeight: 40,
+  paddingVertical: spacing.xs,
+  marginTop: spacing.xxs,
+})
+
+// Esgotado: desabilitado com borda/texto na cor de erro (leitura "indisponível").
+const $soldOutButton: ThemedStyle<ViewStyle> = ({ colors }) => ({
+  borderColor: colors.error,
+  opacity: 0.7,
+})
+
+const $soldOutButtonText: ThemedStyle<TextStyle> = ({ colors }) => ({
+  color: colors.error,
+})
+
+// Saldo insuficiente: desabilitado neutro (texto apagado) — distinto do esgotado.
+const $insufficientButtonText: ThemedStyle<TextStyle> = ({ colors }) => ({
+  color: colors.textDim,
 })
 
 const $dim: ThemedStyle<TextStyle> = ({ colors }) => ({
