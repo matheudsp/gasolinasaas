@@ -188,15 +188,12 @@ const $baseViewStyle: ThemedStyle<ViewStyle> = ({ spacing }) => ({
 
 const $baseTextStyle: ThemedStyle<TextStyle> = ({ typography }) => ({
   fontSize: 16,
-  lineHeight: 20,
+  // Sem lineHeight apertado, flexShrink nem zIndex: no Android tudo isso
+  // cortava glifos (lineHeight 20 < altura da fonte cortava vertical;
+  // flexShrink medía a largura a menos e cortava o último caractere; zIndex
+  // virava elevation e escondia o texto). Deixa o RN medir a fonte natural.
   fontFamily: typography.primary.medium,
   textAlign: "center",
-  flexShrink: 1,
-  flexGrow: 0,
-  // includeFontPadding: false centraliza melhor no Android. Sem zIndex: no
-  // Android o zIndex vira empilhamento (tipo elevation) e o texto sumia atrás
-  // do fundo do Pressable — bug específico do Android.
-  includeFontPadding: false,
 })
 
 const $rightAccessoryStyle: ThemedStyle<ViewStyle> = ({ spacing }) => ({
@@ -246,7 +243,10 @@ const $textPresets: Record<Presets, ThemedStyleArray<TextStyle>> = {
   filled: [$baseTextStyle],
   reversed: [$baseTextStyle, ({ colors }) => ({ color: colors.palette.neutral100 })],
   primary: [$baseTextStyle, ({ colors }) => ({ color: colors.palette.neutral100 })],
-  ghost: [$baseTextStyle, ({ colors }) => ({ color: colors.palette.neutral100 })],
+  // Ghost tem fundo transparente (sobre a superfície) — texto na cor tint,
+  // legível em light e dark. Era neutral100 (branco no light, preto no dark),
+  // que sumia no fundo da tela.
+  ghost: [$baseTextStyle, ({ colors }) => ({ color: colors.tint })],
 }
 
 const $pressedViewPresets: Record<Presets, ThemedStyle<ViewStyle>> = {
