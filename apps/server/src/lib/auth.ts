@@ -69,6 +69,61 @@ export const auth = betterAuth({
       // obrigatoriedade vive no cadastro multi-step e no gate pós-login.
       cpf: { type: "string", required: false, input: true },
     },
+    changeEmail: {
+      enabled: true,
+      /**
+       * O link de aprovação vai para o e-mail ATUAL, não para o novo — é o
+       * que impede alguém com a sessão aberta de sequestrar a conta
+       * apontando-a para um endereço próprio. Só após o clique o e-mail muda.
+       */
+      sendChangeEmailConfirmation: async ({ user, newEmail, url }, request) => {
+        const emailPromise = (async () => {
+          const { brand } = await resolveEmailTenant(request);
+          await sendEmail({
+            to: user.email,
+            fromName: brand,
+            subject: `Confirme a troca de e-mail — ${brand}`,
+            text: `Foi solicitada a troca do e-mail da sua conta para ${newEmail}. Para confirmar, acesse: ${url}\n\nSe não foi você, ignore este e-mail — nada será alterado.`,
+            html: renderEmailHtml({
+              brandName: brand,
+              title: "Confirme a troca de e-mail",
+              bodyText: `Foi solicitada a troca do e-mail da sua conta para ${newEmail}. Clique no botão abaixo para confirmar. Se não foi você, ignore este e-mail — nada será alterado.`,
+              buttonText: "Confirmar novo e-mail",
+              buttonUrl: url,
+              footerNote:
+                "Enviamos para o seu e-mail atual por segurança.",
+            }),
+          });
+        })().catch((err) => {
+          console.error("[auth] Falha ao enviar troca de e-mail:", err);
+        });
+
+        executionCtxStorage.getStore()?.waitUntil(emailPromise);
+      },
+    },
+  },
+  databaseHooks: {
+    user: {
+      update: {
+        /**
+         * O CPF precisa de `input: true` para o cadastro conseguir gravá-lo,
+         * mas isso também deixaria `updateUser({ cpf })` sobrescrevê-lo —
+         * driblando a validação de dígitos e a checagem de unicidade que só
+         * existem em `user.setCpf`. Aqui o campo é descartado em qualquer
+         * update: quem define CPF é o cadastro ou o `setCpf`, nunca o
+         * updateUser genérico.
+         */
+        before: async (data) => {
+          if (!("cpf" in data)) {
+            return;
+          }
+          const { cpf: _ignored, ...rest } = data;
+          // Só o cpf no payload = update inteiro descartado (evita um SET
+          // vazio no banco); com outros campos, eles seguem normalmente.
+          return Object.keys(rest).length > 0 ? { data: rest } : false;
+        },
+      },
+    },
   },
   database: drizzleAdapter(authDb, {
     provider: "pg",

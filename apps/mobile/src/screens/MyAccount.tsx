@@ -254,6 +254,14 @@ export function MyAccountScreen() {
         <SectionHeader title="Conta" icon="account-circle-outline" />
 
         <PreferenceRow
+          href="/(app)/profile"
+          icon="account-edit-outline"
+          label="Meus dados"
+          value="Nome, e-mail e senha"
+          hint="Abre a edição dos seus dados de cadastro"
+        />
+
+        <PreferenceRow
           href="/(app)/about"
           icon="information-outline"
           label="Sobre o app"
