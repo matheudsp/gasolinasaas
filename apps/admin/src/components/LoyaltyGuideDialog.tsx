@@ -41,8 +41,10 @@ const META_CUSTO = 0.008;
 const RECOMPENSAS = [
   { nome: "Café ou água", custo: 3 },
   { nome: "Salgado + bebida", custo: 12 },
-  { nome: "R$ 20 em combustível", custo: 20 },
+  { nome: "Aditivo para combustível", custo: 20 },
+  { nome: "Copo térmico (linha Stanley)", custo: 20 },
   { nome: "Lavagem simples", custo: 25 },
+  { nome: "R$ 30 em combustível", custo: 30 },
   { nome: "Troca de óleo", custo: 80 },
 ];
 
@@ -302,11 +304,20 @@ export function LoyaltyGuideDialog({ pointsPerReal }: { pointsPerReal: number })
                 </tbody>
               </table>
             </div>
-            <p className="text-xs text-muted-foreground">
-              Tenha ao menos uma recompensa <strong>barata e rápida</strong> (o
-              café): ela prova que o programa funciona e engata o hábito. As
-              caras seguram o cliente no longo prazo.
-            </p>
+            <div className="space-y-1.5 text-xs text-muted-foreground">
+              <p>
+                Tenha ao menos uma recompensa <strong>barata e rápida</strong>{" "}
+                (o café): ela prova que o programa funciona e engata o hábito.
+                As caras seguram o cliente no longo prazo.
+              </p>
+              <p>
+                Prefira itens de{" "}
+                <strong>valor percebido alto e custo baixo</strong> — um copo
+                térmico ou um aditivo custam ~R$ 20 para você, mas o cliente vê
+                um brinde “de loja”. Vale muito mais como recompensa do que R$
+                20 de desconto, que ele esquece no dia seguinte.
+              </p>
+            </div>
           </section>
 
           {/* ── 6. Resumo ─────────────────────────────────────────────────── */}
