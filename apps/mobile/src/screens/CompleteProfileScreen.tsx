@@ -27,6 +27,9 @@ export function CompleteProfileScreen() {
 
   const [cpf, setCpf] = useState("")
   const [error, setError] = useState<string | null>(null)
+  // CPF pertence a OUTRA conta (409 do setCpf). É o único erro em que digitar
+  // de novo não resolve — a tela troca de modo e oferece as saídas.
+  const [isTaken, setIsTaken] = useState(false)
   const [isSigningOut, setIsSigningOut] = useState(false)
 
   const setCpfMutation = useMutation({
@@ -37,7 +40,13 @@ export function CompleteProfileScreen() {
       await refetchSession()
       router.replace("/(app)/(tabs)")
     },
-    onError: (err) => setError(err.message),
+    onError: (err) => {
+      const conflict =
+        (err as { status?: number }).status === 409 ||
+        (err as { code?: string }).code === "CONFLICT"
+      setIsTaken(conflict)
+      setError(err.message)
+    },
   })
 
   function handleSubmit() {
@@ -112,6 +121,7 @@ export function CompleteProfileScreen() {
         onChangeText={(v) => {
           setCpf(formatCpf(v))
           setError(null)
+          setIsTaken(false)
         }}
         keyboardType="number-pad"
         maxLength={14}
@@ -141,27 +151,51 @@ export function CompleteProfileScreen() {
         }
       />
 
-      {/* Saídas de emergência — sem elas, quem tem o CPF já cadastrado em
-          outra conta fica preso nesta tela. */}
-      <View style={themed($escapeHatch)}>
-        <Text
-          size="xxs"
-          style={themed($escapeHint)}
-          text="Seu CPF já está cadastrado em outra conta? Entre com ela ou fale com a gente."
-        />
-        <Button
-          text={isSigningOut ? "Saindo..." : "Sair da conta"}
-          preset="default"
-          disabled={isSigningOut || pending}
-          onPress={handleSignOut}
-        />
-        <Button
-          text="Falar com o suporte"
-          preset="ghost"
-          disabled={isSigningOut}
-          onPress={handleSupport}
-        />
-      </View>
+      {/* Saídas de emergência. Quando o CPF é de OUTRA conta, digitar de novo
+          nunca resolve — o bloco vira destaque e explica o que fazer. */}
+      {isTaken ? (
+        <View style={themed($takenBox)}>
+          <Text weight="bold" style={themed($takenTitle)} text="Este CPF já tem uma conta" />
+          <Text
+            size="xs"
+            style={themed($takenText)}
+            text={`Seu CPF está cadastrado em outra conta — provavelmente com outro e-mail. Saia e entre com ela para não perder seus pontos. Se não lembrar qual é, o suporte resolve pra você.`}
+          />
+          <Button
+            text={isSigningOut ? "Saindo..." : "Sair e entrar com a outra conta"}
+            preset="filled"
+            disabled={isSigningOut}
+            onPress={handleSignOut}
+            style={themed($takenAction)}
+          />
+          <Button
+            text="Falar com o suporte"
+            preset="default"
+            disabled={isSigningOut}
+            onPress={handleSupport}
+          />
+        </View>
+      ) : (
+        <View style={themed($escapeHatch)}>
+          <Text
+            size="xxs"
+            style={themed($escapeHint)}
+            text="Seu CPF já está cadastrado em outra conta? Entre com ela ou fale com a gente."
+          />
+          <Button
+            text={isSigningOut ? "Saindo..." : "Sair da conta"}
+            preset="default"
+            disabled={isSigningOut || pending}
+            onPress={handleSignOut}
+          />
+          <Button
+            text="Falar com o suporte"
+            preset="ghost"
+            disabled={isSigningOut}
+            onPress={handleSupport}
+          />
+        </View>
+      )}
     </Screen>
   )
 }
@@ -189,6 +223,30 @@ const $escapeHint: ThemedStyle<TextStyle> = ({ colors, spacing }) => ({
   color: colors.textDim,
   textAlign: "center",
   marginBottom: spacing.xs,
+})
+
+// Modo "CPF já cadastrado": destaque, porque aqui está a única saída possível.
+const $takenBox: ThemedStyle<ViewStyle> = ({ colors, spacing }) => ({
+  marginTop: spacing.lg,
+  padding: spacing.md,
+  borderRadius: 12,
+  borderWidth: 1,
+  borderColor: colors.error,
+  backgroundColor: colors.errorBackground,
+  gap: spacing.xs,
+})
+
+const $takenTitle: ThemedStyle<TextStyle> = ({ colors }) => ({
+  color: colors.error,
+})
+
+const $takenText: ThemedStyle<TextStyle> = ({ colors, spacing }) => ({
+  color: colors.text,
+  marginBottom: spacing.xs,
+})
+
+const $takenAction: ThemedStyle<ViewStyle> = ({ spacing }) => ({
+  marginTop: spacing.xs,
 })
 
 const $subtitle: ThemedStyle<TextStyle> = ({ colors }) => ({
