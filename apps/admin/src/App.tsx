@@ -18,6 +18,7 @@ import ResetPassword from "./pages/ResetPassword";
 import OnPasswordReset from "./pages/OnPasswordReset";
 import VerifyEmail from "./pages/VerifyEmail";
 import Policies, { PolicyDetail } from "./pages/Policies";
+import DeleteAccount from "./pages/DeleteAccount";
 
 export default function App() {
   return (
@@ -30,6 +31,7 @@ export default function App() {
       <Route path="/verify-email" element={<VerifyEmail />} />
       {/* Públicas: também são a URL da política de privacidade exigida
           pelas lojas. Não colocar sob rota protegida. */}
+      <Route path="/excluir-conta" element={<DeleteAccount />} />
       <Route path="/politicas" element={<Policies />} />
       <Route path="/politicas/:slug" element={<PolicyDetail />} />
       <Route
