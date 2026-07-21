@@ -1,6 +1,6 @@
 import { useState } from "react"
 import { ActivityIndicator, Alert, Linking, View, ViewStyle, TextStyle } from "react-native"
-import { useRouter } from "expo-router"
+import { Redirect, useRouter } from "expo-router"
 import { useMutation } from "@tanstack/react-query"
 
 import { Button } from "@/components/Button"
@@ -23,7 +23,11 @@ import type { ThemedStyle } from "@/theme/types"
 export function CompleteProfileScreen() {
   const { themed, theme } = useAppTheme()
   const router = useRouter()
-  const { data: session, refetch: refetchSession } = authClient.useSession()
+  const {
+    data: session,
+    isPending: sessionPending,
+    refetch: refetchSession,
+  } = authClient.useSession()
 
   const [cpf, setCpf] = useState("")
   const [error, setError] = useState<string | null>(null)
@@ -60,7 +64,8 @@ export function CompleteProfileScreen() {
 
   // Saída de emergência: sem isso o usuário fica PRESO aqui se o CPF dele já
   // estiver em outra conta (ex.: entrou com Google num e-mail diferente do
-  // cadastro antigo). Sair devolve pro sign-in (o gate some junto da sessão).
+  // cadastro antigo). Quem tira o usuário da tela é o <Redirect> lá embaixo,
+  // quando a sessão zera.
   async function handleSignOut() {
     Alert.alert(
       "Sair da conta",
@@ -73,6 +78,11 @@ export function CompleteProfileScreen() {
           onPress: async () => {
             setIsSigningOut(true)
             try {
+              // Não navega aqui: quem tira o usuário da tela é o <Redirect>
+              // declarativo abaixo, disparado quando a sessão zera. Um
+              // router.replace imediato correria com o (auth)/_layout, que
+              // ainda veria a sessão antiga e devolveria pro (app) — e o gate
+              // de CPF traria de volta pra cá (loop).
               await authClient.signOut()
             } catch {
               Alert.alert("Erro", "Não foi possível sair. Tente novamente.")
@@ -98,6 +108,15 @@ export function CompleteProfileScreen() {
   }
 
   const pending = setCpfMutation.isPending
+
+  // Sem sessão (o botão "Sair" abaixo, ou expiração) esta tela não faz
+  // sentido. Precisa ser explícito porque (onboarding) não tem gate de saída
+  // — é o que evita loop com o redirect de CPF do (app). O `sessionPending`
+  // é essencial: sem ele, o primeiro render (sessão ainda carregando) jogaria
+  // o usuário pro sign-in sem motivo.
+  if (!sessionPending && !session?.user) {
+    return <Redirect href="/(auth)/sign-in" />
+  }
 
   return (
     <Screen
