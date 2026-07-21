@@ -6,6 +6,7 @@ import { orpc } from "@/lib/orpc";
 import { useAuth } from "@/context/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { LoyaltyGuideDialog } from "@/components/LoyaltyGuideDialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -98,7 +99,8 @@ export function LoyaltyConfig() {
 
   // Validade: vazio = pontos nunca expiram (null no server).
   const trimmedValidity = validityDays.trim();
-  const parsedValidity = trimmedValidity === "" ? null : Number(trimmedValidity);
+  const parsedValidity =
+    trimmedValidity === "" ? null : Number(trimmedValidity);
   const validityValid =
     parsedValidity === null ||
     (Number.isInteger(parsedValidity) &&
@@ -160,10 +162,14 @@ export function LoyaltyConfig() {
       {/* ── Programa de pontos ──────────────────────────────────────────── */}
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-base">
-            <Coins className="h-4 w-4" />
-            Programa de pontos
-          </CardTitle>
+          <div className="flex items-center justify-between gap-2">
+            <CardTitle className="flex items-center gap-2 text-base">
+              <Coins className="h-4 w-4" />
+              Programa de pontos
+            </CardTitle>
+            {/* Guia: explica os campos, sugere valores e simula o custo. */}
+            <LoyaltyGuideDialog pointsPerReal={pointsValid ? parsedPoints : 1} />
+          </div>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="space-y-1.5">
@@ -189,9 +195,7 @@ export function LoyaltyConfig() {
           </div>
 
           <div className="space-y-1.5">
-            <Label htmlFor="points-validity">
-              Validade dos pontos (dias)
-            </Label>
+            <Label htmlFor="points-validity">Validade dos pontos (dias)</Label>
             <Input
               id="points-validity"
               type="number"
@@ -206,16 +210,14 @@ export function LoyaltyConfig() {
               disabled={updateConfig.isPending || !enabled}
             />
             <p className="text-xs text-muted-foreground">
-              Deixe vazio para os pontos nunca expirarem. Cada crédito vale
-              esse prazo a partir da data em que foi ganho — a mudança vale
-              apenas para pontos ganhos daqui em diante.
+              Deixe vazio para os pontos nunca expirarem. Cada crédito vale esse
+              prazo a partir da data em que foi ganho — a mudança vale apenas
+              para pontos ganhos daqui em diante.
             </p>
           </div>
 
           <div className="space-y-1.5">
-            <Label htmlFor="max-credit">
-              Valor máximo por crédito (R$)
-            </Label>
+            <Label htmlFor="max-credit">Valor máximo por crédito (R$)</Label>
             <Input
               id="max-credit"
               type="text"
