@@ -37,15 +37,19 @@ const NUM = (v: number) =>
 /** Meta de custo do programa: 0,8% do faturamento (folgado pra margem de combustível). */
 const META_CUSTO = 0.008;
 
-/** Recompensas típicas de posto — o custo é o que VOCÊ paga, não o preço de venda. */
+/**
+ * Recompensas de posto + conveniência — só PRODUTOS de prateleira, nada que
+ * dependa de box de serviço (lavagem, troca de óleo), que muitos postos não
+ * têm. O custo é o que VOCÊ paga pelo item, não o preço de venda.
+ */
 const RECOMPENSAS = [
   { nome: "Café ou água", custo: 3 },
-  { nome: "Salgado + bebida", custo: 12 },
+  { nome: "Combo salgado + bebida", custo: 12 },
   { nome: "Aditivo para combustível", custo: 20 },
   { nome: "Copo térmico (linha Stanley)", custo: 20 },
-  { nome: "Lavagem simples", custo: 25 },
-  { nome: "R$ 30 em combustível", custo: 30 },
-  { nome: "Troca de óleo", custo: 80 },
+  { nome: "Carregador veicular USB", custo: 25 },
+  { nome: "Kit limpeza automotiva", custo: 40 },
+  { nome: "Óleo lubrificante 1 L", custo: 50 },
 ];
 
 export function LoyaltyGuideDialog({ pointsPerReal }: { pointsPerReal: number }) {
@@ -336,7 +340,7 @@ export function LoyaltyGuideDialog({ pointsPerReal }: { pointsPerReal: number })
               </li>
               <li>
                 • Recompensas entre <strong>4.000</strong> e{" "}
-                <strong>100.000</strong> pontos, seguindo a tabela acima
+                <strong>60.000</strong> pontos, seguindo a tabela acima
               </li>
             </ul>
           </section>
