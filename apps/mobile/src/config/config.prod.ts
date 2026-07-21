@@ -10,4 +10,7 @@
 export default {
   API_URL: process.env.EXPO_PUBLIC_SERVER_URL,
   FRONTEND_URL: `https://sistema.gasolina.cloud`,
+  // Canal de suporte exibido quando o usuário fica travado (ex.: CPF já
+  // cadastrado em outra conta, no gate de completar perfil).
+  SUPPORT_EMAIL: `suporte@gasolina.cloud`,
 }
