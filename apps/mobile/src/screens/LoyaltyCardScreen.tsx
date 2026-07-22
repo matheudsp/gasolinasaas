@@ -62,7 +62,7 @@ export const LoyaltyCardScreen: FC<LoyaltyCardScreenProps> = function LoyaltyCar
   const nearestExpiry = expiringSoon.at(0)
 
   return (
-    <Screen preset="fixed" safeAreaEdges={["bottom"]}>
+    <Screen preset="fixed" safeAreaEdges={[]}>
       <Header
         title="Meus pontos"
         leftIcon={showBack ? "back" : undefined}
@@ -87,11 +87,7 @@ export const LoyaltyCardScreen: FC<LoyaltyCardScreenProps> = function LoyaltyCar
 
         {nearestExpiry && (
           <View style={themed($expiryWarning)}>
-            <MaterialDesignIcons
-              name="clock-alert-outline"
-              size={20}
-              color={theme.colors.error}
-            />
+            <MaterialDesignIcons name="clock-alert-outline" size={20} color={theme.colors.error} />
             <View style={$txInfo}>
               <Text
                 size="xs"
@@ -221,7 +217,7 @@ function formatRelativeDays(d: Date | string): string {
 const $content: ThemedStyle<ViewStyle> = ({ spacing }) => ({
   padding: spacing.lg,
   gap: spacing.md,
-  paddingBottom: spacing.xxl,
+  paddingBottom: spacing.xxxxl,
 })
 
 const $balanceCard: ThemedStyle<ViewStyle> = ({ colors, spacing }) => ({
