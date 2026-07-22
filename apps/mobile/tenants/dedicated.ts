@@ -13,7 +13,10 @@
  * puras, sem imports de React Native. Caminhos relativos à raiz de apps/mobile.
  *
  * Como adicionar uma rede dedicada:
- * 1. Coloque o ícone quadrado (≥1024px) em `tenants/<slug>/icon.png`;
+ * 1. Coloque o ícone quadrado (≥1024px) em `tenants/<slug>/icon.png`. Para
+ *    acabamento melhor, adicione também `adaptive-foreground.png` (arte com
+ *    folga pra máscara do Android), `splash.png` e `notification-icon.png`
+ *    (silhueta branca) e registre-os abaixo;
  * 2. Coloque o `google-services.json` do app Firebase DESSE bundle id em
  *    `tenants/<slug>/google-services.json` (o guarda-chuva tem o seu próprio);
  * 3. Registre aqui com o bundle id real;
@@ -27,12 +30,33 @@ export type DedicatedApp = {
   name: string;
   /** iOS bundleIdentifier + Android package. Identidade permanente. */
   bundleId: string;
-  /** PNG quadrado ≥1024px: ícone iOS, Android legacy e adaptive foreground. */
+  /** PNG quadrado ≥1024px: ícone do iOS e do Android legacy. */
   icon: string;
   /** Cor de fundo do adaptive icon do Android (atrás do foreground). */
   adaptiveBackgroundColor: string;
   /** google-services.json do app Firebase deste bundleId (push Android). */
   googleServicesFile: string;
+
+  // ── Opcionais: sem eles o build usa o fallback documentado ─────────────
+
+  /**
+   * Foreground do adaptive icon (Android). O sistema aplica uma MÁSCARA
+   * (círculo, squircle...) e corta as bordas, então o ideal é uma arte com
+   * folga — o desenho ocupando ~66% do centro, resto transparente.
+   * Sem isso cai no `icon`, que por ser quadrado sangrado ACABA CORTADO.
+   */
+  adaptiveForegroundImage?: string;
+  /** Arte do splash. Sem isso usa o `icon`. */
+  splashImage?: string;
+  /** Fundo do splash. Sem isso usa `adaptiveBackgroundColor`. */
+  splashBackgroundColor?: string;
+  /**
+   * Ícone da notificação no Android: o sistema descarta as cores e usa só a
+   * SILHUETA, então precisa ser um PNG branco/transparente. Um ícone
+   * colorido comum vira um borrão branco — por isso o fallback é o ícone
+   * monocromático do guarda-chuva, não o `icon` da rede.
+   */
+  notificationIcon?: string;
 };
 
 export const DEDICATED_APPS: Record<string, DedicatedApp> = {

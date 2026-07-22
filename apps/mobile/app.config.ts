@@ -11,16 +11,23 @@ import "tsx/cjs"
 
 import { DEDICATED_APPS } from "./tenants/dedicated"
 
-/**
- * Cores nativas assadas no binário — neutras, iguais para todos.
- * O que é nativo não muda via OTA.
- */
-const SPLASH_BACKGROUND = "#FFFFFF"
-const NOTIFICATION_ICON_COLOR = "#F7f7f7"
+// Identidade padrão do app guarda-chuva. O que é nativo não muda via OTA.
+const UMBRELLA = {
+  name: "Gasolina Cloud",
+  bundleId: "cloud.gasolina.app",
+  scheme: "gasolina",
+  icon: "./assets/app-icon/app-icon-all.png",
+  adaptiveForegroundImage: "./assets/app-icon/android-adaptive-foreground.png",
+  adaptiveBackgroundImage: "./assets/app-icon/android-adaptive-background.png",
+  splashImage: "./assets/images/logo2.png",
+  splashBackgroundColor: "#FFFFFF",
+  // Silhueta monocromática — o Android descarta as cores do ícone de
+  // notificação e usa só a forma.
+  notificationIcon: "./assets/app-icon/android-adaptive-foreground.png",
+  googleServicesFile: "./google-services.json",
+} as const
 
-// Identidade padrão do app guarda-chuva.
-const UMBRELLA_ICON = "./assets/app-icon/app-icon-all.png"
-const UMBRELLA_BUNDLE_ID = "cloud.gasolina.app"
+const NOTIFICATION_ICON_COLOR = "#F7f7f7"
 
 /**
  * Projeto EAS. É a fonte ÚNICA do id: o `updates.url` e o
@@ -48,19 +55,65 @@ if (APP_VARIANT && !dedicated) {
   )
 }
 
-// O google-services.json do app dedicado precisa existir no build (bundle id
-// próprio = app Firebase próprio). Falha cedo com mensagem clara em vez do
-// erro cru do prebuild.
-if (dedicated && !existsSync(dedicated.googleServicesFile)) {
-  throw new Error(
-    `Build dedicado "${dedicated.slug}": falta ${dedicated.googleServicesFile}. ` +
-      `Baixe o google-services.json do app Firebase do bundle id ${dedicated.bundleId} e coloque nesse caminho.`,
-  )
-}
+/**
+ * TODOS os assets nativos num lugar só. Antes o splash e o ícone de
+ * notificação estavam escritos direto nos plugins, então um build dedicado
+ * saía com a arte do guarda-chuva — o app do cliente com a marca errada.
+ *
+ * Os opcionais têm fallback dentro da PRÓPRIA rede (splash cai no ícone
+ * dela), exceto o de notificação: o Android usa só a silhueta, e um ícone
+ * colorido viraria um borrão branco — aí é melhor a silhueta neutra do
+ * guarda-chuva do que a marca da rede quebrada.
+ */
+const identity = dedicated
+  ? {
+      name: dedicated.name,
+      bundleId: dedicated.bundleId,
+      scheme: dedicated.slug,
+      icon: dedicated.icon,
+      adaptiveForegroundImage:
+        dedicated.adaptiveForegroundImage ?? dedicated.icon,
+      adaptiveBackgroundColor: dedicated.adaptiveBackgroundColor,
+      splashImage: dedicated.splashImage ?? dedicated.icon,
+      splashBackgroundColor:
+        dedicated.splashBackgroundColor ?? dedicated.adaptiveBackgroundColor,
+      notificationIcon: dedicated.notificationIcon ?? UMBRELLA.notificationIcon,
+      googleServicesFile: dedicated.googleServicesFile,
+    }
+  : {
+      name: UMBRELLA.name,
+      bundleId: UMBRELLA.bundleId,
+      scheme: UMBRELLA.scheme,
+      icon: UMBRELLA.icon,
+      adaptiveForegroundImage: UMBRELLA.adaptiveForegroundImage,
+      adaptiveBackgroundColor: null,
+      splashImage: UMBRELLA.splashImage,
+      splashBackgroundColor: UMBRELLA.splashBackgroundColor,
+      notificationIcon: UMBRELLA.notificationIcon,
+      googleServicesFile: UMBRELLA.googleServicesFile,
+    }
 
-const appIcon = dedicated?.icon ?? UMBRELLA_ICON
-const bundleId = dedicated?.bundleId ?? UMBRELLA_BUNDLE_ID
-const scheme = dedicated?.slug ?? "gasolina"
+// Falha cedo com mensagem clara em vez do erro cru do prebuild — um caminho
+// errado no registry passaria despercebido até o app sair sem ícone.
+if (dedicated) {
+  const required: [string, string][] = [
+    ["icon", identity.icon],
+    ["adaptiveForegroundImage", identity.adaptiveForegroundImage],
+    ["splashImage", identity.splashImage],
+    ["notificationIcon", identity.notificationIcon],
+    ["googleServicesFile", identity.googleServicesFile],
+  ]
+  for (const [field, path] of required) {
+    if (!existsSync(path)) {
+      throw new Error(
+        `Build dedicado "${dedicated.slug}": ${field} aponta para ${path}, que não existe.` +
+          (field === "googleServicesFile"
+            ? ` Baixe o google-services.json do app Firebase do bundle id ${dedicated.bundleId}.`
+            : ""),
+      )
+    }
+  }
+}
 
 /**
  * @param config ExpoConfig coming from the static config app.json if it exists
@@ -73,12 +126,12 @@ module.exports = ({ config }: ConfigContext): Partial<ExpoConfig> => {
 
   return {
     ...config,
-    name: dedicated?.name ?? "Gasolina Cloud",
+    name: identity.name,
     // `slug` identifica o PROJETO EAS (compartilhado) — NÃO é o slug da rede.
     // Mantém "gasolina" em todos os variantes; o scheme é que == slug da rede.
     slug: "gasolina",
-    scheme,
-    icon: appIcon,
+    scheme: identity.scheme,
+    icon: identity.icon,
     updates: {
       ...config.updates,
       url: `https://u.expo.dev/${EAS_PROJECT_ID}`,
@@ -101,8 +154,8 @@ module.exports = ({ config }: ConfigContext): Partial<ExpoConfig> => {
     },
     ios: {
       ...config.ios,
-      icon: appIcon,
-      bundleIdentifier: bundleId,
+      icon: identity.icon,
+      bundleIdentifier: identity.bundleId,
       // This privacyManifests is to get you started.
       // See Expo's guide on apple privacy manifests here:
       // https://docs.expo.dev/guides/apple-privacy/
@@ -120,20 +173,20 @@ module.exports = ({ config }: ConfigContext): Partial<ExpoConfig> => {
     },
     android: {
       ...config.android,
-      icon: appIcon,
-      package: bundleId,
-      adaptiveIcon: dedicated
+      icon: identity.icon,
+      package: identity.bundleId,
+      // A rede dedicada define a cor de fundo; o guarda-chuva usa a arte de
+      // fundo própria que já existe em assets/.
+      adaptiveIcon: identity.adaptiveBackgroundColor
         ? {
-            foregroundImage: dedicated.icon,
-            backgroundColor: dedicated.adaptiveBackgroundColor,
+            foregroundImage: identity.adaptiveForegroundImage,
+            backgroundColor: identity.adaptiveBackgroundColor,
           }
         : {
-            foregroundImage: `./assets/app-icon/android-adaptive-foreground.png`,
-            backgroundImage: `./assets/app-icon/android-adaptive-background.png`,
+            foregroundImage: identity.adaptiveForegroundImage,
+            backgroundImage: UMBRELLA.adaptiveBackgroundImage,
           },
-      // Guarda-chuva: google-services.json do app cloud.gasolina.app (o da
-      // raiz). Dedicado: o do bundle id próprio (validado acima).
-      googleServicesFile: dedicated?.googleServicesFile ?? "./google-services.json",
+      googleServicesFile: identity.googleServicesFile,
     },
     plugins: [
       "@react-native-vector-icons/material-icons",
@@ -148,16 +201,16 @@ module.exports = ({ config }: ConfigContext): Partial<ExpoConfig> => {
       [
         "expo-splash-screen",
         {
-          image: `./assets/images/logo2.png`,
+          image: identity.splashImage,
           imageWidth: 300,
           resizeMode: "contain",
-          backgroundColor: SPLASH_BACKGROUND,
+          backgroundColor: identity.splashBackgroundColor,
         },
       ],
       [
         "expo-notifications",
         {
-          icon: appIcon,
+          icon: identity.notificationIcon,
           color: NOTIFICATION_ICON_COLOR,
           sounds: [],
         },
