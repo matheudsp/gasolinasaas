@@ -15,6 +15,10 @@ export default function ModalLayout() {
         name="confirmRedemption/index"
         options={{ presentation: "modal", animation: "slide_from_bottom" }}
       />
+      <Stack.Screen
+        name="howItWorks/index"
+        options={{ presentation: "modal", animation: "slide_from_bottom" }}
+      />
     </Stack>
   )
 }

@@ -112,7 +112,7 @@ export function ForgotPasswordScreen() {
             onPress={() => setSubmitted(false)}
             style={themed($retryLink)}
           >
-            <Text text="Usar outro e-mail" style={themed($retryLinkText)} />
+            <Text weight="semiBold" text="Usar outro e-mail" style={themed($retryLinkText)} />
           </Pressable>
         </View>
       ) : (
@@ -254,7 +254,6 @@ const $retryLink: ThemedStyle<ViewStyle> = ({ spacing }) => ({
 const $retryLinkText: ThemedStyle<TextStyle> = ({ colors }) => ({
   color: colors.tint,
   fontSize: 14,
-  fontWeight: "600",
 })
 
 const $poweredBy: ThemedStyle<ViewStyle> = ({ spacing }) => ({

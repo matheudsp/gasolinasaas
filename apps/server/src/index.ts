@@ -4,6 +4,10 @@ import { createDb } from "./db";
 import { apiHandler } from "./handlers/api";
 import { rpcHandler } from "./handlers/rpc";
 import { runExpirePointsJob } from "./jobs/expire-points";
+import { runExpiringPointsWarningJob } from "./jobs/expiring-points-warning";
+
+/** Precisa bater EXATAMENTE com a entrada em triggers.crons do wrangler.jsonc. */
+const EXPIRING_WARNING_CRON = "0 12 * * *";
 import { auth } from "./lib/auth";
 import { createContext } from "./lib/context";
 import { executionCtxStorage } from "./lib/execution-context";
@@ -103,15 +107,32 @@ app.get("/session", (c) => {
 export default {
   fetch: app.fetch,
 
-  // Cron Trigger (wrangler.jsonc → triggers.crons): expire pass em lote.
-  // Complementa o expire pass preguiçoso pra clientes dormentes — sem ele o
-  // passivo do painel fica superestimado até cada cliente abrir o app.
+  /**
+   * Cron Triggers (wrangler.jsonc → triggers.crons). São DOIS horários de
+   * propósito: cada invocação tem seu próprio orçamento de subrequests, e
+   * somar os dois jobs numa só estouraria o teto do plano.
+   *
+   * - 03:00 UTC (meia-noite BRT): expire pass em lote — complementa o expire
+   *   pass preguiçoso pra clientes dormentes, senão o passivo do painel fica
+   *   superestimado até cada um abrir o app.
+   * - 12:00 UTC (09:00 BRT): aviso de pontos a vencer — horário em que a
+   *   pessoa está acordada e o push tem chance de ser lido.
+   */
   async scheduled(
-    _controller: unknown,
+    controller: { cron?: string },
     env: AppEnv["Bindings"],
     _ctx: unknown,
   ) {
     const db = createDb(env.DATABASE_URL || "");
+
+    if (controller.cron === EXPIRING_WARNING_CRON) {
+      const result = await runExpiringPointsWarningJob(db);
+      console.log(
+        `[expiring-points] avisados: ${result.notified}, falhas: ${result.failed}`,
+      );
+      return;
+    }
+
     const result = await runExpirePointsJob(db);
     console.log(
       `[expire-points] clientes: ${result.processed} ok, ${result.failed} falhas; pontos expirados: ${result.expiredPoints}`,

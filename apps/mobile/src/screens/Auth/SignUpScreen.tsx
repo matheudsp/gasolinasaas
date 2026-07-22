@@ -337,7 +337,7 @@ export function SignUpScreen() {
       <View style={themed($footer)}>
         <Text text="Já tem uma conta? " style={themed($footerText)} />
         <TouchableOpacity onPress={() => router.replace("/(auth)/sign-in")}>
-          <Text text="Entrar" style={themed($footerLink)} />
+          <Text weight="semiBold" text="Entrar" style={themed($footerLink)} />
         </TouchableOpacity>
       </View>
 
@@ -438,7 +438,6 @@ const $footerText: ThemedStyle<TextStyle> = ({ colors }) => ({
 const $footerLink: ThemedStyle<TextStyle> = ({ colors }) => ({
   color: colors.tint,
   fontSize: 14,
-  fontWeight: "600",
 })
 
 const $poweredBy: ThemedStyle<ViewStyle> = ({ spacing }) => ({

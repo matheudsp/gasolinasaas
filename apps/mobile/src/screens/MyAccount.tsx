@@ -185,7 +185,7 @@ export function MyAccountScreen() {
         accessibilityLabel={`${user?.name ?? "Usuário"}, ${user?.email ?? ""}`}
       >
         <View style={themed($avatar)}>
-          <Text text={initials} style={themed($avatarText)} />
+          <Text weight="bold" text={initials} style={themed($avatarText)} />
         </View>
         <Text preset="heading" text={user?.name ?? "—"} style={themed($userName)} />
         <Text text={user?.email ?? "—"} style={themed($userEmail)} />
@@ -400,7 +400,6 @@ const $avatar: ThemedStyle<ViewStyle> = ({ colors, spacing }) => ({
 const $avatarText: ThemedStyle<TextStyle> = ({ colors }) => ({
   color: colors.palette.neutral100,
   fontSize: 28,
-  fontWeight: "700",
 })
 
 const $userName: ThemedStyle<TextStyle> = ({ spacing }) => ({

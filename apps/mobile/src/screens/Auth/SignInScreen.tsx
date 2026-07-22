@@ -179,7 +179,7 @@ export function SignInScreen() {
             accessibilityLabel="Esqueci minha senha"
             onPress={() => router.push("/(auth)/forgot-password")}
           >
-            <Text text="Esqueci minha senha" style={themed($footerLink)} />
+            <Text weight="semiBold" text="Esqueci minha senha" style={themed($footerLink)} />
           </Pressable>
         </View>
         <Button
@@ -240,7 +240,7 @@ export function SignInScreen() {
           accessibilityLabel="Cadastre-se"
           onPress={() => router.push("/(auth)/sign-up")}
         >
-          <Text text="Cadastre-se" style={themed($footerLink)} />
+          <Text weight="semiBold" text="Cadastre-se" style={themed($footerLink)} />
         </Pressable>
       </View>
 
@@ -363,7 +363,6 @@ const $footerText: ThemedStyle<TextStyle> = ({ colors }) => ({
 const $footerLink: ThemedStyle<TextStyle> = ({ colors }) => ({
   color: colors.tint,
   fontSize: 14,
-  fontWeight: "600",
 })
 
 const $poweredBy: ThemedStyle<ViewStyle> = ({ spacing }) => ({

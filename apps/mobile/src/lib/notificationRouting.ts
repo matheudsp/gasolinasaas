@@ -34,6 +34,10 @@ export function resolveNotificationHref(data: unknown): Href {
   if (parsed?.type === "points") {
     return "/(app)/(tabs)/loyalty"
   }
+  // Saldo cruzou o custo da recompensa mais barata — cai direto no catálogo.
+  if (parsed?.type === "rewards") {
+    return "/(app)/rewards"
+  }
   // Tipo desconhecido/ausente: a lista de notificações é o fallback seguro.
   return NOTIFICATIONS_FALLBACK_HREF
 }

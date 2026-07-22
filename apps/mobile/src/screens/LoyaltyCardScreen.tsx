@@ -1,4 +1,4 @@
-import { FC, useCallback } from "react"
+import { FC, useCallback, useEffect } from "react"
 import {
   ActivityIndicator,
   Pressable,
@@ -16,6 +16,7 @@ import { MaterialDesignIcons } from "@react-native-vector-icons/material-design-
 import { Header } from "@/components/Header"
 import { Screen } from "@/components/Screen"
 import { Text } from "@/components/Text"
+import { markLoyaltyIntroSeen, useHasSeenLoyaltyIntro } from "@/lib/loyaltyOnboarding"
 import { orpc } from "@/lib/orpc"
 import { formatBRL } from "@/utils/formatCurrency"
 import { formatDateBR } from "@/utils/formatDate"
@@ -51,6 +52,20 @@ export const LoyaltyCardScreen: FC<LoyaltyCardScreenProps> = function LoyaltyCar
     balanceQuery.refetch()
     txQuery.refetch()
   }, [codeQuery, balanceQuery, txQuery])
+
+  // Primeira visita: abre o explicador sozinho. Sem isso o cliente cai numa
+  // tela de saldo zerado sem saber o que fazer com o QR.
+  //
+  // A flag é marcada AQUI, na abertura — não no fechamento: quem arrasta o
+  // modal pra baixo em vez de tocar em "Entendi" não passaria pelo handler e
+  // veria o explicador de novo a cada visita à aba.
+  const hasSeenIntro = useHasSeenLoyaltyIntro()
+  useEffect(() => {
+    if (!hasSeenIntro) {
+      markLoyaltyIntroSeen()
+      router.push("/(app)/(modals)/howItWorks")
+    }
+  }, [hasSeenIntro, router])
 
   const code = codeQuery.data?.code
   const transactions = txQuery.data ?? []
@@ -112,6 +127,17 @@ export const LoyaltyCardScreen: FC<LoyaltyCardScreenProps> = function LoyaltyCar
         >
           <MaterialDesignIcons name="gift-outline" size={18} color={theme.colors.tint} />
           <Text weight="bold" size="sm" style={themed($rewardsButtonText)} text="Ver recompensas" />
+          <MaterialDesignIcons name="chevron-right" size={18} color={theme.colors.tint} />
+        </Pressable>
+
+        <Pressable
+          onPress={() => router.push("/(app)/(modals)/howItWorks")}
+          accessibilityRole="button"
+          accessibilityLabel="Como funciona o programa de pontos"
+          style={themed($rewardsButton)}
+        >
+          <MaterialDesignIcons name="help-circle-outline" size={18} color={theme.colors.tint} />
+          <Text weight="bold" size="sm" style={themed($rewardsButtonText)} text="Como funciona" />
           <MaterialDesignIcons name="chevron-right" size={18} color={theme.colors.tint} />
         </Pressable>
 

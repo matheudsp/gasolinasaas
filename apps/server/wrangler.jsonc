@@ -47,13 +47,16 @@
 			"previews_enabled": false
 		}
 	],
-	// Cron do expire pass em lote (jobs/expire-points.ts): 1x/dia às 03:00
-	// UTC (= meia-noite no horário de Brasília), horário de baixo tráfego.
-	// Crons são SEMPRE em UTC. Até 20 clientes por execução (limite de
-	// subrequests do plano).
+	// Crons são SEMPRE em UTC. São dois horários porque cada invocação tem seu
+	// próprio orçamento de subrequests — juntar os dois jobs estouraria o teto.
+	// O despacho por horário fica em index.ts (scheduled → controller.cron).
+	//   03:00 UTC (meia-noite BRT): expire pass em lote (jobs/expire-points.ts)
+	//   12:00 UTC (09:00 BRT): aviso de pontos a vencer, horário em que a
+	//   pessoa está acordada (jobs/expiring-points-warning.ts)
 	"triggers": {
 		"crons": [
-			"0 3 * * *"
+			"0 3 * * *",
+			"0 12 * * *"
 		]
 	},
 	"workers_dev": false,

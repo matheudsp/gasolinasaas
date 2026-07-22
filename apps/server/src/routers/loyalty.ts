@@ -13,6 +13,7 @@ import {
 import { tenant, tenantMembership } from "../db/schema/tenant";
 import { isValidCpf, normalizeCpf } from "../lib/cpf";
 import { executionCtxStorage } from "../lib/execution-context";
+import { notifyRewardUnlocked } from "../lib/loyalty-notifications";
 import { settleExpiredPoints } from "../lib/loyalty-points";
 import {
   protectedProcedure,
@@ -86,6 +87,21 @@ export const loyaltyRouter = {
     );
 
     return { balance: snapshot.balance, expiringSoon: snapshot.expiringSoon };
+  }),
+
+  /**
+   * Regras do programa visíveis ao CLIENTE (tela "como funciona"). Não
+   * confundir com `getConfig`, que é do owner e expõe também o teto por
+   * crédito. Lê do tenant já resolvido no contexto — sem query.
+   */
+  publicConfig: protectedProcedure.handler(({ context }) => {
+    if (!context.tenant) {
+      throw new ORPCError("BAD_REQUEST", { message: "Tenant é obrigatório" });
+    }
+    return {
+      pointsPerReal: Number(context.tenant.pointsPerReal),
+      pointsValidityDays: context.tenant.pointsValidityDays ?? null,
+    };
   }),
 
   /** Extrato de pontos do cliente. */
@@ -294,6 +310,18 @@ export const loyaltyRouter = {
           console.error("[loyalty] Falha ao notificar crédito:", err);
         });
         executionCtxStorage.getStore()?.waitUntil(pushPromise);
+
+        // Segundo aviso, só quando o saldo PASSA a dar para a recompensa mais
+        // barata — o gancho que traz o cliente de volta pra resgatar.
+        const unlockedPromise = notifyRewardUnlocked(context.db, {
+          tenantId: context.tenant.id,
+          tenantSlug: context.tenant.slug,
+          userId: claimed.userId,
+          creditedPoints: points,
+        }).catch((err) => {
+          console.error("[loyalty] Falha ao notificar recompensa liberada:", err);
+        });
+        executionCtxStorage.getStore()?.waitUntil(unlockedPromise);
       }
 
       return {
