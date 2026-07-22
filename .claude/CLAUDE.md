@@ -313,7 +313,15 @@ pós-login** (`(app)/_layout` redireciona pra `/complete-profile`, que vive em
 sincronia. No Better Auth: `user.additionalFields.cpf` com `required: false`
 (Google não manda CPF) e **sem generic explícito no `betterAuth()`** (fixar
 `BetterAuthOptions` mata a inferência do campo); no mobile,
-`inferAdditionalFields` com schema EXPLÍCITO (importar `typeof auth` puxaria
+**O `cpf` tem `input: true`** porque o cadastro precisa gravá-lo — o efeito
+colateral é que `updateUser({ cpf })` conseguiria sobrescrevê-lo pela API,
+driblando a validação de dígitos e unicidade. Um `databaseHooks.user.update.
+before` descarta o campo em QUALQUER update (e cancela o update se o cpf for o
+único campo, evitando `SET` vazio). O `setCpf` usa Drizzle direto, então passa
+por fora do hook e segue funcionando — quem grava CPF é o cadastro ou o
+`setCpf`, nunca o updateUser genérico.
+
+No mobile, `inferAdditionalFields` com schema EXPLÍCITO (importar `typeof auth` puxaria
 `cloudflare:workers` pro bundle).
 
 **Fotos de recompensa (R2):** `reward.imageUrl` guarda **caminho relativo**
@@ -358,7 +366,10 @@ marca no bundle JS (bundle é compartilhado via OTA entre todas as redes):
   `x-tenant-id` no header.
 - Rotas em `App.tsx` (react-router): owner/admin sob `TenantProtectedRoute` + `Layout`;
   admin-only sob `AdminProtectedRoute`. `Layout` renderiza o `PaymentReminderBanner`.
-  Públicas (sem sessão): `/politicas(/:slug)` — URL exigida pelas lojas —,
+  Públicas (sem sessão): `/politicas(/:slug)` e **`/excluir-conta`** — as duas
+  URLs exigidas pelas lojas (política de privacidade e exclusão de conta);
+  a de exclusão descreve o que o `deleteAccount` REALMENTE apaga (cascade) e
+  o que sobra (lançamentos feitos como operador, com `operatorUserId` anulado),
   `/verify-email` e o fluxo de reset de senha.
 - **Botões "Abrir o app"** (`VerifyEmail`, `OnPasswordReset`): o scheme chega
   pronto na query `?app=` e `lib/appScheme.ts:appUrlFromParam` só valida (regex
@@ -375,6 +386,14 @@ marca no bundle JS (bundle é compartilhado via OTA entre todas as redes):
   do `/admin` (`pages/admin/OwnersTab`). Branding do app em `/marca` (`AppBranding`).
   O form de push (`PushNotifications`) tem seletor de destino (genérica/promoção
   com posto/pontos) que monta o `data` do deep link.
+- **Guia do programa de pontos** (`components/LoyaltyGuideDialog`, botão no card
+  "Programa de pontos" da aba Config): documentação para o DONO, com simulador
+  que usa o `pointsPerReal` já configurado e mostra o investimento por venda em
+  R$ e em % do faturamento (meta 0,8%), mais tabela de preço sugerido por
+  recompensa derivada do CUSTO do item. Ensina que o multiplicador é
+  PSICOLOGIA, não custo — o que define o custo é a razão pontos-ganhos ÷
+  pontos-da-recompensa. Exemplos são só PRODUTOS de conveniência (posto sem box
+  de serviço também usa).
 
 **Mobile** (`apps/mobile`, Expo + expo-router) — **app guarda-chuva único**:
 - **Identidade nativa única** no `app.config.ts`: nome "Gasolina", scheme `gasolina`,
@@ -407,8 +426,22 @@ marca no bundle JS (bundle é compartilhado via OTA entre todas as redes):
   LOJA (muda nativo); OTA fica compatível entre builds da MESMA version.
 - Tabs em `src/app/(app)/(tabs)/`: Início · Meus pontos · Operador (só owner/operator,
   via `hidden` + `loyalty.myRole`) · Minha Conta. Telas empilhadas em `(app)/` (station,
-  rewards, notifications, about, spending). Gate de CPF: `(onboarding)/complete-profile`.
+  rewards, notifications, about, spending, **profile**).
   SignUp é multi-step (dados pessoais com CPF mascarado → contato → senha).
+- **Gate de CPF** (`(onboarding)/complete-profile`): tem SAÍDAS DE EMERGÊNCIA —
+  sem elas quem tem o CPF em outra conta fica preso. No 409 do `setCpf` a tela
+  troca de modo e destaca "Sair e entrar com a outra conta" + suporte
+  (`Config.SUPPORT_EMAIL`). **O sair usa `<Redirect>` declarativo, não
+  `router.replace`**: como `(onboarding)` não tem gate de saída, um replace
+  logo após o `signOut` correria com o `(auth)/_layout`, que ainda veria a
+  sessão antiga, devolveria pro `(app)` e o gate de CPF traria de volta (loop).
+  O guard checa `!sessionPending` — sem isso o primeiro render chuta o usuário.
+- **Editar dados** (`screens/EditProfileScreen`, rota `(app)/profile`): nome
+  (`updateUser`), e-mail (`changeEmail` — o link de confirmação vai pro e-mail
+  ATUAL, impedindo sequestro por quem pegou a sessão aberta) e senha
+  (`changePassword` com `revokeOtherSessions`, seção só aparece se houver conta
+  `providerId: "credential"`; quem entrou com Google não tem senha). CPF é
+  somente leitura.
 - Telas em `src/screens/`; arquivos de rota são finos (`export default () => <Screen/>`).
 - Marca da plataforma: `components/PoweredByGasolinaCloud` (nuvem-gota SVG, roxo #7C3AED).
   Políticas (Termos/Regulamento/Privacidade) vêm dos `.md` compartilhados em
@@ -453,6 +486,17 @@ marca no bundle JS (bundle é compartilhado via OTA entre todas as redes):
   (FadeIn*) podem travar em opacity 0 sob automação de screenshots — glitch web-only.
   E cuidado com `flex: 1` em slides de pager: o shorthand embute `flexBasis: 0` +
   `flexShrink: 1` e os slides ENCOLHEM pra caber (sem overflow, nada rola).
+- **Space Grotesk CORTA o último glifo** ("Grupo Martinez" → "Grupo Martine",
+  "Entrar" → "Entrai"), em iOS e Android: a fonte reporta um avanço menor que a
+  tinta que desenha e o RN mede a caixa curta demais. Mitigado com
+  `paddingRight: 2` no `$baseStyle` do `Text` (cobre o app todo, inclusive
+  botões — o `Button` renderiza através do mesmo `Text`). **Se um texto parece
+  imune, desconfie:** estilo com `fontWeight` cru faz o iOS resolver outra face
+  e cair na fonte do SISTEMA — não é referência de "correto", é a fonte errada.
+  Prefira o prop `weight` do `Text` a `fontWeight` no estilo.
+- **Presets do `Button`:** `ghost` usa `colors.tint` (o texto fica sobre a
+  superfície). Era `neutral100` — branco no light e preto no dark, invisível
+  nos dois. Não volte a usar neutral100 em preset de fundo transparente.
 - **`TextField` LeftAccessory/RightAccessory:** o `style` passado é de CONTAINER
   (height 40 + center) — envolva o ícone num `<View style={style}>`; aplicado direto
   no glifo, o ícone desalinha pro topo.
