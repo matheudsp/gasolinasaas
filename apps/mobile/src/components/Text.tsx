@@ -96,6 +96,15 @@ const $baseStyle: ThemedStyle<TextStyle> = (theme) => ({
   ...$sizeStyles.sm,
   ...$fontWeightStyles.normal,
   color: theme.colors.text,
+  // A Space Grotesk reporta um avanço menor que a tinta que desenha, então o
+  // RN mede a caixa curta demais e o ÚLTIMO glifo é cortado ("Martinez" vira
+  // "Martine"). Acontece em iOS e Android. Estes 2px dão folga pra tinta
+  // sangrar sem alterar o layout de forma perceptível.
+  //
+  // Por que só alguns textos pareciam certos: quem tem `fontWeight` no estilo
+  // faz o iOS resolver outra face e cair na fonte do SISTEMA — some o corte,
+  // mas o texto deixa de usar a fonte do app. Não é referência de "correto".
+  paddingRight: 2,
 })
 
 const $presets: Record<Presets, ThemedStyleArray<TextStyle>> = {
