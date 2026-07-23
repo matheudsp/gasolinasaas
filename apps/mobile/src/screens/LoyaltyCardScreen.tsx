@@ -14,6 +14,7 @@ import QRCode from "react-native-qrcode-svg"
 import { MaterialDesignIcons } from "@react-native-vector-icons/material-design-icons"
 
 import { Header } from "@/components/Header"
+import { LoyaltyProgress } from "@/components/LoyaltyProgress"
 import { Screen } from "@/components/Screen"
 import { Text } from "@/components/Text"
 import { markLoyaltyIntroSeen, useHasSeenLoyaltyIntro } from "@/lib/loyaltyOnboarding"
@@ -99,6 +100,8 @@ export const LoyaltyCardScreen: FC<LoyaltyCardScreenProps> = function LoyaltyCar
           <Text size="xxs" weight="bold" style={themed($balanceLabel)} text="SALDO DE PONTOS" />
           <Text style={themed($balanceValue)} text={`${balanceQuery.data?.balance ?? 0}`} />
         </View>
+
+        <LoyaltyProgress />
 
         {nearestExpiry && (
           <View style={themed($expiryWarning)}>

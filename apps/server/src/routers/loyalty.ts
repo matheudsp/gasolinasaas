@@ -213,6 +213,72 @@ export const loyaltyRouter = {
   }),
 
   /**
+   * "Onde estou no programa" (cliente) — pro hub/gamificação. Devolve o saldo,
+   * a recompensa mais barata alcançável (barra de progresso) e o percentil do
+   * cliente entre quem tem pontos na rede. NÃO expõe dados de terceiros —
+   * decisão de privacidade (a base é de motoristas, não de membros).
+   */
+  myStanding: protectedProcedure.handler(async ({ context }) => {
+    if (!context.tenant) {
+      throw new ORPCError("BAD_REQUEST", { message: "Tenant é obrigatório" });
+    }
+    const tenantId = context.tenant.id;
+    const userId = context.session.user.id;
+
+    // Saldo com expire pass — bate com o resto do app.
+    const snapshot = await settleExpiredPoints(context.db, tenantId, userId);
+    const balance = snapshot.balance;
+
+    // Saldo de TODOS os clientes da rede (SUM(points) por usuário), pra situar
+    // o percentil. Não materializa expiração dos outros — aproximação boa o
+    // suficiente pra um "você está no top X%".
+    const balances = await context.db
+      .select({
+        userId: loyaltyTransaction.userId,
+        points: sql<number>`coalesce(sum(${loyaltyTransaction.points}), 0)::int`,
+      })
+      .from(loyaltyTransaction)
+      .where(eq(loyaltyTransaction.tenantId, tenantId))
+      .groupBy(loyaltyTransaction.userId);
+
+    const withPoints = balances.filter((b) => b.points > 0);
+    const total = withPoints.length;
+    // Quantos têm MENOS que eu → quão à frente estou. topPercent menor = melhor.
+    const below = withPoints.filter((b) => b.points < balance).length;
+    const topPercent =
+      total > 0 && balance > 0
+        ? Math.max(1, Math.round(100 - (below / total) * 100))
+        : null;
+
+    // Recompensa mais barata alcançável (ativa, com estoque) — alvo da barra.
+    const [cheapest] = await context.db
+      .select({ name: reward.name, costPoints: reward.costPoints })
+      .from(reward)
+      .where(
+        and(
+          eq(reward.tenantId, tenantId),
+          eq(reward.isActive, true),
+          sql`(${reward.stock} is null or ${reward.stock} > 0)`,
+        ),
+      )
+      .orderBy(reward.costPoints)
+      .limit(1);
+
+    return {
+      balance,
+      topPercent,
+      totalCustomers: total,
+      nextReward: cheapest
+        ? {
+            name: cheapest.name,
+            costPoints: cheapest.costPoints,
+            missing: Math.max(0, cheapest.costPoints - balance),
+          }
+        : null,
+    };
+  }),
+
+  /**
    * Campanha de pontos ativa AGORA (cliente) — para o banner do app. Null
    * quando não há. O `endsAt` alimenta a contagem regressiva na UI.
    */
