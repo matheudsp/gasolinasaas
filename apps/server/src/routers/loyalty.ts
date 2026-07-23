@@ -1,10 +1,12 @@
 import { ORPCError } from "@orpc/server";
-import { and, desc, eq, gt, isNotNull, ne, sql } from "drizzle-orm";
+import { and, desc, eq, gt, gte, isNotNull, lte, ne, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { z } from "zod";
 
+import type { Db } from "../db";
 import { user } from "../db/schema/auth";
 import {
+  loyaltyCampaign,
   loyaltyScanCode,
   loyaltyTransaction,
   reward,
@@ -31,6 +33,37 @@ const REDEMPTION_TTL_MS = 300_000;
 // Janela em que o frentista pode estornar um crédito que ELE MESMO fez
 // (corrigir o próprio erro de digitação). Owner e admin estornam sempre.
 const REVERSAL_WINDOW_MS = 30 * 60_000;
+
+// Aceita o client raiz ou uma transação drizzle (ambos têm .select).
+type DbLike = Pick<Db, "select">;
+
+/**
+ * Multiplicador da campanha ativa do tenant na data (1 = sem campanha).
+ * Ativa = isActive e `at` dentro de [startsAt, endsAt]. Havendo mais de uma
+ * (config incomum), pega a de maior multiplicador — favorece o cliente.
+ */
+async function getActiveCampaignMultiplier(
+  db: DbLike,
+  tenantId: string,
+  at: Date,
+): Promise<number> {
+  const [row] = await db
+    .select({ multiplier: loyaltyCampaign.multiplier })
+    .from(loyaltyCampaign)
+    .where(
+      and(
+        eq(loyaltyCampaign.tenantId, tenantId),
+        eq(loyaltyCampaign.isActive, true),
+        lte(loyaltyCampaign.startsAt, at),
+        gte(loyaltyCampaign.endsAt, at),
+      ),
+    )
+    .orderBy(desc(loyaltyCampaign.multiplier))
+    .limit(1);
+
+  const value = row ? Number(row.multiplier) : 1;
+  return value > 0 ? value : 1;
+}
 
 const formatCentsBRL = (cents: number) =>
   (cents / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -180,6 +213,43 @@ export const loyaltyRouter = {
   }),
 
   /**
+   * Campanha de pontos ativa AGORA (cliente) — para o banner do app. Null
+   * quando não há. O `endsAt` alimenta a contagem regressiva na UI.
+   */
+  activeCampaign: protectedProcedure.handler(async ({ context }) => {
+    if (!context.tenant) {
+      return null;
+    }
+    const now = new Date();
+    const [row] = await context.db
+      .select({
+        name: loyaltyCampaign.name,
+        multiplier: loyaltyCampaign.multiplier,
+        endsAt: loyaltyCampaign.endsAt,
+      })
+      .from(loyaltyCampaign)
+      .where(
+        and(
+          eq(loyaltyCampaign.tenantId, context.tenant.id),
+          eq(loyaltyCampaign.isActive, true),
+          lte(loyaltyCampaign.startsAt, now),
+          gte(loyaltyCampaign.endsAt, now),
+        ),
+      )
+      .orderBy(desc(loyaltyCampaign.multiplier))
+      .limit(1);
+
+    if (!row) {
+      return null;
+    }
+    return {
+      name: row.name,
+      multiplier: Number(row.multiplier),
+      endsAt: row.endsAt,
+    };
+  }),
+
+  /**
    * Papel do usuário logado no tenant atual — o app mobile usa para decidir se
    * exibe a tela de operador. Cliente comum não é membro e recebe role: null.
    */
@@ -260,9 +330,15 @@ export const loyaltyRouter = {
             });
           }
 
-          // pointsPerReal vem como string (coluna numeric). O valor final de
+          // pointsPerReal vem como string (coluna numeric). Campanha ativa
+          // (ex.: pontos em dobro) multiplica em cima. O valor final de
           // pontos é sempre inteiro (arredonda para baixo).
-          const multiplier = Number(context.tenant.pointsPerReal);
+          const boost = await getActiveCampaignMultiplier(
+            tx,
+            context.tenant.id,
+            now,
+          );
+          const multiplier = Number(context.tenant.pointsPerReal) * boost;
           const earned = Math.floor((input.amountCents * multiplier) / 100);
 
           // Validade estampada no momento do crédito: mudar a config depois
@@ -603,6 +679,93 @@ export const loyaltyRouter = {
         pointsValidityDays: input.pointsValidityDays,
         maxCreditAmountCents: input.maxCreditAmountCents,
       };
+    }),
+
+  // ── Campanhas de pontos (owner) ─────────────────────────────────────────────
+
+  /** Campanhas do tenant (ativas, agendadas e passadas), mais recentes antes. */
+  listCampaigns: tenantOwnerProcedure.handler(async ({ context }) => {
+    const rows = await context.db
+      .select()
+      .from(loyaltyCampaign)
+      .where(eq(loyaltyCampaign.tenantId, context.tenant.id))
+      .orderBy(desc(loyaltyCampaign.startsAt));
+
+    return rows.map((c) => ({
+      ...c,
+      multiplier: Number(c.multiplier),
+    }));
+  }),
+
+  createCampaign: tenantOwnerProcedure
+    .input(
+      z.object({
+        name: z.string().min(1),
+        multiplier: z.number().min(1).max(10),
+        startsAt: z.string().datetime(),
+        endsAt: z.string().datetime(),
+      }),
+    )
+    .handler(async ({ context, input }) => {
+      const startsAt = new Date(input.startsAt);
+      const endsAt = new Date(input.endsAt);
+      if (endsAt <= startsAt) {
+        throw new ORPCError("BAD_REQUEST", {
+          message: "O fim da campanha precisa ser depois do início.",
+        });
+      }
+
+      const now = new Date();
+      const [created] = await context.db
+        .insert(loyaltyCampaign)
+        .values({
+          id: crypto.randomUUID(),
+          tenantId: context.tenant.id,
+          name: input.name,
+          // 2 casas — a coluna é numeric(4,2).
+          multiplier: (Math.round(input.multiplier * 100) / 100).toString(),
+          startsAt,
+          endsAt,
+          isActive: true,
+          createdAt: now,
+          updatedAt: now,
+        })
+        .returning();
+      return { ...created, multiplier: Number(created.multiplier) };
+    }),
+
+  /** Liga/desliga a campanha manualmente (sem apagar). */
+  setCampaignActive: tenantOwnerProcedure
+    .input(z.object({ id: z.string().min(1), isActive: z.boolean() }))
+    .handler(async ({ context, input }) => {
+      const [updated] = await context.db
+        .update(loyaltyCampaign)
+        .set({ isActive: input.isActive, updatedAt: new Date() })
+        .where(
+          and(
+            eq(loyaltyCampaign.id, input.id),
+            eq(loyaltyCampaign.tenantId, context.tenant.id),
+          ),
+        )
+        .returning({ id: loyaltyCampaign.id });
+      if (!updated) {
+        throw new ORPCError("NOT_FOUND", { message: "Campanha não encontrada" });
+      }
+      return { success: true };
+    }),
+
+  deleteCampaign: tenantOwnerProcedure
+    .input(z.object({ id: z.string().min(1) }))
+    .handler(async ({ context, input }) => {
+      await context.db
+        .delete(loyaltyCampaign)
+        .where(
+          and(
+            eq(loyaltyCampaign.id, input.id),
+            eq(loyaltyCampaign.tenantId, context.tenant.id),
+          ),
+        );
+      return { success: true };
     }),
 
   // ── Auditoria (owner) ───────────────────────────────────────────────────────

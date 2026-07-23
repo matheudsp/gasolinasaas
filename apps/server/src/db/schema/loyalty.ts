@@ -3,6 +3,7 @@ import {
   boolean,
   index,
   integer,
+  numeric,
   pgTable,
   text,
   timestamp,
@@ -96,6 +97,35 @@ export const loyaltyTransaction = pgTable(
     unique("loyalty_expiration_per_credit").on(t.expiredTransactionId),
     unique("loyalty_reversal_per_credit").on(t.reversedTransactionId),
   ]
+);
+
+/**
+ * Campanha temporária que MULTIPLICA os pontos ganhos no crédito (ex.: pontos
+ * em dobro no fim de semana). O `credit` procura a campanha ativa na data e
+ * aplica `multiplier` SOBRE o `pointsPerReal` do tenant.
+ *
+ * Tabela (e não campos no tenant) para permitir agendar com antecedência,
+ * manter histórico e ter mais de uma no tempo. A que vale é a única com
+ * `isActive` e `now` dentro de [startsAt, endsAt].
+ */
+export const loyaltyCampaign = pgTable(
+  "loyalty_campaign",
+  {
+    id: text("id").primaryKey(),
+    tenantId: text("tenant_id")
+      .notNull()
+      .references(() => tenant.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    // numeric pra aceitar 1.5x, 2x, 3x... Aplicado sobre pointsPerReal.
+    multiplier: numeric("multiplier", { precision: 4, scale: 2 }).notNull(),
+    startsAt: timestamp("starts_at").notNull(),
+    endsAt: timestamp("ends_at").notNull(),
+    // Interruptor manual — o dono pode desligar antes do fim sem apagar.
+    isActive: boolean("is_active").notNull().default(true),
+    createdAt: timestamp("created_at").notNull(),
+    updatedAt: timestamp("updated_at").notNull(),
+  },
+  (t) => [index("loyalty_campaign_tenant_idx").on(t.tenantId)]
 );
 
 /**

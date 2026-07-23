@@ -113,6 +113,13 @@
       "when": 1784320092372,
       "tag": "0015_vengeful_nitro",
       "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1784844412071,
+      "tag": "0016_tense_tattoo",
+      "breakpoints": true
     }
   ]
 }

@@ -7,6 +7,7 @@ import { useAuth } from "@/context/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { LoyaltyGuideDialog } from "@/components/LoyaltyGuideDialog";
+import { LoyaltyCampaigns } from "@/components/LoyaltyCampaigns";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -255,6 +256,9 @@ export function LoyaltyConfig() {
           </Button>
         </CardContent>
       </Card>
+
+      {/* ── Campanhas de pontos ─────────────────────────────────────────── */}
+      <LoyaltyCampaigns enabled={enabled} />
 
       {/* ── Adicionar operador ──────────────────────────────────────────── */}
       <Card>
