@@ -262,6 +262,14 @@ export function MyAccountScreen() {
         />
 
         <PreferenceRow
+          href="/(app)/support"
+          icon="lifebuoy"
+          label="Ajuda e suporte"
+          value="Perguntas frequentes e contato"
+          hint="Abre a central de ajuda"
+        />
+
+        <PreferenceRow
           href="/(app)/about"
           icon="information-outline"
           label="Sobre o app"
