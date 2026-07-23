@@ -1,5 +1,13 @@
 import { FC, useCallback } from "react"
-import { ActivityIndicator, Pressable, RefreshControl, ScrollView, TextStyle, View, ViewStyle } from "react-native"
+import {
+  ActivityIndicator,
+  Pressable,
+  RefreshControl,
+  ScrollView,
+  TextStyle,
+  View,
+  ViewStyle,
+} from "react-native"
 import { useFocusEffect, useRouter } from "expo-router"
 import { useQuery } from "@tanstack/react-query"
 import { MaterialDesignIcons } from "@react-native-vector-icons/material-design-icons"
@@ -42,11 +50,12 @@ export const HomeScreen: FC = function HomeScreen() {
   const { preferredFuelSlug, refresh: refreshFuel } = usePreferredFuel()
   const { sortBy, refresh: refreshSort } = useSortOption()
   const { location, isLoading: locationLoading } = useUserLocation()
-  const { stations, isLoading: stationsLoading, isRefetching, refetch } = useNearbyStations(
-    preferredFuelSlug,
-    location,
-    sortBy,
-  )
+  const {
+    stations,
+    isLoading: stationsLoading,
+    isRefetching,
+    refetch,
+  } = useNearbyStations(preferredFuelSlug, location, sortBy)
 
   const balanceQuery = useQuery(orpc.loyalty.myBalance.queryOptions())
   const campaignQuery = useQuery(orpc.loyalty.activeCampaign.queryOptions())
@@ -90,7 +99,9 @@ export const HomeScreen: FC = function HomeScreen() {
           <Pressable
             onPress={() => router.push("/(app)/notifications")}
             accessibilityRole="button"
-            accessibilityLabel={unreadCount > 0 ? `Notificações, ${unreadCount} não lidas` : "Notificações"}
+            accessibilityLabel={
+              unreadCount > 0 ? `Notificações, ${unreadCount} não lidas` : "Notificações"
+            }
             hitSlop={8}
             style={themed($iconButton)}
           >
@@ -118,7 +129,11 @@ export const HomeScreen: FC = function HomeScreen() {
               accessibilityLabel="Ver meus pontos"
               hitSlop={8}
             >
-              <MaterialDesignIcons name="chevron-right" size={22} color={theme.colors.palette.neutral100} />
+              <MaterialDesignIcons
+                name="chevron-right"
+                size={22}
+                color={theme.colors.palette.neutral100}
+              />
             </Pressable>
           </View>
           <Text style={themed($pointsValue)} text={`${balanceQuery.data?.balance ?? 0}`} />
@@ -143,7 +158,11 @@ export const HomeScreen: FC = function HomeScreen() {
           >
             <MaterialDesignIcons name="rocket-launch" size={22} color={theme.colors.tint} />
             <View style={$flex1}>
-              <Text weight="bold" size="sm" text={`${formatMultiplier(campaign.multiplier)} pontos até ${formatEnds(campaign.endsAt)}`} />
+              <Text
+                weight="bold"
+                size="sm"
+                text={`${formatMultiplier(campaign.multiplier)} pontos até ${formatEnds(campaign.endsAt)}`}
+              />
               <Text size="xxs" style={themed($dim)} text={campaign.name} />
             </View>
           </Pressable>
@@ -218,13 +237,17 @@ function formatEnds(d: Date | string): string {
 const $flex1: ViewStyle = { flex: 1 }
 const $centered: TextStyle = { textAlign: "center" }
 const $headingText: TextStyle = { flexShrink: 1 }
-const $rowBetween: ViewStyle = { flexDirection: "row", alignItems: "center", justifyContent: "space-between" }
+const $rowBetween: ViewStyle = {
+  flexDirection: "row",
+  alignItems: "center",
+  justifyContent: "space-between",
+}
 const $quickRow: ViewStyle = { flexDirection: "row", gap: 8 }
 const $stationList: ViewStyle = { gap: 8 }
 
 const $content: ThemedStyle<ViewStyle> = ({ spacing }) => ({
   paddingHorizontal: spacing.lg,
-  paddingBottom: spacing.xxl,
+  paddingBottom: spacing.xxxxl,
   gap: spacing.md,
 })
 
