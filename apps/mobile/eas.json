@@ -1,6 +1,7 @@
 {
   "cli": {
-    "version": ">= 3.15.1"
+    "version": ">= 3.15.1",
+    "appVersionSource": "remote"
   },
   "build": {
     "development": {
@@ -26,23 +27,34 @@
       "extends": "production",
       "distribution": "internal",
       "channel": "preview",
-      "ios": { "simulator": true },
-      "android": { "buildType": "apk" }
+      "ios": {
+        "simulator": true
+      },
+      "android": {
+        "buildType": "apk"
+      }
     },
     "preview:device": {
       "extends": "preview",
-      "ios": { "simulator": false }
+      "ios": {
+        "simulator": false
+      }
     },
     "production": {
-      "channel": "production"
+      "channel": "production",
+      "autoIncrement": true
     },
     "preview:martinez": {
       "extends": "preview",
-      "env": { "APP_VARIANT": "martinez" }
+      "env": {
+        "APP_VARIANT": "martinez"
+      }
     },
     "production:martinez": {
       "extends": "production",
-      "env": { "APP_VARIANT": "martinez" }
+      "env": {
+        "APP_VARIANT": "martinez"
+      }
     }
   },
   "submit": {

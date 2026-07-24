@@ -1,5 +1,6 @@
 import { ExpoConfig, ConfigContext } from "@expo/config"
 import { existsSync } from "node:fs"
+import packageJson from "./package.json"
 
 /**
  * Use tsx/cjs here so we can use TypeScript for our Config Plugins
@@ -50,9 +51,7 @@ const APP_VARIANT = process.env.APP_VARIANT?.trim() || null
 const dedicated = APP_VARIANT ? DEDICATED_APPS[APP_VARIANT] : null
 
 if (APP_VARIANT && !dedicated) {
-  throw new Error(
-    `APP_VARIANT="${APP_VARIANT}" não está registrado em tenants/dedicated.ts.`,
-  )
+  throw new Error(`APP_VARIANT="${APP_VARIANT}" não está registrado em tenants/dedicated.ts.`)
 }
 
 /**
@@ -71,12 +70,10 @@ const identity = dedicated
       bundleId: dedicated.bundleId,
       scheme: dedicated.slug,
       icon: dedicated.icon,
-      adaptiveForegroundImage:
-        dedicated.adaptiveForegroundImage ?? dedicated.icon,
+      adaptiveForegroundImage: dedicated.adaptiveForegroundImage ?? dedicated.icon,
       adaptiveBackgroundColor: dedicated.adaptiveBackgroundColor,
       splashImage: dedicated.splashImage ?? dedicated.icon,
-      splashBackgroundColor:
-        dedicated.splashBackgroundColor ?? dedicated.adaptiveBackgroundColor,
+      splashBackgroundColor: dedicated.splashBackgroundColor ?? dedicated.adaptiveBackgroundColor,
       notificationIcon: dedicated.notificationIcon ?? UMBRELLA.notificationIcon,
       googleServicesFile: dedicated.googleServicesFile,
     }
@@ -136,6 +133,7 @@ module.exports = ({ config }: ConfigContext): Partial<ExpoConfig> => {
       ...config.updates,
       url: `https://u.expo.dev/${EAS_PROJECT_ID}`,
     },
+    version: packageJson.version,
     // runtimeVersion = a `version` do app (app.json, hoje "1.0.0"). Estável
     // por construção: Mac e EAS leem a mesma string, sem recomputar hash. A
     // policy "fingerprint" era recalculada em cada ambiente e divergia por
