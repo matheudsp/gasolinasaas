@@ -1,0 +1,23 @@
+# Gasolina Cloud
+User-agent: *
+Allow: /$
+Allow: /politicas
+Allow: /excluir-conta
+
+# Áreas privadas do painel — não indexar (conteúdo atrás de login)
+Disallow: /login
+Disallow: /dashboard
+Disallow: /admin
+Disallow: /fidelidade
+Disallow: /marca
+Disallow: /profile
+Disallow: /minha-assinatura
+Disallow: /assinaturas
+Disallow: /stations
+Disallow: /push-notifications
+Disallow: /forgot-password
+Disallow: /reset-password
+Disallow: /on-password-reset
+Disallow: /verify-email
+
+Sitemap: https://gasolina.cloud/sitemap.xml

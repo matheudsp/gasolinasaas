@@ -132,3 +132,33 @@
     @apply font-sans;
   }
 }
+/* ── Landing page (rota /) — animações da marca Gasolina Cloud ─────────── */
+@keyframes gc-marquee {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+@keyframes gc-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-12px);
+  }
+}
+.gc-marquee {
+  animation: gc-marquee 32s linear infinite;
+}
+.gc-float {
+  animation: gc-float 6s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .gc-marquee,
+  .gc-float {
+    animation: none;
+  }
+}

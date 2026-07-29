@@ -3,7 +3,7 @@ import { TenantProtectedRoute } from "@/components/TenantProtectedRoute";
 import { AdminProtectedRoute } from "./components/AdminProtectedRoute";
 import { Layout } from "@/components/Layout";
 import Login from "@/pages/Login";
-import Index from "@/pages/Index";
+import Landing from "@/pages/Landing";
 import Dashboard from "@/pages/Dashboard";
 import Profile from "@/pages/Profile";
 import StationDetail from "./pages/StationDetail";
@@ -24,7 +24,7 @@ export default function App() {
   return (
     <Routes>
       <Route path="/login" element={<Login />} />
-      <Route path="/" element={<Index />} />
+      <Route path="/" element={<Landing />} />
       <Route path="/forgot-password" element={<ForgotPassword />} />
       <Route path="/reset-password" element={<ResetPassword />} />
       <Route path="/on-password-reset" element={<OnPasswordReset />} />
