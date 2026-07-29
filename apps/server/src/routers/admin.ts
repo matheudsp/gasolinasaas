@@ -249,6 +249,44 @@ export const adminRouter = {
           .limit(100);
       }),
 
+    getById: adminProcedure
+      .input(z.object({ userId: z.string() }))
+      .handler(async ({ context, input }) => {
+        const [u] = await context.db
+          .select({
+            id: user.id,
+            name: user.name,
+            email: user.email,
+            emailVerified: user.emailVerified,
+            cpf: user.cpf,
+            role: user.role,
+            banned: user.banned,
+            banReason: user.banReason,
+            banExpires: user.banExpires,
+            createdAt: user.createdAt,
+          })
+          .from(user)
+          .where(eq(user.id, input.userId));
+
+        if (!u) {
+          throw new ORPCError("NOT_FOUND", { message: "Usuário não encontrado" });
+        }
+
+        const memberships = await context.db
+          .select({
+            tenantId: tenant.id,
+            tenantName: tenant.name,
+            tenantSlug: tenant.slug,
+            role: tenantMembership.role,
+            createdAt: tenantMembership.createdAt,
+          })
+          .from(tenantMembership)
+          .innerJoin(tenant, eq(tenantMembership.tenantId, tenant.id))
+          .where(eq(tenantMembership.userId, input.userId));
+
+        return { ...u, memberships };
+      }),
+
     assignToTenant: adminProcedure
       .input(
         z.object({

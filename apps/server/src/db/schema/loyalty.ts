@@ -90,12 +90,23 @@ export const loyaltyTransaction = pgTable(
       (): AnyPgColumn => loyaltyTransaction.id,
       { onDelete: "cascade" }
     ),
+    // Preenchido quando a transação é a DEVOLUÇÃO de pontos de um resgate
+    // estornado (points > 0) — aponta para o resgate de origem. Um resgate já
+    // debitou pontos (linha negativa com redemptionId); reverter devolve os
+    // pontos como um lote novo (points > 0 abre lote em computeCreditLots). O
+    // unique abaixo garante no máximo uma devolução por resgate (portão de uso
+    // único, mesmo truque da expiração/estorno).
+    reversedRedemptionId: text("reversed_redemption_id").references(
+      (): AnyPgColumn => rewardRedemption.id,
+      { onDelete: "set null" }
+    ),
     createdAt: timestamp("created_at").notNull(),
   },
   (t) => [
     index("loyalty_transaction_user_idx").on(t.tenantId, t.userId),
     unique("loyalty_expiration_per_credit").on(t.expiredTransactionId),
     unique("loyalty_reversal_per_credit").on(t.reversedTransactionId),
+    unique("loyalty_reversal_per_redemption").on(t.reversedRedemptionId),
   ]
 );
 
@@ -151,7 +162,7 @@ export const reward = pgTable("reward", {
 /**
  * Pedido de resgate. O débito só acontece na entrega (confirmRedemption pelo
  * operador). code é o QR de uso único que o cliente exibe no caixa.
- * status: "pending" | "fulfilled" | "expired".
+ * status: "pending" | "fulfilled" | "expired" | "reversed".
  */
 export const rewardRedemption = pgTable(
   "reward_redemption",
@@ -175,6 +186,11 @@ export const rewardRedemption = pgTable(
     }),
     expiresAt: timestamp("expires_at").notNull(),
     fulfilledAt: timestamp("fulfilled_at"),
+    // Estorno de resgate concluído (owner): quando e por quê o resgate foi
+    // revertido (ex.: item em falta no estoque físico). Os pontos voltam via
+    // loyaltyTransaction.reversedRedemptionId.
+    reversedAt: timestamp("reversed_at"),
+    reversalReason: text("reversal_reason"),
     createdAt: timestamp("created_at").notNull(),
     updatedAt: timestamp("updated_at").notNull(),
   },

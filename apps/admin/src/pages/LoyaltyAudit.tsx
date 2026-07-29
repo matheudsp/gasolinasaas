@@ -3,8 +3,11 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
   Coins,
+  Gift,
   History,
   Percent,
+  Receipt,
+  RotateCcw,
   Search,
   Trophy,
   Undo2,
@@ -34,8 +37,37 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Spinner } from "@/components/ui/spinner";
+import { Badge } from "@/components/ui/badge";
+import { Textarea } from "@/components/ui/textarea";
 
 const RANK_LIMIT = 20;
+
+/** Rótulo + estilo de cada tipo de linha do extrato do cliente. */
+const TX_TYPE_META: Record<
+  "credit" | "redemption" | "expiration" | "reversal" | "redemption_reversal",
+  { label: string; className: string }
+> = {
+  credit: {
+    label: "Crédito",
+    className: "bg-emerald-100 text-emerald-700 hover:bg-emerald-100",
+  },
+  redemption: {
+    label: "Resgate",
+    className: "bg-blue-100 text-blue-700 hover:bg-blue-100",
+  },
+  expiration: {
+    label: "Expiração",
+    className: "bg-muted text-muted-foreground hover:bg-muted",
+  },
+  reversal: {
+    label: "Estorno de crédito",
+    className: "bg-amber-100 text-amber-700 hover:bg-amber-100",
+  },
+  redemption_reversal: {
+    label: "Devolução de resgate",
+    className: "bg-violet-100 text-violet-700 hover:bg-violet-100",
+  },
+};
 
 function fmtDateTime(d: Date | string | null) {
   if (!d) return "—";
@@ -60,6 +92,11 @@ function fmtCpf(raw: string | null) {
   const parts = [d.slice(0, 3), d.slice(3, 6), d.slice(6, 9)].filter(Boolean);
   const base = parts.join(".");
   return d.length > 9 ? `${base}-${d.slice(9)}` : base;
+}
+
+/** Caminho relativo (/images/rewards/...) vira URL absoluta via VITE_API_URL. */
+function resolveImageUrl(url: string) {
+  return url.startsWith("http") ? url : `${import.meta.env.VITE_API_URL}${url}`;
 }
 
 function Stat({
@@ -126,6 +163,25 @@ export function LoyaltyAudit() {
     name: string | null;
   } | null>(null);
 
+  // Cliente selecionado no ranking → extrato completo + estorno de créditos.
+  const [selectedCustomer, setSelectedCustomer] = useState<{
+    userId: string;
+    name: string | null;
+  } | null>(null);
+
+  const customerTxOptions = orpc.loyalty.customerTransactions.queryOptions({
+    input: { userId: selectedCustomer?.userId ?? "", limit: 100 },
+    enabled: !!selectedCustomer,
+  });
+  const { data: customerDetail, isLoading: loadingCustomerDetail } =
+    useQuery(customerTxOptions);
+
+  // Resgate selecionado no histórico → detalhes + estorno (item em falta).
+  const [selectedRedemption, setSelectedRedemption] = useState<
+    (typeof redemptions)[number] | null
+  >(null);
+  const [reversalReason, setReversalReason] = useState("");
+
   const operatorTxOptions = orpc.loyalty.operatorTransactions.queryOptions({
     input: { operatorUserId: selectedOperator?.userId ?? "", limit: 100 },
     enabled: !!selectedOperator,
@@ -150,6 +206,7 @@ export function LoyaltyAudit() {
       );
       setReverseTarget(null);
       qc.invalidateQueries({ queryKey: operatorTxOptions.queryKey });
+      qc.invalidateQueries({ queryKey: customerTxOptions.queryKey });
       qc.invalidateQueries(orpc.loyalty.auditTotals.queryOptions());
       qc.invalidateQueries(
         orpc.loyalty.topOperators.queryOptions({
@@ -160,6 +217,28 @@ export function LoyaltyAudit() {
         orpc.loyalty.topCustomers.queryOptions({
           input: { limit: RANK_LIMIT },
         }),
+      );
+    },
+    onError: (err: Error) => toast.error(`Erro: ${err.message}`),
+  });
+
+  // Estorno de resgate concluído (ex.: item em falta) — devolve pontos e repõe
+  // estoque. Fecha o detalhe e recarrega histórico, saldos e rankings.
+  const reverseRedemption = useMutation({
+    ...orpc.loyalty.reverseRedemption.mutationOptions(),
+    onSuccess: (data) => {
+      toast.success(
+        `Resgate estornado — ${data.restoredPoints.toLocaleString("pt-BR")} pontos devolvidos${
+          data.customerName ? ` a ${data.customerName}` : ""
+        }.`,
+      );
+      setSelectedRedemption(null);
+      setReversalReason("");
+      qc.invalidateQueries(orpc.loyalty.listRedemptions.queryOptions({ input: { limit: 50 } }));
+      qc.invalidateQueries({ queryKey: customerTxOptions.queryKey });
+      qc.invalidateQueries(orpc.loyalty.auditTotals.queryOptions());
+      qc.invalidateQueries(
+        orpc.loyalty.topCustomers.queryOptions({ input: { limit: RANK_LIMIT } }),
       );
     },
     onError: (err: Error) => toast.error(`Erro: ${err.message}`),
@@ -309,6 +388,9 @@ export function LoyaltyAudit() {
             <Trophy className="h-4 w-4" />
             Clientes com mais pontos
           </CardTitle>
+          <p className="text-xs text-muted-foreground">
+            Clique em um cliente para ver o extrato e tomar ações.
+          </p>
         </CardHeader>
         <CardContent>
           {loadingCustomers ? (
@@ -332,7 +414,13 @@ export function LoyaltyAudit() {
               </TableHeader>
               <TableBody>
                 {customers.map((c, i) => (
-                  <TableRow key={c.userId}>
+                  <TableRow
+                    key={c.userId}
+                    className="cursor-pointer hover:bg-muted/50"
+                    onClick={() =>
+                      setSelectedCustomer({ userId: c.userId, name: c.name })
+                    }
+                  >
                     <TableCell className="text-muted-foreground tabular-nums">
                       {i + 1}
                     </TableCell>
@@ -429,6 +517,10 @@ export function LoyaltyAudit() {
             <History className="h-4 w-4" />
             Histórico de resgates
           </CardTitle>
+          <p className="text-xs text-muted-foreground">
+            Clique em um resgate para ver detalhes, auditar ou estornar (item
+            em falta).
+          </p>
         </CardHeader>
         <CardContent>
           {loadingRedemptions ? (
@@ -449,11 +541,16 @@ export function LoyaltyAudit() {
                     <TableHead>Recompensa</TableHead>
                     <TableHead className="text-right">Pontos</TableHead>
                     <TableHead>Operador</TableHead>
+                    <TableHead>Status</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {redemptions.map((rd) => (
-                    <TableRow key={rd.id}>
+                    <TableRow
+                      key={rd.id}
+                      className="cursor-pointer hover:bg-muted/50"
+                      onClick={() => setSelectedRedemption(rd)}
+                    >
                       <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
                         {fmtDateTime(rd.fulfilledAt)}
                       </TableCell>
@@ -479,6 +576,17 @@ export function LoyaltyAudit() {
                           </>
                         ) : (
                           <span className="text-muted-foreground">—</span>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        {rd.status === "reversed" ? (
+                          <Badge className="bg-amber-100 text-amber-700 hover:bg-amber-100">
+                            Estornado
+                          </Badge>
+                        ) : (
+                          <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100">
+                            Entregue
+                          </Badge>
                         )}
                       </TableCell>
                     </TableRow>
@@ -613,6 +721,264 @@ export function LoyaltyAudit() {
               Estornar
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Detalhe do cliente: extrato + estorno de créditos ───────────────── */}
+      <Dialog
+        open={selectedCustomer !== null}
+        onOpenChange={(open) => !open && setSelectedCustomer(null)}
+      >
+        <DialogContent className="max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>{selectedCustomer?.name ?? "Cliente"}</DialogTitle>
+            <DialogDescription>
+              {customerDetail?.customer?.email ?? ""}
+              {customerDetail?.customer?.cpf
+                ? ` · ${fmtCpf(customerDetail.customer.cpf)}`
+                : ""}
+            </DialogDescription>
+          </DialogHeader>
+
+          {loadingCustomerDetail || !customerDetail ? (
+            <div className="flex justify-center py-8">
+              <Spinner className="size-6" />
+            </div>
+          ) : (
+            <>
+              <div className="grid grid-cols-3 gap-3">
+                <div className="rounded-md border p-3">
+                  <p className="text-lg font-bold tabular-nums">
+                    {customerDetail.balance.toLocaleString("pt-BR")}
+                  </p>
+                  <p className="text-xs text-muted-foreground">Saldo atual</p>
+                </div>
+                <div className="rounded-md border p-3">
+                  <p className="text-lg font-bold tabular-nums">
+                    {fmtBRL(customerDetail.spentCents)}
+                  </p>
+                  <p className="text-xs text-muted-foreground">Total gasto</p>
+                </div>
+                <div className="rounded-md border p-3">
+                  <p className="text-lg font-bold tabular-nums">
+                    {customerDetail.credits.toLocaleString("pt-BR")}
+                  </p>
+                  <p className="text-xs text-muted-foreground">Abastecimentos</p>
+                </div>
+              </div>
+
+              {customerDetail.transactions.length === 0 ? (
+                <p className="py-8 text-center text-sm text-muted-foreground">
+                  Nenhuma transação.
+                </p>
+              ) : (
+                <div className="max-h-[50vh] overflow-y-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Data</TableHead>
+                        <TableHead>Tipo</TableHead>
+                        <TableHead>Detalhe</TableHead>
+                        <TableHead className="text-right">Valor</TableHead>
+                        <TableHead className="text-right">Pontos</TableHead>
+                        <TableHead className="text-right">Ações</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {customerDetail.transactions.map((tx) => {
+                        const meta = TX_TYPE_META[tx.type];
+                        return (
+                          <TableRow key={tx.id}>
+                            <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
+                              {fmtDateTime(tx.createdAt)}
+                            </TableCell>
+                            <TableCell>
+                              <Badge className={meta.className}>
+                                {meta.label}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="text-sm text-muted-foreground">
+                              {tx.type === "redemption"
+                                ? (tx.rewardName ?? "Resgate")
+                                : (tx.operatorName ?? "—")}
+                            </TableCell>
+                            <TableCell className="text-right tabular-nums whitespace-nowrap">
+                              {fmtBRL(tx.amountCents)}
+                            </TableCell>
+                            <TableCell className="text-right font-semibold tabular-nums">
+                              {tx.points > 0 ? "+" : ""}
+                              {tx.points.toLocaleString("pt-BR")}
+                            </TableCell>
+                            <TableCell className="text-right">
+                              {tx.type === "credit" &&
+                              tx.amountCents !== null &&
+                              tx.amountCents > 0 ? (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="gap-1.5 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                                  onClick={() =>
+                                    setReverseTarget({
+                                      id: tx.id,
+                                      customerName: selectedCustomer?.name ?? null,
+                                      points: tx.points,
+                                      amountCents: tx.amountCents,
+                                    })
+                                  }
+                                >
+                                  <Undo2 className="h-3.5 w-3.5" />
+                                  Estornar
+                                </Button>
+                              ) : null}
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Detalhe do resgate: auditoria + estorno (item em falta) ─────────── */}
+      <Dialog
+        open={selectedRedemption !== null}
+        onOpenChange={(open) => {
+          if (!open) {
+            setSelectedRedemption(null);
+            setReversalReason("");
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Receipt className="h-4 w-4" />
+              Detalhes do resgate
+            </DialogTitle>
+          </DialogHeader>
+
+          {selectedRedemption && (
+            <div className="space-y-4">
+              <div className="flex items-center gap-3">
+                {selectedRedemption.rewardImageUrl ? (
+                  <img
+                    src={resolveImageUrl(selectedRedemption.rewardImageUrl)}
+                    alt={selectedRedemption.rewardName}
+                    className="h-14 w-14 rounded-md border object-cover"
+                  />
+                ) : (
+                  <div className="flex h-14 w-14 items-center justify-center rounded-md border bg-muted text-muted-foreground">
+                    <Gift className="h-6 w-6" />
+                  </div>
+                )}
+                <div className="flex-1">
+                  <p className="font-semibold">{selectedRedemption.rewardName}</p>
+                  <p className="text-sm text-muted-foreground tabular-nums">
+                    −{selectedRedemption.costPoints.toLocaleString("pt-BR")} pontos
+                  </p>
+                </div>
+                {selectedRedemption.status === "reversed" ? (
+                  <Badge className="bg-amber-100 text-amber-700 hover:bg-amber-100">
+                    Estornado
+                  </Badge>
+                ) : (
+                  <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100">
+                    Entregue
+                  </Badge>
+                )}
+              </div>
+
+              <dl className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
+                <div>
+                  <dt className="text-xs text-muted-foreground">Cliente</dt>
+                  <dd className="font-medium">
+                    {selectedRedemption.customerName ?? "—"}
+                  </dd>
+                  <dd className="text-xs text-muted-foreground">
+                    {selectedRedemption.customerEmail}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-xs text-muted-foreground">CPF</dt>
+                  <dd className="tabular-nums">
+                    {fmtCpf(selectedRedemption.customerCpf)}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-xs text-muted-foreground">
+                    Operador que entregou
+                  </dt>
+                  <dd className="font-medium">
+                    {selectedRedemption.operatorName ?? "—"}
+                  </dd>
+                  <dd className="text-xs text-muted-foreground">
+                    {selectedRedemption.operatorEmail ?? ""}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-xs text-muted-foreground">Entregue em</dt>
+                  <dd>{fmtDateTime(selectedRedemption.fulfilledAt)}</dd>
+                </div>
+                <div className="col-span-2">
+                  <dt className="text-xs text-muted-foreground">
+                    Código do resgate
+                  </dt>
+                  <dd className="font-mono text-xs">{selectedRedemption.code}</dd>
+                </div>
+              </dl>
+
+              {selectedRedemption.status === "reversed" ? (
+                <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm">
+                  <p className="font-medium text-amber-800">
+                    Estornado em {fmtDateTime(selectedRedemption.reversedAt)}
+                  </p>
+                  <p className="text-amber-700">
+                    Motivo: {selectedRedemption.reversalReason || "não informado"}.
+                    Os pontos foram devolvidos ao cliente e o estoque reposto.
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-2 border-t pt-4">
+                  <p className="text-sm font-medium">Estornar resgate</p>
+                  <p className="text-xs text-muted-foreground">
+                    Use quando o item estava em falta ou houve erro na entrega.
+                    Devolve os pontos ao cliente e repõe o estoque. Essa ação não
+                    pode ser desfeita.
+                  </p>
+                  <Textarea
+                    placeholder="Motivo (ex.: item em falta no estoque físico)"
+                    value={reversalReason}
+                    onChange={(e) => setReversalReason(e.target.value)}
+                    rows={2}
+                  />
+                  <div className="flex justify-end">
+                    <Button
+                      variant="destructive"
+                      className="gap-2"
+                      disabled={reverseRedemption.isPending}
+                      onClick={() =>
+                        reverseRedemption.mutate({
+                          redemptionId: selectedRedemption.id,
+                          reason: reversalReason.trim() || undefined,
+                        })
+                      }
+                    >
+                      {reverseRedemption.isPending ? (
+                        <Spinner className="size-4" />
+                      ) : (
+                        <RotateCcw className="h-4 w-4" />
+                      )}
+                      Estornar resgate
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
         </DialogContent>
       </Dialog>
     </div>

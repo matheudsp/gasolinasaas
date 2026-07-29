@@ -8,6 +8,7 @@ import {
   XCircle,
   AlertTriangle,
   Clock,
+  RefreshCw,
 } from "lucide-react";
 import { orpc } from "@/lib/orpc";
 import { useAuth } from "@/context/AuthContext";
@@ -33,6 +34,13 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Spinner } from "@/components/ui/spinner";
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
@@ -67,6 +75,24 @@ function destinationLabel(dataJson: string | null): string {
     return "—";
   } catch {
     return "—";
+  }
+}
+
+/** Reconstrói o destino (kind + posto) do dataJson para reenviar no formulário. */
+function parseDestination(dataJson: string | null): {
+  kind: NotificationKind;
+  stationId: string;
+} {
+  if (!dataJson) return { kind: "generic", stationId: "" };
+  try {
+    const d = JSON.parse(dataJson) as { type?: string; stationId?: string };
+    if (d.type === "promotion") {
+      return { kind: "promotion", stationId: d.stationId ?? "" };
+    }
+    if (d.type === "points") return { kind: "points", stationId: "" };
+    return { kind: "generic", stationId: "" };
+  } catch {
+    return { kind: "generic", stationId: "" };
   }
 }
 
@@ -127,6 +153,24 @@ export default function PushNotificationsPage() {
         enabled,
       }),
     );
+
+  // Envio selecionado no histórico → detalhes + reenviar.
+  const [selected, setSelected] = useState<
+    (typeof notifications)[number] | null
+  >(null);
+
+  // Reenviar = pré-preenche o formulário com o conteúdo do envio e deixa o
+  // owner revisar antes de disparar (evita re-blast acidental para todos).
+  const handleResend = (n: (typeof notifications)[number]) => {
+    const dest = parseDestination(n.dataJson);
+    setTitle(n.title);
+    setBody(n.body);
+    setKind(dest.kind);
+    setStationId(dest.stationId);
+    setSelected(null);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+    toast.info("Conteúdo carregado no formulário. Revise e envie novamente.");
+  };
 
   // Send mutation
   const sendMutation = useMutation({
@@ -324,6 +368,9 @@ export default function PushNotificationsPage() {
             <Clock className="h-4 w-4" />
             Histórico de Envios
           </CardTitle>
+          <p className="text-xs text-muted-foreground">
+            Clique em um envio para ver os detalhes e reenviar.
+          </p>
         </CardHeader>
         <CardContent>
           {notificationsLoading ? (
@@ -351,7 +398,11 @@ export default function PushNotificationsPage() {
                 {notifications.map((n) => {
                   const s = statusMap[n.status] ?? statusMap.sent;
                   return (
-                    <TableRow key={n.id}>
+                    <TableRow
+                      key={n.id}
+                      className="cursor-pointer hover:bg-muted/50"
+                      onClick={() => setSelected(n)}
+                    >
                       <TableCell className="font-medium max-w-[160px] truncate">
                         {n.title}
                       </TableCell>
@@ -390,6 +441,85 @@ export default function PushNotificationsPage() {
           )}
         </CardContent>
       </Card>
+
+      {/* ── Detalhe de um envio + reenviar ──────────────────────────────── */}
+      <Dialog
+        open={selected !== null}
+        onOpenChange={(open) => !open && setSelected(null)}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Detalhes do envio</DialogTitle>
+            <DialogDescription>
+              {selected ? fmtDateTime(selected.sentAt ?? selected.createdAt) : ""}
+            </DialogDescription>
+          </DialogHeader>
+
+          {selected &&
+            (() => {
+              const s = statusMap[selected.status] ?? statusMap.sent;
+              const dest = parseDestination(selected.dataJson);
+              const stationName =
+                dest.kind === "promotion"
+                  ? (stations.find((st) => st.id === dest.stationId)?.name ??
+                    "posto removido")
+                  : null;
+              return (
+                <div className="space-y-4">
+                  <div className="rounded-md border bg-muted/30 p-4">
+                    <p className="font-semibold">{selected.title}</p>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      {selected.body}
+                    </p>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4 text-sm">
+                    <div>
+                      <p className="text-xs text-muted-foreground">Status</p>
+                      <Badge variant={s.variant} className="mt-1 gap-1 text-xs">
+                        {s.icon}
+                        {s.label}
+                      </Badge>
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground">
+                        Ao tocar, abre
+                      </p>
+                      <p className="mt-1 font-medium">
+                        {kindLabels[dest.kind]}
+                        {stationName ? ` — ${stationName}` : ""}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground">
+                        Dispositivos alcançados
+                      </p>
+                      <p className="mt-1 font-semibold tabular-nums">
+                        {selected.successCount}/{selected.recipientCount}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground">Falhas</p>
+                      <p className="mt-1 font-semibold tabular-nums">
+                        {selected.failureCount}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex justify-end border-t pt-4">
+                    <Button
+                      className="gap-2"
+                      onClick={() => handleResend(selected)}
+                    >
+                      <RefreshCw className="h-4 w-4" />
+                      Reenviar
+                    </Button>
+                  </div>
+                </div>
+              );
+            })()}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

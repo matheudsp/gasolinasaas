@@ -1,5 +1,16 @@
 import { ORPCError } from "@orpc/server";
-import { and, desc, eq, gt, gte, isNotNull, lte, ne, sql } from "drizzle-orm";
+import {
+  and,
+  desc,
+  eq,
+  gt,
+  gte,
+  inArray,
+  isNotNull,
+  lte,
+  ne,
+  sql,
+} from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { z } from "zod";
 
@@ -998,12 +1009,19 @@ export const loyaltyRouter = {
         .select({
           id: rewardRedemption.id,
           rewardName: reward.name,
+          rewardImageUrl: reward.imageUrl,
           costPoints: rewardRedemption.costPoints,
+          code: rewardRedemption.code,
+          status: rewardRedemption.status,
+          customerUserId: rewardRedemption.userId,
           customerName: user.name,
           customerEmail: user.email,
+          customerCpf: user.cpf,
           operatorName: operator.name,
           operatorEmail: operator.email,
           fulfilledAt: rewardRedemption.fulfilledAt,
+          reversedAt: rewardRedemption.reversedAt,
+          reversalReason: rewardRedemption.reversalReason,
           createdAt: rewardRedemption.createdAt,
         })
         .from(rewardRedemption)
@@ -1013,7 +1031,7 @@ export const loyaltyRouter = {
         .where(
           and(
             eq(rewardRedemption.tenantId, context.tenant.id),
-            eq(rewardRedemption.status, "fulfilled"),
+            inArray(rewardRedemption.status, ["fulfilled", "reversed"]),
           ),
         )
         .orderBy(desc(rewardRedemption.fulfilledAt))
@@ -1053,6 +1071,181 @@ export const loyaltyRouter = {
         )
         .orderBy(desc(loyaltyTransaction.createdAt))
         .limit(input.limit);
+    }),
+
+  /**
+   * Extrato completo de um cliente (owner) — o detalhe por trás do ranking de
+   * clientes. Roda o expire pass para o saldo bater com o que o app mostra, e
+   * classifica cada linha (crédito/resgate/expiração/estorno/devolução).
+   */
+  customerTransactions: tenantOwnerProcedure
+    .input(
+      z.object({
+        userId: z.string().min(1),
+        limit: z.number().int().min(1).max(200).default(100),
+      }),
+    )
+    .handler(async ({ context, input }) => {
+      const tenantId = context.tenant.id;
+
+      // Expire pass: materializa expirações vencidas para o saldo ser exato.
+      const snapshot = await settleExpiredPoints(
+        context.db,
+        tenantId,
+        input.userId,
+      );
+
+      const operator = alias(user, "operator");
+      const rd = alias(rewardRedemption, "rd");
+      const rw = alias(reward, "rw");
+
+      const transactions = await context.db
+        .select({
+          id: loyaltyTransaction.id,
+          points: loyaltyTransaction.points,
+          amountCents: loyaltyTransaction.amountCents,
+          createdAt: loyaltyTransaction.createdAt,
+          operatorName: operator.name,
+          rewardName: rw.name,
+          type: sql<
+            "credit" | "redemption" | "expiration" | "reversal" | "redemption_reversal"
+          >`case when ${loyaltyTransaction.expiredTransactionId} is not null then 'expiration' when ${loyaltyTransaction.reversedTransactionId} is not null then 'reversal' when ${loyaltyTransaction.reversedRedemptionId} is not null then 'redemption_reversal' when ${loyaltyTransaction.redemptionId} is not null then 'redemption' else 'credit' end`,
+        })
+        .from(loyaltyTransaction)
+        .leftJoin(operator, eq(loyaltyTransaction.operatorUserId, operator.id))
+        .leftJoin(rd, eq(loyaltyTransaction.redemptionId, rd.id))
+        .leftJoin(rw, eq(rd.rewardId, rw.id))
+        .where(
+          and(
+            eq(loyaltyTransaction.tenantId, tenantId),
+            eq(loyaltyTransaction.userId, input.userId),
+            // Esconde marcadores de 0 pontos (ruído de auditoria).
+            ne(loyaltyTransaction.points, 0),
+          ),
+        )
+        .orderBy(desc(loyaltyTransaction.createdAt))
+        .limit(input.limit);
+
+      // Total gasto: soma de amountCents (estornos entram negativos e netam).
+      const [spentRow] = await context.db
+        .select({
+          spentCents: sql<number>`coalesce(sum(${loyaltyTransaction.amountCents}), 0)::int`,
+          credits: sql<number>`(count(*) filter (where ${loyaltyTransaction.amountCents} > 0))::int`,
+        })
+        .from(loyaltyTransaction)
+        .where(
+          and(
+            eq(loyaltyTransaction.tenantId, tenantId),
+            eq(loyaltyTransaction.userId, input.userId),
+            isNotNull(loyaltyTransaction.amountCents),
+          ),
+        );
+
+      const [customer] = await context.db
+        .select({ name: user.name, email: user.email, cpf: user.cpf })
+        .from(user)
+        .where(eq(user.id, input.userId));
+
+      return {
+        balance: snapshot.balance,
+        spentCents: spentRow?.spentCents ?? 0,
+        credits: spentRow?.credits ?? 0,
+        customer: customer ?? null,
+        transactions,
+      };
+    }),
+
+  /**
+   * Estorno de um resgate CONCLUÍDO (owner) — ex.: item em falta no estoque
+   * físico. Reverte a entrega: devolve os pontos (lote novo, points > 0),
+   * repõe o estoque (se limitado) e marca o resgate como "reversed". O unique
+   * em reversedRedemptionId + o gate de status garantem uso único (idempotente
+   * sob concorrência). Preserva o invariante SUM(points).
+   */
+  reverseRedemption: tenantOwnerProcedure
+    .input(
+      z.object({
+        redemptionId: z.string().min(1),
+        reason: z.string().max(280).optional(),
+      }),
+    )
+    .handler(async ({ context, input }) => {
+      const tenantId = context.tenant.id;
+      const callerId = context.session.user.id;
+
+      return context.db.transaction(async (tx) => {
+        const now = new Date();
+
+        // Portão de uso único: só um estorno sai de "fulfilled".
+        const [rd] = await tx
+          .update(rewardRedemption)
+          .set({
+            status: "reversed",
+            reversedAt: now,
+            reversalReason: input.reason ?? null,
+            updatedAt: now,
+          })
+          .where(
+            and(
+              eq(rewardRedemption.id, input.redemptionId),
+              eq(rewardRedemption.tenantId, tenantId),
+              eq(rewardRedemption.status, "fulfilled"),
+            ),
+          )
+          .returning();
+
+        if (!rd) {
+          throw new ORPCError("NOT_FOUND", {
+            message: "Resgate não encontrado, ainda pendente ou já estornado.",
+          });
+        }
+
+        // Repõe o estoque, se a recompensa for limitada (stock não-nulo).
+        await tx
+          .update(reward)
+          .set({ stock: sql`${reward.stock} + 1`, updatedAt: now })
+          .where(and(eq(reward.id, rd.rewardId), isNotNull(reward.stock)));
+
+        // Devolve os pontos como um lote novo (points > 0 abre lote). Validade
+        // fresca a partir de agora, coerente com a config atual do tenant.
+        const validityDays = context.tenant.pointsValidityDays;
+        const expiresAt = validityDays
+          ? new Date(now.getTime() + validityDays * 86_400_000)
+          : null;
+
+        const [reversal] = await tx
+          .insert(loyaltyTransaction)
+          .values({
+            id: crypto.randomUUID(),
+            tenantId,
+            userId: rd.userId,
+            operatorUserId: callerId,
+            points: rd.costPoints,
+            reversedRedemptionId: rd.id,
+            expiresAt,
+            createdAt: now,
+          })
+          .onConflictDoNothing({
+            target: [loyaltyTransaction.reversedRedemptionId],
+          })
+          .returning({ id: loyaltyTransaction.id });
+
+        if (!reversal) {
+          throw new ORPCError("CONFLICT", {
+            message: "Este resgate já foi estornado.",
+          });
+        }
+
+        const [customer] = await tx
+          .select({ name: user.name })
+          .from(user)
+          .where(eq(user.id, rd.userId));
+
+        return {
+          restoredPoints: rd.costPoints,
+          customerName: customer?.name ?? null,
+        };
+      });
     }),
 
   // ── Recompensas: catálogo e resgate ─────────────────────────────────────────

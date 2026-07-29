@@ -33,6 +33,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -591,6 +592,15 @@ function UsersTab() {
     onError: (e: Error) => toast.error(e.message),
   });
 
+  // Usuário selecionado → painel de detalhes (perfil + vínculos + ações).
+  const [detailUserId, setDetailUserId] = useState<string | null>(null);
+  const { data: userDetail, isLoading: loadingDetail } = useQuery(
+    orpc.admin.user.getById.queryOptions({
+      input: { userId: detailUserId ?? "" },
+      enabled: !!detailUserId,
+    }),
+  );
+
   // user.list com tenantId retorna shape diferente (membershipId, userId, etc.)
   const isMembershipView = !!tenantFilter;
   const rows = users as any[];
@@ -657,7 +667,11 @@ function UsersTab() {
                 const name = u.name;
                 const banned = u.banned;
                 return (
-                  <TableRow key={userId}>
+                  <TableRow
+                    key={userId}
+                    className="cursor-pointer hover:bg-muted/50"
+                    onClick={() => setDetailUserId(userId)}
+                  >
                     <TableCell className="font-medium">{name}</TableCell>
                     <TableCell className="text-sm text-muted-foreground">
                       {u.email}
@@ -677,7 +691,7 @@ function UsersTab() {
                         {banned ? "Banido" : "Ativo"}
                       </Badge>
                     </TableCell>
-                    <TableCell>
+                    <TableCell onClick={(e) => e.stopPropagation()}>
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
                           <Button
@@ -750,6 +764,186 @@ function UsersTab() {
           </TableBody>
         </Table>
       </CardContent>
+
+      {/* Detalhes do usuário */}
+      <Dialog
+        open={detailUserId !== null}
+        onOpenChange={(open) => !open && setDetailUserId(null)}
+      >
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>{userDetail?.name ?? "Usuário"}</DialogTitle>
+            <DialogDescription>{userDetail?.email ?? ""}</DialogDescription>
+          </DialogHeader>
+
+          {loadingDetail || !userDetail ? (
+            <div className="flex justify-center py-8">
+              <Spinner className="size-6" />
+            </div>
+          ) : (
+            <div className="space-y-5">
+              {/* Perfil */}
+              <dl className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
+                <div>
+                  <dt className="text-xs text-muted-foreground">Papel na plataforma</dt>
+                  <dd>
+                    <Badge variant={userDetail.role === "admin" ? "default" : "secondary"}>
+                      {userDetail.role === "admin" ? "Admin" : "Usuário"}
+                    </Badge>
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-xs text-muted-foreground">Status</dt>
+                  <dd>
+                    <Badge
+                      className={userDetail.banned ? "text-white" : ""}
+                      variant={userDetail.banned ? "destructive" : "secondary"}
+                    >
+                      {userDetail.banned ? "Banido" : "Ativo"}
+                    </Badge>
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-xs text-muted-foreground">E-mail verificado</dt>
+                  <dd className="flex items-center gap-1.5">
+                    {userDetail.emailVerified ? (
+                      <>
+                        <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+                        Sim
+                      </>
+                    ) : (
+                      <>
+                        <XCircle className="h-4 w-4 text-muted-foreground" />
+                        Não
+                      </>
+                    )}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-xs text-muted-foreground">CPF</dt>
+                  <dd className="tabular-nums">{userDetail.cpf ?? "—"}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs text-muted-foreground">Cadastrado em</dt>
+                  <dd>{fmtDate(userDetail.createdAt)}</dd>
+                </div>
+                {userDetail.banned && userDetail.banReason && (
+                  <div>
+                    <dt className="text-xs text-muted-foreground">Motivo do ban</dt>
+                    <dd>{userDetail.banReason}</dd>
+                  </div>
+                )}
+              </dl>
+
+              {/* Vínculos com redes */}
+              <div>
+                <p className="mb-2 flex items-center gap-1.5 text-sm font-medium">
+                  <Building2 className="h-4 w-4" />
+                  Redes vinculadas
+                </p>
+                {userDetail.memberships.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">
+                    Não é membro de nenhuma rede (cliente final ou usuário sem
+                    vínculo).
+                  </p>
+                ) : (
+                  <ul className="space-y-2">
+                    {userDetail.memberships.map((m) => (
+                      <li
+                        key={m.tenantId}
+                        className="flex items-center justify-between rounded-md border p-2.5 text-sm"
+                      >
+                        <div>
+                          <span className="font-medium">{m.tenantName}</span>
+                          <Badge variant="outline" className="ml-2 capitalize">
+                            {m.role}
+                          </Badge>
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="gap-1.5 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                          onClick={() => {
+                            removeMutation.mutate({
+                              userId: userDetail.id,
+                              tenantId: m.tenantId,
+                            });
+                            setDetailUserId(null);
+                          }}
+                        >
+                          <UserMinus className="h-3.5 w-3.5" />
+                          Remover
+                        </Button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+
+              {/* Ações */}
+              <div className="flex flex-wrap justify-end gap-2 border-t pt-4">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="gap-1.5"
+                  onClick={() => {
+                    const id = userDetail.id;
+                    const name = userDetail.name;
+                    setDetailUserId(null);
+                    setAssignDialog({ id, name });
+                  }}
+                >
+                  <UserPlus className="h-4 w-4" />
+                  Associar a domínio
+                </Button>
+                {userDetail.banned ? (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="gap-1.5"
+                    onClick={() => {
+                      unbanMutation.mutate({ userId: userDetail.id });
+                      setDetailUserId(null);
+                    }}
+                  >
+                    <CheckCircle2 className="h-4 w-4" />
+                    Remover ban
+                  </Button>
+                ) : (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="gap-1.5 text-destructive hover:text-destructive"
+                    onClick={() => {
+                      const id = userDetail.id;
+                      const name = userDetail.name;
+                      setDetailUserId(null);
+                      setBanDialog({ id, name });
+                    }}
+                  >
+                    <Ban className="h-4 w-4" />
+                    Banir
+                  </Button>
+                )}
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  className="gap-1.5"
+                  onClick={() => {
+                    const id = userDetail.id;
+                    const name = userDetail.name;
+                    setDetailUserId(null);
+                    setDeleteDialog({ id, name });
+                  }}
+                >
+                  <Trash2 className="h-4 w-4" />
+                  Excluir
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
 
       {/* Criar usuário */}
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
