@@ -22,9 +22,11 @@ import { TextField } from "@/components/TextField"
 
 import { authClient } from "@/lib/auth"
 import { authErrorMessage } from "@/lib/authErrors"
+import { IS_DEDICATED_APP } from "@/lib/activeTenant"
 import { useTenantBranding } from "@/lib/branding"
 import { useAppTheme } from "@/theme/context"
 import type { ThemedStyle } from "@/theme/types"
+import { Header } from "@/components/Header"
 
 export function SignInScreen() {
   const { themed, theme } = useAppTheme()
@@ -98,16 +100,15 @@ export function SignInScreen() {
       contentContainerStyle={themed($screen)}
       keyboardShouldPersistTaps="handled"
     >
-      {/* Escolheu a rede errada? Volta pro seletor antes de logar. */}
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel="Trocar de rede"
-        onPress={() => router.replace("/select-network")}
-        style={themed($changeNetwork)}
-      >
-        <MaterialDesignIcons name="chevron-left" size={18} color={theme.colors.textDim} />
-        <Text size="xs" text="Trocar de rede" style={themed($changeNetworkText)} />
-      </Pressable>
+      {/* Escolheu a rede errada? Volta pro seletor antes de logar. No app
+          dedicado a rede é fixa (não há seletor) — não mostra o botão. */}
+      {!IS_DEDICATED_APP && (
+        <Header
+          leftText="Trocar de rede"
+          leftIcon="back"
+          onLeftPress={() => router.replace("/select-network")}
+        />
+      )}
 
       {/* Branding */}
       <View style={themed($header)}>
@@ -253,21 +254,8 @@ export function SignInScreen() {
 const $screen: ThemedStyle<ViewStyle> = ({ spacing }) => ({
   flexGrow: 1,
   paddingHorizontal: spacing.lg,
-  paddingVertical: spacing.xxl,
+  paddingBottom: spacing.xxl,
   justifyContent: "center",
-})
-
-const $changeNetwork: ThemedStyle<ViewStyle> = ({ spacing }) => ({
-  flexDirection: "row",
-  alignItems: "center",
-  alignSelf: "flex-start",
-  gap: spacing.xxs,
-  paddingVertical: spacing.xs,
-  marginBottom: spacing.sm,
-})
-
-const $changeNetworkText: ThemedStyle<TextStyle> = ({ colors }) => ({
-  color: colors.textDim,
 })
 
 const $header: ThemedStyle<ViewStyle> = ({ spacing }) => ({
